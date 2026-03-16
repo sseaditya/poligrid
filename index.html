@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Interior Fitout Planner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="noise"></div>
+    <main class="app-shell">
+      <section class="panel input-panel">
+        <h1>Interior Fitout Planner</h1>
+        <p class="subhead">Upload a floor plan, then add rooms one-by-one with photos, brief, and inspiration. Generate furnished room concepts + standardized cutlist/BOM with pricing.</p>
+
+        <form id="planner-form">
+          <div class="section-head">
+            <div>
+              <h2>Inputs</h2>
+              <p class="note">Step 1: floor plan. Step 2: add rooms. Step 3: per-room brief + inspiration.</p>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h3>1) Floor plan</h3>
+            <label>
+              Floor plan (PDF preferred)
+              <input type="file" id="floorPlan" accept="application/pdf,image/*" required />
+            </label>
+            <label>
+              Labels / notes (optional)
+              <textarea id="floorPlanLabels" rows="3" placeholder="Example: Living=101, Kitchen=102, Master Bed=201. Marked on plan."></textarea>
+            </label>
+            <div id="floorPlanPreview" class="preview-card" hidden>
+              <canvas id="floorPlanCanvas" aria-label="Floor plan preview"></canvas>
+              <div class="preview-meta">
+                <span id="floorPlanPreviewName"></span>
+                <div class="button-row">
+                  <button type="button" id="calibrateScale" class="ghost">Calibrate scale</button>
+                  <span class="mini-note" id="scaleHint">Set scale once, then pick room rectangles.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="row-between">
+              <h3>2) Rooms (add one at a time)</h3>
+              <button type="button" id="addRoomBtn" class="ghost">Add room</button>
+            </div>
+            <div id="roomsList" class="rooms-list"></div>
+          </div>
+
+          <div class="form-section">
+            <h3>3) Generate</h3>
+            <button type="submit" id="generateBtn">Generate furnished rooms + BOM</button>
+          </div>
+        </form>
+
+        <p class="note">No database is used. Update any inputs and click generate again.</p>
+      </section>
+
+      <section class="panel output-panel" id="outputPanel" hidden>
+        <div class="status" id="statusBox"></div>
+
+        <h2>Per-room furnished concepts</h2>
+        <div id="roomResults" class="room-results"></div>
+
+        <h2>Downloads</h2>
+        <div class="button-row">
+          <button id="downloadScene">Download Scene JSON</button>
+          <button id="downloadBoq">Download BOM CSV</button>
+        </div>
+
+        <h2>Standardized BOM + Pricing (INR)</h2>
+        <div class="table-wrap">
+          <table id="boqTable">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Quantity</th>
+                <th>Unit</th>
+                <th>Rate</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot>
+              <tr>
+                <td colspan="4">Grand Total</td>
+                <td id="grandTotal">-</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <h3>Run summary</h3>
+        <pre id="placementSummary"></pre>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
