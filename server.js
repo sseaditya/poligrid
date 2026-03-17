@@ -61,6 +61,7 @@ async function renderWithOpenAi(body) {
   const prompt = String(body.prompt || "").trim();
   const imageBase64 = String(body.imageBase64 || "").trim();
   const mimeType = String(body.mimeType || "image/png").trim();
+  const quality = "low";
 
   if (!prompt || !imageBase64) {
     throw httpError(400, "Missing prompt or imageBase64 for OpenAI render.");
@@ -69,6 +70,7 @@ async function renderWithOpenAi(body) {
   const imageBuffer = decodeBase64Image(imageBase64);
   const form = new FormData();
   form.append("model", model);
+  form.append("quality", quality);
   form.append("prompt", prompt);
   form.append("image", new Blob([imageBuffer], { type: mimeType }), "room_input.png");
 
