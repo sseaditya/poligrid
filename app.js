@@ -1178,8 +1178,11 @@ async function renderImageToCanvas(file) {
 
 async function renderPdfFirstPage(file) {
   const canvas = dom.floorPlanCanvas;
-  const pdfjsLib = await loadPdfJs();
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "/node_modules/pdfjs-dist/build/pdf.worker.mjs";
+  const pdfjsLib = window.pdfjsLib;
+  if (!pdfjsLib) {
+    throw new Error("PDF renderer not available (pdf.js failed to load).");
+  }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "/node_modules/pdfjs-dist/build/pdf.worker.min.js";
 
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
@@ -1198,17 +1201,6 @@ async function renderPdfFirstPage(file) {
   floorPlanState.rendered = true;
   floorPlanState._renderWidth = canvas.width;
   floorPlanState._renderHeight = canvas.height;
-}
-
-let _pdfjsModule = null;
-async function loadPdfJs() {
-  if (_pdfjsModule) return _pdfjsModule;
-  try {
-    _pdfjsModule = await import("/node_modules/pdfjs-dist/build/pdf.mjs");
-    return _pdfjsModule;
-  } catch (err) {
-    throw new Error("PDF renderer not available (failed to import pdfjs-dist).");
-  }
 }
 
 function startRectPick({ title, onPicked }) {
