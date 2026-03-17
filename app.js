@@ -165,7 +165,8 @@ const floorPlanState = {
   rendered: false,
   pxPerMeter: null,
   _renderWidth: 0,
-  _renderHeight: 0
+  _renderHeight: 0,
+  roomRectsById: {}
 };
 
 init();
@@ -174,7 +175,9 @@ function init() {
   dom.plannerForm.addEventListener("submit", onGenerate);
   dom.addRoomBtn.addEventListener("click", () => addRoom());
   dom.floorPlan.addEventListener("change", onFloorPlanPicked);
-  dom.calibrateScale?.addEventListener("click", () => startCalibration());
+  dom.calibrateScale?.addEventListener("click", async () => {
+    await startCalibration();
+  });
   dom.downloadScene.addEventListener("click", () => {
     if (latestArtifacts) {
       downloadText("furnished_scene.json", JSON.stringify(latestArtifacts.scene, null, 2), "application/json");
@@ -235,11 +238,11 @@ async function onGenerate(event) {
       if (!room.brief) {
         throw new Error(`Room ${room.label}: design brief is required.`);
       }
-      if (!room.photos.length) {
-        throw new Error(`Room ${room.label}: add at least one room photo.`);
-      }
       if (!room.widthM || !room.lengthM) {
         throw new Error(`Room ${room.label}: pick the room rectangle on the floor plan to set dimensions.`);
+      }
+      if (!room.photos.length && !room.generateFromPlan) {
+        throw new Error(`Room ${room.label}: add photos OR enable "Generate from floor plan".`);
       }
     }
 
@@ -261,25 +264,67 @@ async function onGenerate(event) {
       allPlacements.push(...placement.placements.map((p) => ({ ...p, roomLabel: room.label })));
 
       const renders = [];
-      for (let i = 0; i < room.photos.length; i += 1) {
-        const file = room.photos[i];
-        try {
-          const edited = await createOpenAiFurnishedRender(file, {
-            model: DEFAULT_OPENAI_IMAGE_MODEL,
-            roomWidth: room.widthM,
-            roomLength: room.lengthM,
-            brief: room.brief,
-            styleSummary: style.style_summary || "",
-            laminate,
-            placements: placement.placements,
-            roomLabel: room.label
-          }, i);
-          renders.push(edited);
-        } catch (error) {
-          fallbackCount += 1;
-          const fb = await createLocalFurnishedRender(file, placement.placements, laminate, i);
-          fb.note = `OpenAI failed: ${error.message}`;
-          renders.push(fb);
+      if (room.photos.length) {
+        for (let i = 0; i < room.photos.length; i += 1) {
+          const file = room.photos[i];
+          try {
+            const edited = await createOpenAiFurnishedRender(
+              file,
+              {
+                model: DEFAULT_OPENAI_IMAGE_MODEL,
+                roomWidth: room.widthM,
+                roomLength: room.lengthM,
+                brief: room.brief,
+                styleSummary: style.style_summary || "",
+                laminate,
+                placements: placement.placements,
+                roomLabel: room.label
+              },
+              i
+            );
+            renders.push(edited);
+          } catch (error) {
+            fallbackCount += 1;
+            const fb = await createLocalFurnishedRender(file, placement.placements, laminate, i);
+            fb.note = `OpenAI failed: ${error.message}`;
+            renders.push(fb);
+          }
+        }
+      } else if (room.generateFromPlan) {
+        const crop = floorPlanState.roomRectsById[room._roomId];
+        if (!crop) {
+          throw new Error(`Room ${room.label}: missing floor plan crop. Pick the room on the plan again.`);
+        }
+        const cropPngBase64 = cropCanvasRegionToPngBase64(dom.floorPlanCanvas, crop, 1400);
+        for (let i = 0; i < 2; i += 1) {
+          try {
+            const edited = await createOpenAiFurnishedRenderFromBase64(
+              `floorplan_${room.label}_concept_${i + 1}.png`,
+              cropPngBase64,
+              "image/png",
+              {
+                model: DEFAULT_OPENAI_IMAGE_MODEL,
+                roomWidth: room.widthM,
+                roomLength: room.lengthM,
+                brief: room.brief,
+                styleSummary: style.style_summary || "",
+                laminate,
+                placements: placement.placements,
+                roomLabel: room.label,
+                fromFloorPlan: true
+              },
+              i
+            );
+            renders.push(edited);
+          } catch (error) {
+            fallbackCount += 1;
+            renders.push({
+              name: `floorplan_${room.label}_concept_${i + 1}.png`,
+              dataUrl: `data:image/png;base64,${cropPngBase64}`,
+              source: "floorplan",
+              note: `OpenAI failed (showing plan crop): ${error.message}`
+            });
+          }
         }
       }
 
@@ -507,15 +552,36 @@ async function createOpenAiFurnishedRender(file, context, index) {
   };
 }
 
+async function createOpenAiFurnishedRenderFromBase64(name, imageBase64, mimeType, context, index) {
+  const prompt = buildImageEditPrompt(context);
+  const result = await callRenderApi("openai", {
+    model: context.model,
+    prompt,
+    imageBase64,
+    mimeType: mimeType || "image/png"
+  });
+
+  return {
+    name,
+    dataUrl: result.dataUrl,
+    source: "openai",
+    note: `Room ${context.roomLabel || ""} · concept ${index + 1}${context.fromFloorPlan ? " (from floor plan)" : ""}`
+  };
+}
+
 function buildImageEditPrompt(context) {
   const moduleList = context.placements.map((p) => p.module.label).join(", ");
   return [
     "You are an interior render assistant.",
-    "Edit the input room photo by adding only realistic furniture and millwork.",
+    context.fromFloorPlan
+      ? "The input image is a cropped floor plan of a single room."
+      : "Edit the input room photo by adding only realistic furniture and millwork.",
     "Strict rules:",
-    "1) Respect room geometry and floor plan scale.",
+    "1) Respect room geometry and scale.",
     "2) Keep existing walls, windows, doors, and structural elements unchanged.",
-    "3) Add furniture only; lighting can be improved for realism.",
+    context.fromFloorPlan
+      ? "3) Produce a photorealistic furnished 3D interior render consistent with the plan geometry."
+      : "3) Add furniture only; lighting can be improved for realism.",
     "4) Photoreal output, natural shadows, no cartoon style.",
     "5) Do not add text overlays, labels, watermarks, or annotations.",
     `Room size approximately ${context.roomWidth}m x ${context.roomLength}m.`,
@@ -526,6 +592,28 @@ function buildImageEditPrompt(context) {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function cropCanvasRegionToPngBase64(canvas, rect, maxSidePx = 1400) {
+  if (!canvas) return "";
+  const srcW = Math.max(2, Math.round(rect.w));
+  const srcH = Math.max(2, Math.round(rect.h));
+  const scale = Math.min(1, maxSidePx / Math.max(srcW, srcH));
+  const outW = Math.max(2, Math.round(srcW * scale));
+  const outH = Math.max(2, Math.round(srcH * scale));
+
+  const tmp = document.createElement("canvas");
+  tmp.width = outW;
+  tmp.height = outH;
+  const ctx = tmp.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, outW, outH);
+  ctx.drawImage(canvas, rect.x, rect.y, srcW, srcH, 0, 0, outW, outH);
+
+  const dataUrl = tmp.toDataURL("image/png");
+  return dataUrl.split(",")[1] || "";
 }
 
 async function callRenderApi(provider, payload) {
@@ -1017,7 +1105,15 @@ function renderRoomsList() {
           </label>
           <label class="full">
             Room photos (multiple)
-            <input type="file" accept="image/*" multiple data-field="photos" required />
+            <input type="file" accept="image/*" multiple data-field="photos" />
+            <div class="mini-note">Optional. If omitted, we can generate concepts from the floor plan for this room.</div>
+          </label>
+          <label class="full">
+            Image source fallback
+            <div class="inline-row">
+              <input type="checkbox" data-field="generateFromPlan" checked />
+              <span class="mini-note">Generate concepts from the floor plan if room photos are not uploaded.</span>
+            </div>
           </label>
           <label class="full">
             Inspiration images (optional, multiple)
@@ -1058,7 +1154,8 @@ function readRoomsFromDom() {
     const brief = String(getInput("brief")?.value || "").trim();
     const photos = getInput("photos")?.files ? [...getInput("photos").files] : [];
     const inspo = getInput("inspo")?.files ? [...getInput("inspo").files] : [];
-    return { label, name, widthM, lengthM, brief, photos, inspo };
+    const generateFromPlan = Boolean(getInput("generateFromPlan")?.checked);
+    return { _roomId: card.dataset.roomId, label, name, widthM, lengthM, brief, photos, inspo, generateFromPlan };
   });
 }
 
@@ -1070,6 +1167,7 @@ function resetFloorPlanState() {
   floorPlanState.pxPerMeter = null;
   floorPlanState._renderWidth = 0;
   floorPlanState._renderHeight = 0;
+  floorPlanState.roomRectsById = {};
   activeRoomPickId = null;
   if (dom.floorPlanCanvas) {
     const ctx = dom.floorPlanCanvas.getContext("2d");
@@ -1160,6 +1258,7 @@ function beginRoomPick(roomId) {
     onPicked: (rect) => {
       const widthM = rect.w / floorPlanState.pxPerMeter;
       const lengthM = rect.h / floorPlanState.pxPerMeter;
+      floorPlanState.roomRectsById[roomId] = rect;
       applyRoomDims(roomId, widthM, lengthM);
       activeRoomPickId = null;
     }
@@ -1179,9 +1278,21 @@ function applyRoomDims(roomId, widthM, lengthM) {
   if (hint) hint.textContent = `Picked: ${w}m × ${l}m`;
 }
 
-function startCalibration() {
-  if (!floorPlanState.rendered) {
+async function startCalibration() {
+  if (!floorPlanState.file) {
     alert("Upload a floor plan PDF first.");
+    return;
+  }
+  if (!floorPlanState.rendered) {
+    try {
+      dom.calibrateScale.disabled = true;
+      await renderFloorPlanToCanvas(floorPlanState.file);
+    } finally {
+      dom.calibrateScale.disabled = false;
+    }
+  }
+  if (!floorPlanState.rendered || !dom.floorPlanCanvas?.width || !dom.floorPlanCanvas?.height) {
+    alert("Floor plan preview is not ready yet. Please wait a moment and try again.");
     return;
   }
   startLinePick({
