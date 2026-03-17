@@ -189,6 +189,26 @@ button.ghost:hover {
   background: #fbfaf7;
 }
 
+.preview-card canvas {
+  width: 100%;
+  display: block;
+  max-height: 360px;
+  background: #fbfaf7;
+}
+
+.inline-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inline-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+}
+
 .preview-meta {
   display: flex;
   justify-content: space-between;

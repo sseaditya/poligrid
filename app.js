@@ -138,8 +138,6 @@ const dom = {
   floorPlanPreview: document.getElementById("floorPlanPreview"),
   floorPlanCanvas: document.getElementById("floorPlanCanvas"),
   floorPlanPreviewName: document.getElementById("floorPlanPreviewName"),
-  calibrateScale: document.getElementById("calibrateScale"),
-  scaleHint: document.getElementById("scaleHint"),
   addRoomBtn: document.getElementById("addRoomBtn"),
   roomsList: document.getElementById("roomsList"),
   plannerForm: document.getElementById("planner-form"),
@@ -156,14 +154,12 @@ const dom = {
 let latestArtifacts = null;
 let roomsState = [];
 let roomIdSeq = 1;
-let activeRoomPickId = null;
 
 const floorPlanState = {
   file: null,
   kind: null, // "pdf" | "image"
   page: 1,
   rendered: false,
-  pxPerMeter: null,
   _renderWidth: 0,
   _renderHeight: 0,
   roomRectsById: {}
@@ -175,9 +171,6 @@ function init() {
   dom.plannerForm.addEventListener("submit", onGenerate);
   dom.addRoomBtn.addEventListener("click", () => addRoom());
   dom.floorPlan.addEventListener("change", onFloorPlanPicked);
-  dom.calibrateScale?.addEventListener("click", async () => {
-    await startCalibration();
-  });
   dom.downloadScene.addEventListener("click", () => {
     if (latestArtifacts) {
       downloadText("furnished_scene.json", JSON.stringify(latestArtifacts.scene, null, 2), "application/json");
@@ -209,7 +202,6 @@ async function onFloorPlanPicked() {
   dom.floorPlanPreviewName.textContent = file.name;
   dom.floorPlanPreview.hidden = false;
   await renderFloorPlanToCanvas(file);
-  updateScaleHint();
 }
 
 async function onGenerate(event) {
@@ -228,18 +220,12 @@ async function onGenerate(event) {
     if (!rooms.length) {
       throw new Error("Add at least one room.");
     }
-    if (!floorPlanState.pxPerMeter) {
-      throw new Error("Calibrate scale on the floor plan before generating.");
-    }
     for (const room of rooms) {
       if (!room.label) {
         throw new Error("Each room needs a room number / label.");
       }
       if (!room.brief) {
         throw new Error(`Room ${room.label}: design brief is required.`);
-      }
-      if (!room.widthM || !room.lengthM) {
-        throw new Error(`Room ${room.label}: pick the room rectangle on the floor plan to set dimensions.`);
       }
       if (!room.photos.length && !room.generateFromPlan) {
         throw new Error(`Room ${room.label}: add photos OR enable "Generate from floor plan".`);
@@ -259,8 +245,10 @@ async function onGenerate(event) {
     for (const room of rooms) {
       const style = await extractRoomStyle(room);
       const laminate = pickLaminateFromStyle(style);
-      const selectedModules = pickModulesFromBrief(`${room.brief}\n${style.style_summary || ""}`, room.widthM * room.lengthM);
-      const placement = placeModules(selectedModules, room.widthM, room.lengthM);
+      const widthM = room.widthM || 4.2;
+      const lengthM = room.lengthM || 4.2;
+      const selectedModules = pickModulesFromBrief(`${room.brief}\n${style.style_summary || ""}`, widthM * lengthM);
+      const placement = placeModules(selectedModules, widthM, lengthM);
       allPlacements.push(...placement.placements.map((p) => ({ ...p, roomLabel: room.label })));
 
       const renders = [];
@@ -272,8 +260,8 @@ async function onGenerate(event) {
               file,
               {
                 model: DEFAULT_OPENAI_IMAGE_MODEL,
-                roomWidth: room.widthM,
-                roomLength: room.lengthM,
+                roomWidth: widthM,
+                roomLength: lengthM,
                 brief: room.brief,
                 styleSummary: style.style_summary || "",
                 laminate,
@@ -292,10 +280,9 @@ async function onGenerate(event) {
         }
       } else if (room.generateFromPlan) {
         const crop = floorPlanState.roomRectsById[room._roomId];
-        if (!crop) {
-          throw new Error(`Room ${room.label}: missing floor plan crop. Pick the room on the plan again.`);
-        }
-        const cropPngBase64 = cropCanvasRegionToPngBase64(dom.floorPlanCanvas, crop, 1400);
+        const cropPngBase64 = crop
+          ? cropCanvasRegionToPngBase64(dom.floorPlanCanvas, crop, 1400)
+          : cropCanvasRegionToPngBase64(dom.floorPlanCanvas, { x: 0, y: 0, w: dom.floorPlanCanvas.width, h: dom.floorPlanCanvas.height }, 1400);
         for (let i = 0; i < 2; i += 1) {
           try {
             const edited = await createOpenAiFurnishedRenderFromBase64(
@@ -304,8 +291,8 @@ async function onGenerate(event) {
               "image/png",
               {
                 model: DEFAULT_OPENAI_IMAGE_MODEL,
-                roomWidth: room.widthM,
-                roomLength: room.lengthM,
+                roomWidth: widthM,
+                roomLength: lengthM,
                 brief: room.brief,
                 styleSummary: style.style_summary || "",
                 laminate,
@@ -1094,15 +1081,8 @@ function renderRoomsList() {
             Room name (optional)
             <input type="text" data-field="name" placeholder="Example: Living room" />
           </label>
-          <label class="full">
-            Room size (from floor plan)
-            <div class="inline-row">
-              <button type="button" class="ghost" data-action="pick-room">Pick room rectangle on plan</button>
-              <span class="mini-note" data-field="dimsHint">Not picked yet.</span>
-            </div>
-            <input type="hidden" data-field="widthM" value="" />
-            <input type="hidden" data-field="lengthM" value="" />
-          </label>
+          <input type="hidden" data-field="widthM" value="4.2" />
+          <input type="hidden" data-field="lengthM" value="4.2" />
           <label class="full">
             Room photos (multiple)
             <input type="file" accept="image/*" multiple data-field="photos" />
@@ -1134,9 +1114,6 @@ function renderRoomsList() {
       if (btn.dataset.action === "remove-room") {
         removeRoom(roomId);
       }
-      if (btn.dataset.action === "pick-room") {
-        beginRoomPick(roomId);
-      }
     });
 
     dom.roomsList.appendChild(card);
@@ -1164,29 +1141,13 @@ function resetFloorPlanState() {
   floorPlanState.kind = null;
   floorPlanState.page = 1;
   floorPlanState.rendered = false;
-  floorPlanState.pxPerMeter = null;
   floorPlanState._renderWidth = 0;
   floorPlanState._renderHeight = 0;
   floorPlanState.roomRectsById = {};
-  activeRoomPickId = null;
   if (dom.floorPlanCanvas) {
     const ctx = dom.floorPlanCanvas.getContext("2d");
     ctx?.clearRect(0, 0, dom.floorPlanCanvas.width, dom.floorPlanCanvas.height);
   }
-  updateScaleHint();
-}
-
-function updateScaleHint() {
-  if (!dom.scaleHint) return;
-  if (!floorPlanState.file) {
-    dom.scaleHint.textContent = "";
-    return;
-  }
-  if (!floorPlanState.pxPerMeter) {
-    dom.scaleHint.textContent = "Calibrate scale once (click two points on the plan, enter real distance).";
-    return;
-  }
-  dom.scaleHint.textContent = `Scale set. ${round(floorPlanState.pxPerMeter, 1)} px per meter. Pick room rectangles.`;
 }
 
 async function renderFloorPlanToCanvas(file) {
@@ -1217,12 +1178,8 @@ async function renderImageToCanvas(file) {
 
 async function renderPdfFirstPage(file) {
   const canvas = dom.floorPlanCanvas;
-  const pdfjsLib = window.pdfjsLib;
-  if (!pdfjsLib) {
-    throw new Error("PDF renderer not available (pdf.js failed to load).");
-  }
-  // Required for CDN usage.
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.js";
+  const pdfjsLib = await loadPdfJs();
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "/node_modules/pdfjs-dist/build/pdf.worker.mjs";
 
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
@@ -1243,122 +1200,15 @@ async function renderPdfFirstPage(file) {
   floorPlanState._renderHeight = canvas.height;
 }
 
-function beginRoomPick(roomId) {
-  if (!floorPlanState.rendered) {
-    alert("Upload a floor plan PDF first.");
-    return;
+let _pdfjsModule = null;
+async function loadPdfJs() {
+  if (_pdfjsModule) return _pdfjsModule;
+  try {
+    _pdfjsModule = await import("/node_modules/pdfjs-dist/build/pdf.mjs");
+    return _pdfjsModule;
+  } catch (err) {
+    throw new Error("PDF renderer not available (failed to import pdfjs-dist).");
   }
-  if (!floorPlanState.pxPerMeter) {
-    alert("Calibrate scale first, then pick rooms.");
-    return;
-  }
-  activeRoomPickId = roomId;
-  startRectPick({
-    title: "Pick room rectangle",
-    onPicked: (rect) => {
-      const widthM = rect.w / floorPlanState.pxPerMeter;
-      const lengthM = rect.h / floorPlanState.pxPerMeter;
-      floorPlanState.roomRectsById[roomId] = rect;
-      applyRoomDims(roomId, widthM, lengthM);
-      activeRoomPickId = null;
-    }
-  });
-}
-
-function applyRoomDims(roomId, widthM, lengthM) {
-  const card = dom.roomsList.querySelector(`.room-card[data-room-id="${roomId}"]`);
-  if (!card) return;
-  const wEl = card.querySelector(`[data-field="widthM"]`);
-  const lEl = card.querySelector(`[data-field="lengthM"]`);
-  const hint = card.querySelector(`[data-field="dimsHint"]`);
-  const w = Math.max(0.5, round(widthM, 2));
-  const l = Math.max(0.5, round(lengthM, 2));
-  if (wEl) wEl.value = String(w);
-  if (lEl) lEl.value = String(l);
-  if (hint) hint.textContent = `Picked: ${w}m × ${l}m`;
-}
-
-async function startCalibration() {
-  if (!floorPlanState.file) {
-    alert("Upload a floor plan PDF first.");
-    return;
-  }
-  if (!floorPlanState.rendered) {
-    try {
-      dom.calibrateScale.disabled = true;
-      await renderFloorPlanToCanvas(floorPlanState.file);
-    } finally {
-      dom.calibrateScale.disabled = false;
-    }
-  }
-  if (!floorPlanState.rendered || !dom.floorPlanCanvas?.width || !dom.floorPlanCanvas?.height) {
-    alert("Floor plan preview is not ready yet. Please wait a moment and try again.");
-    return;
-  }
-  startLinePick({
-    title: "Calibrate scale",
-    onPicked: (p1, p2, distPx) => {
-      const metersRaw = prompt("Enter the real-world distance between the two points (in meters):", "1.0");
-      const meters = parseFloat(String(metersRaw || "").trim());
-      if (!meters || meters <= 0) {
-        alert("Calibration cancelled (invalid distance).");
-        return;
-      }
-      floorPlanState.pxPerMeter = distPx / meters;
-      updateScaleHint();
-    }
-  });
-}
-
-function startLinePick({ title, onPicked }) {
-  const canvas = dom.floorPlanCanvas;
-  const ctx = canvas.getContext("2d");
-  const base = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  let p1 = null;
-
-  const onClick = (ev) => {
-    const pt = canvasPointFromEvent(canvas, ev);
-    if (!p1) {
-      p1 = pt;
-      drawOverlay(() => {
-        drawMarker(ctx, p1.x, p1.y, "#ffcc00");
-        drawLabel(ctx, title, 12, 20);
-      });
-      return;
-    }
-    const p2 = pt;
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    const distPx = Math.sqrt(dx * dx + dy * dy);
-    cleanup();
-    onPicked(p1, p2, distPx);
-  };
-
-  const onMove = (ev) => {
-    if (!p1) return;
-    const p2 = canvasPointFromEvent(canvas, ev);
-    drawOverlay(() => {
-      drawMarker(ctx, p1.x, p1.y, "#ffcc00");
-      drawMarker(ctx, p2.x, p2.y, "#ffcc00");
-      drawLine(ctx, p1.x, p1.y, p2.x, p2.y, "#ffcc00");
-      drawLabel(ctx, `${title}: click second point`, 12, 20);
-    });
-  };
-
-  function drawOverlay(drawFn) {
-    ctx.putImageData(base, 0, 0);
-    drawFn();
-  }
-
-  function cleanup() {
-    canvas.removeEventListener("click", onClick);
-    canvas.removeEventListener("mousemove", onMove);
-    ctx.putImageData(base, 0, 0);
-  }
-
-  canvas.addEventListener("click", onClick);
-  canvas.addEventListener("mousemove", onMove);
-  drawOverlay(() => drawLabel(ctx, `${title}: click first point`, 12, 20));
 }
 
 function startRectPick({ title, onPicked }) {

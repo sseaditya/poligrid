@@ -1,0 +1,24 @@
+{
+  "name": "poligrid",
+  "version": "1.0.0",
+  "description": "A no-database web app for interior furniture concepting in India.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sseaditya/poligrid.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/sseaditya/poligrid/issues"
+  },
+  "homepage": "https://github.com/sseaditya/poligrid#readme",
+  "dependencies": {
+    "pdfjs-dist": "^5.5.207"
+  }
+}
