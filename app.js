@@ -132,364 +132,560 @@ const COST_RATES = {
 
 const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1.5";
 
+// ─── DOM refs ─────────────────────────────────────────────────────────────────
+
 const dom = {
-  floorPlan: document.getElementById("floorPlan"),
-  floorPlanLabels: document.getElementById("floorPlanLabels"),
-  floorPlanPreview: document.getElementById("floorPlanPreview"),
-  floorPlanCanvas: document.getElementById("floorPlanCanvas"),
-  floorPlanPreviewName: document.getElementById("floorPlanPreviewName"),
-  analyzeBtn: document.getElementById("analyzeBtn"),
-  analysisPanel: document.getElementById("analysisPanel"),
-  analysisStatus: document.getElementById("analysisStatus"),
+  floorPlan:          document.getElementById("floorPlan"),
+  floorPlanName:      document.getElementById("floorPlanName"),
+  analyzeBtn:         document.getElementById("analyzeBtn"),
+  analysisPanel:      document.getElementById("analysisPanel"),
   analysisStatusText: document.getElementById("analysisStatusText"),
-  analysisSummaryWrap: document.getElementById("analysisSummaryWrap"),
-  analysisSummaryText: document.getElementById("analysisSummaryText"),
-  detectedRoomsList: document.getElementById("detectedRoomsList"),
-  addRoomBtn: document.getElementById("addRoomBtn"),
-  roomsList: document.getElementById("roomsList"),
-  plannerForm: document.getElementById("planner-form"),
-  outputPanel: document.getElementById("outputPanel"),
-  roomResults: document.getElementById("roomResults"),
-  statusBox: document.getElementById("statusBox"),
-  placementSummary: document.getElementById("placementSummary"),
-  boqTableBody: document.querySelector("#boqTable tbody"),
-  grandTotal: document.getElementById("grandTotal"),
-  downloadScene: document.getElementById("downloadScene"),
-  downloadBoq: document.getElementById("downloadBoq")
+  analysisSummaryWrap:document.getElementById("analysisSummaryWrap"),
+  analysisSummaryText:document.getElementById("analysisSummaryText"),
+  detectedRoomsList:  document.getElementById("detectedRoomsList"),
+  canvasPlaceholder:  document.getElementById("canvasPlaceholder"),
+  canvasWrap:         document.getElementById("canvasWrap"),
+  plannerCanvas:      document.getElementById("plannerCanvas"),
+  canvasControlsSection: document.getElementById("canvasControlsSection"),
+  pinsPanelSection:   document.getElementById("pinsPanelSection"),
+  tabSelect:          document.getElementById("tabSelect"),
+  tabPin:             document.getElementById("tabPin"),
+  furniturePalette:   document.getElementById("furniturePalette"),
+  nlInput:            document.getElementById("nlInput"),
+  nlBtn:              document.getElementById("nlBtn"),
+  nlStatus:           document.getElementById("nlStatus"),
+  selectionPanel:     document.getElementById("selectionPanel"),
+  selectionLabel:     document.getElementById("selectionLabel"),
+  rotateBtn:          document.getElementById("rotateBtn"),
+  deleteBtn:          document.getElementById("deleteBtn"),
+  placedList:         document.getElementById("placedList"),
+  pinsList:           document.getElementById("pinsList"),
+  globalBrief:        document.getElementById("globalBrief"),
+  generateBtn:        document.getElementById("generateBtn"),
+  generateStatus:     document.getElementById("generateStatus"),
+  outputPanel:        document.getElementById("outputPanel"),
+  roomResults:        document.getElementById("roomResults"),
+  statusBox:          document.getElementById("statusBox"),
+  placementSummary:   document.getElementById("placementSummary"),
+  boqTableBody:       document.querySelector("#boqTable tbody"),
+  grandTotal:         document.getElementById("grandTotal"),
+  downloadScene:      document.getElementById("downloadScene"),
+  downloadBoq:        document.getElementById("downloadBoq"),
+  // Camera pin popover
+  pinPopover:         document.getElementById("pinPopover"),
+  pinPopoverTitle:    document.getElementById("pinPopoverTitle"),
+  pinPopoverClose:    document.getElementById("pinPopoverClose"),
+  pinPhotoInput:      document.getElementById("pinPhotoInput"),
+  pinPhotoPreview:    document.getElementById("pinPhotoPreview"),
+  pinRoomLabel:       document.getElementById("pinRoomLabel"),
+  pinFov:             document.getElementById("pinFov"),
+  pinBrief:           document.getElementById("pinBrief")
 };
 
+// ─── State ────────────────────────────────────────────────────────────────────
+
+let planner = null; // PlannerCanvas instance
 let latestArtifacts = null;
-let roomsState = [];
-let roomIdSeq = 1;
-let roomBoxEditorCleanup = null; // cleanup fn for the interactive overlay
+let activePinId = null; // pin being edited in popover
 
 const floorPlanState = {
   file: null,
-  kind: null, // "pdf" | "image"
-  page: 1,
+  kind: null,
   rendered: false,
-  _renderWidth: 0,
-  _renderHeight: 0,
-  roomRectsById: {},
-  detectedRooms: null // from /api/analyze/floorplan
+  detectedRooms: null
 };
+
+const ROOM_DOT_COLORS = {
+  bedroom:"#8a4db5", living:"#2e8b57", kitchen:"#c97820",
+  bathroom:"#2080c0", dining:"#c04040", study:"#3070a0",
+  balcony:"#288070", foyer:"#a09020", utility:"#707070", other:"#6050a0"
+};
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
 
 init();
 
 function init() {
-  dom.plannerForm.addEventListener("submit", onGenerate);
-  dom.addRoomBtn.addEventListener("click", () => addRoom());
   dom.floorPlan.addEventListener("change", onFloorPlanPicked);
-  dom.analyzeBtn && dom.analyzeBtn.addEventListener("click", onAnalyzePlan);
+  dom.analyzeBtn.addEventListener("click", onAnalyzePlan);
+  dom.tabSelect.addEventListener("click", () => setMode("select"));
+  dom.tabPin.addEventListener("click", () => setMode("pin"));
+  dom.rotateBtn.addEventListener("click", () => planner?.rotateSelected());
+  dom.deleteBtn.addEventListener("click", () => planner?.removeSelected());
+  dom.nlBtn.addEventListener("click", onNlAdd);
+  dom.nlInput.addEventListener("keydown", e => { if (e.key === "Enter") onNlAdd(); });
+  dom.generateBtn.addEventListener("click", onGenerate);
+  dom.pinPopoverClose.addEventListener("click", () => { dom.pinPopover.hidden = true; });
+  dom.pinPhotoInput.addEventListener("change", onPinPhotoUpload);
+  dom.pinRoomLabel.addEventListener("input", onPinFieldChange);
+  dom.pinFov.addEventListener("input", onPinFieldChange);
+  dom.pinBrief.addEventListener("input", onPinFieldChange);
   dom.downloadScene.addEventListener("click", () => {
-    if (latestArtifacts) {
-      downloadText("furnished_scene.json", JSON.stringify(latestArtifacts.scene, null, 2), "application/json");
-    }
+    if (latestArtifacts) downloadText("furnished_scene.json", JSON.stringify(latestArtifacts.scene, null, 2), "application/json");
   });
   dom.downloadBoq.addEventListener("click", () => {
-    if (latestArtifacts) {
-      downloadText("bom_pricing.csv", latestArtifacts.boq.csv, "text/csv");
-    }
+    if (latestArtifacts) downloadText("bom_pricing.csv", latestArtifacts.boq.csv, "text/csv");
   });
-  addRoom();
+
+  buildPalette();
 }
+
+function buildPalette() {
+  dom.furniturePalette.innerHTML = "";
+  for (const m of MODULE_LIBRARY) {
+    const item = document.createElement("div");
+    item.className = "palette-item";
+    item.draggable = true;
+    item.innerHTML = `<span>${escapeHtml(m.label)}</span><span class="palette-item-dim">${m.w}×${m.d}m</span>`;
+    item.addEventListener("dragstart", () => { planner?.startExternalDrop(m); });
+    item.addEventListener("click", () => {
+      if (!planner) return;
+      planner.addFurnitureFromSuggestion(MODULE_LIBRARY, { id: m.id, label: m.label }, null);
+      refreshPlacedList();
+    });
+    dom.furniturePalette.appendChild(item);
+  }
+}
+
+function setMode(mode) {
+  if (!planner) return;
+  planner.setMode(mode);
+  dom.tabSelect.classList.toggle("active", mode === "select");
+  dom.tabPin.classList.toggle("active", mode === "pin");
+}
+
+// ─── Floor plan upload ────────────────────────────────────────────────────────
 
 async function onFloorPlanPicked() {
-  const file = dom.floorPlan.files && dom.floorPlan.files[0];
-  if (!file) {
-    dom.floorPlanPreview.hidden = true;
-    resetFloorPlanState();
-    return;
-  }
-  resetFloorPlanState();
+  const file = dom.floorPlan.files?.[0];
+  if (!file) return;
   floorPlanState.file = file;
   floorPlanState.kind = file.type === "application/pdf" ? "pdf" : file.type.startsWith("image/") ? "image" : null;
-  if (!floorPlanState.kind) {
-    dom.floorPlanPreview.hidden = true;
-    return;
-  }
+  if (!floorPlanState.kind) { alert("Only PDF or image files are supported."); return; }
 
-  dom.floorPlanPreviewName.textContent = file.name;
-  dom.floorPlanPreview.hidden = false;
-  if (dom.analysisPanel) dom.analysisPanel.hidden = true;
-  await renderFloorPlanToCanvas(file);
+  dom.floorPlanName.textContent = file.name;
+  dom.analyzeBtn.disabled = false;
+
+  // Render floor plan to a hidden canvas, then pass it to PlannerCanvas
+  dom.canvasPlaceholder.hidden = false;
+  dom.canvasWrap.hidden = true;
+  floorPlanState.rendered = false;
+  floorPlanState.detectedRooms = null;
+
+  // Use a temporary off-screen canvas to render the plan
+  const tempCanvas = document.createElement("canvas");
+  await renderFloorPlanToCanvas(file, tempCanvas);
+  floorPlanState.rendered = true;
+
+  // Show canvas workspace
+  dom.canvasPlaceholder.hidden = true;
+  dom.canvasWrap.hidden = false;
+
+  // Init PlannerCanvas
+  planner = new PlannerCanvas(dom.plannerCanvas, {
+    onStateChange: onSceneChange,
+    onPinSelect: openPinPopover
+  });
+  planner.setFloorPlanImage(tempCanvas);
 }
 
-// ─── Floor Plan Analysis ──────────────────────────────────────
+// ─── Floor plan analysis ──────────────────────────────────────────────────────
 
 async function onAnalyzePlan() {
-  if (!floorPlanState.rendered) {
-    alert("Upload a floor plan first.");
-    return;
-  }
-
+  if (!floorPlanState.rendered || !planner) { alert("Upload a floor plan first."); return; }
   const PA = window.PoligridAnalysis;
   if (!PA) { alert("Analysis module not loaded."); return; }
 
-  // Show analysis panel with spinner
   dom.analysisPanel.hidden = false;
-  dom.analysisSummaryWrap.hidden = true;
-  dom.analysisStatus.innerHTML = `<span class="spinner"></span><span id="analysisStatusText">Analysing floor plan with GPT-5.4…</span>`;
-
-  // Cleanup any previous editor
-  if (roomBoxEditorCleanup) { roomBoxEditorCleanup(); roomBoxEditorCleanup = null; }
+  dom.analysisStatusText.textContent = "Analysing with AI…";
 
   try {
-    const analysis = await PA.analyzeFloorPlan(dom.floorPlanCanvas);
+    // Use a temp canvas matching the bg image to run analysis
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = planner.bgImage.width;
+    tempCanvas.height = planner.bgImage.height;
+    tempCanvas.getContext("2d").drawImage(planner.bgImage, 0, 0);
+
+    const analysis = await PA.analyzeFloorPlan(tempCanvas);
     floorPlanState.detectedRooms = analysis.rooms || [];
 
-    // Update status
-    dom.analysisStatus.innerHTML = `<span style="color:var(--brand)">✓</span><span id="analysisStatusText">Found ${analysis.rooms.length} room(s) · ${analysis.bhkType || ""} · ${analysis.totalAreaM2 ? analysis.totalAreaM2 + " m²" : ""}</span>`;
-
-    // Show summary
+    dom.analysisStatusText.textContent = `✓ ${analysis.rooms.length} rooms · ${analysis.bhkType || ""} · ${analysis.totalAreaM2 || "?"}m²`;
     dom.analysisSummaryText.textContent = analysis.summary || "";
-    renderDetectedRoomsPills(analysis.rooms);
+
+    renderRoomChips(analysis.rooms);
     dom.analysisSummaryWrap.hidden = false;
 
-    // Draw overlay + start editor
-    const ctx = dom.floorPlanCanvas.getContext("2d");
-    const snapshot = ctx.getImageData(0, 0, dom.floorPlanCanvas.width, dom.floorPlanCanvas.height);
-    PA.drawRoomOverlay(dom.floorPlanCanvas, analysis.rooms, null, null);
+    // Pass rooms to PlannerCanvas — sets overlays + auto-places furniture
+    planner.setDetectedRooms(analysis.rooms);
+    planner.autoPlaceAll(MODULE_LIBRARY);
 
-    roomBoxEditorCleanup = PA.startRoomBoxEditor(
-      dom.floorPlanCanvas,
-      analysis.rooms,
-      floorPlanState.detectedRooms,
-      snapshot,
-      (label, newBbox) => {
-        const room = floorPlanState.detectedRooms.find(r => r.label === label);
-        if (room) room.bbox = newBbox;
-      }
-    );
+    // Show canvas tools
+    dom.canvasControlsSection.hidden = false;
+    dom.pinsPanelSection.hidden = false;
+    dom.generateBtn.disabled = false;
 
-    // Auto-sync detected rooms into room cards
-    syncDetectedRoomsToCards(analysis.rooms);
-
+    refreshPlacedList();
+    refreshPinsList();
   } catch (err) {
-    dom.analysisStatus.innerHTML = `<span style="color:#b84040">⚠ ${escapeHtml(err.message)}</span>`;
+    dom.analysisStatusText.textContent = `⚠ ${err.message}`;
   }
 }
 
-function renderDetectedRoomsPills(rooms) {
-  const ROOM_DOT_COLORS = {
-    bedroom: "#8a4db5", living: "#2e8b57", kitchen: "#c97820",
-    bathroom: "#2080c0", dining: "#c04040", study: "#3070a0",
-    balcony: "#288070", foyer: "#a09020", utility: "#707070", other: "#6050a0"
-  };
+function renderRoomChips(rooms) {
   dom.detectedRoomsList.innerHTML = "";
   for (const room of rooms) {
-    const pill = document.createElement("span");
-    pill.className = "room-pill-detected";
-    pill.title = room.notes || "";
-    const dotColor = ROOM_DOT_COLORS[room.roomType] || "#6050a0";
-    pill.innerHTML = `
-      <span class="pill-type-dot" style="background:${dotColor}"></span>
-      <span>${escapeHtml(room.label)} — ${escapeHtml(room.name)}</span>
-      <span class="pill-dims">${room.widthM || "?"} × ${room.lengthM || "?"}m</span>
-    `;
-    dom.detectedRoomsList.appendChild(pill);
+    const chip = document.createElement("span");
+    chip.className = "room-chip";
+    chip.title = room.notes || "";
+    chip.innerHTML = `
+      <span class="room-chip-dot" style="background:${ROOM_DOT_COLORS[room.roomType]||"#6050a0"}"></span>
+      ${escapeHtml(room.label)}
+      <span class="room-chip-dim">${room.widthM||"?"}×${room.lengthM||"?"}m</span>`;
+    dom.detectedRoomsList.appendChild(chip);
   }
 }
 
-function syncDetectedRoomsToCards(detectedRooms) {
-  // Map existing cards to detected rooms by label
-  const cards = [...dom.roomsList.querySelectorAll(".room-card")];
+// ─── NL furniture add ─────────────────────────────────────────────────────────
 
-  for (let i = 0; i < detectedRooms.length; i++) {
-    const dr = detectedRooms[i];
-    // Skip bathrooms/utility from auto-syncing (they rarely need design briefs)
-    if (dr.roomType === "bathroom" || dr.roomType === "utility") continue;
+async function onNlAdd() {
+  const text = dom.nlInput.value.trim();
+  if (!text || !planner) return;
 
-    let card = cards[i];
-    if (!card) {
-      addRoom();
-      const updatedCards = [...dom.roomsList.querySelectorAll(".room-card")];
-      card = updatedCards[updatedCards.length - 1];
-    }
-    if (!card) continue;
-
-    const labelInput = card.querySelector('[data-field="label"]');
-    const nameInput = card.querySelector('[data-field="name"]');
-    const widthInput = card.querySelector('[data-field="widthM"]');
-    const lengthInput = card.querySelector('[data-field="lengthM"]');
-
-    if (labelInput && !labelInput.value) labelInput.value = dr.label;
-    if (nameInput && !nameInput.value) nameInput.value = dr.name;
-    if (widthInput) widthInput.value = String(dr.widthM || 4.2);
-    if (lengthInput) lengthInput.value = String(dr.lengthM || 4.2);
-  }
-}
-
-async function onGenerate(event) {
-  event.preventDefault();
-  const generateBtn = document.getElementById("generateBtn");
-  generateBtn.disabled = true;
-  generateBtn.textContent = "Generating...";
+  dom.nlStatus.hidden = false;
+  dom.nlStatus.textContent = "Thinking…";
 
   try {
-    const floorPlanFile = dom.floorPlan.files[0];
-    if (!floorPlanFile) {
-      throw new Error("Please provide a floor plan PDF.");
-    }
+    const resp = await fetch("/api/furniture/suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        request: text,
+        availableModules: MODULE_LIBRARY.map(m => ({ id: m.id, label: m.label, w: m.w, d: m.d, h: m.h, type: m.type }))
+      })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Suggest failed");
 
-    const rooms = readRoomsFromDom();
-    if (!rooms.length) {
-      throw new Error("Add at least one room.");
-    }
-    for (const room of rooms) {
-      if (!room.label) {
-        throw new Error("Each room needs a room number / label.");
+    const suggestions = data.suggestions || [];
+    if (!suggestions.length) { dom.nlStatus.textContent = "No matching module found."; return; }
+
+    // Add top suggestion
+    const top = suggestions[0];
+    planner.addFurnitureFromSuggestion(MODULE_LIBRARY, top, null);
+    dom.nlStatus.textContent = `✓ Added: ${top.label}`;
+    dom.nlInput.value = "";
+    refreshPlacedList();
+  } catch (err) {
+    dom.nlStatus.textContent = `⚠ ${err.message}`;
+  }
+}
+
+// ─── Scene change callback ────────────────────────────────────────────────────
+
+function onSceneChange(state) {
+  refreshPlacedList();
+  refreshPinsList();
+  // Enable generate once we have at least one camera pin
+  dom.generateBtn.disabled = !state.cameraPins.length && !floorPlanState.detectedRooms;
+}
+
+function refreshPlacedList() {
+  if (!planner) return;
+  dom.placedList.innerHTML = "";
+  for (const f of planner.furniturePlacements) {
+    const item = document.createElement("div");
+    item.className = "placed-item" + (planner.selected?.id === f.id ? " active" : "");
+    item.innerHTML = `
+      <span class="placed-dot" style="background:${f.color}"></span>
+      <span>${escapeHtml(f.label)}</span>
+      <span class="placed-room">${escapeHtml(f.roomLabel || "")}</span>`;
+    item.addEventListener("click", () => {
+      planner.selected = { type: "furniture", id: f.id };
+      planner.render();
+      updateSelectionPanel();
+    });
+    dom.placedList.appendChild(item);
+  }
+  updateSelectionPanel();
+}
+
+function updateSelectionPanel() {
+  if (!planner || !planner.selected) {
+    dom.selectionPanel.hidden = true;
+    return;
+  }
+  dom.selectionPanel.hidden = false;
+  if (planner.selected.type === "furniture") {
+    const f = planner.furniturePlacements.find(f => f.id === planner.selected.id);
+    dom.selectionLabel.textContent = f ? `${f.label} (${f.wM.toFixed(1)}×${f.dM.toFixed(1)}m)` : "";
+    dom.rotateBtn.hidden = false;
+  } else {
+    const p = planner.cameraPins.find(p => p.id === planner.selected.id);
+    dom.selectionLabel.textContent = p ? `📷 Pin — ${p.roomLabel || "no room"}` : "";
+    dom.rotateBtn.hidden = true;
+  }
+}
+
+function refreshPinsList() {
+  if (!planner) return;
+  dom.pinsList.innerHTML = "";
+  for (const pin of planner.cameraPins) {
+    const card = document.createElement("div");
+    card.className = "pin-card" + (activePinId === pin.id ? " active" : "");
+    const thumbHtml = pin.photoDataUrl
+      ? `<img class="pin-thumb" src="${pin.photoDataUrl}" alt="photo">`
+      : `<div class="pin-thumb-placeholder">📷</div>`;
+    card.innerHTML = `
+      <div class="pin-card-head">
+        ${thumbHtml}
+        <div class="pin-info">
+          <div class="pin-name">${escapeHtml(pin.roomLabel || "Pin")}</div>
+          <div class="pin-dir">${Math.round(pin.angleDeg)}° · FOV ${pin.fovDeg}°</div>
+        </div>
+        <button class="ghost-sm" data-pin-edit="${pin.id}">Edit</button>
+      </div>
+      ${pin.brief ? `<div class="mini-note" style="margin-top:4px">${escapeHtml(pin.brief)}</div>` : ""}`;
+    card.querySelector("[data-pin-edit]").addEventListener("click", () => openPinPopover(pin));
+    dom.pinsList.appendChild(card);
+  }
+}
+
+// ─── Camera pin popover ───────────────────────────────────────────────────────
+
+function openPinPopover(pin) {
+  activePinId = pin.id;
+  dom.pinPopoverTitle.textContent = `📷 ${pin.roomLabel || "Camera Pin"}`;
+  dom.pinRoomLabel.value = pin.roomLabel || "";
+  dom.pinFov.value = String(pin.fovDeg || 60);
+  dom.pinBrief.value = pin.brief || "";
+  if (pin.photoDataUrl) {
+    dom.pinPhotoPreview.innerHTML = `<img src="${pin.photoDataUrl}" alt="Photo">`;
+    dom.pinPhotoPreview.hidden = false;
+  } else {
+    dom.pinPhotoPreview.hidden = true;
+  }
+  dom.pinPopover.hidden = false;
+  refreshPinsList();
+}
+
+function onPinPhotoUpload() {
+  const file = dom.pinPhotoInput.files?.[0];
+  if (!file || !activePinId || !planner) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    planner.updatePin(activePinId, { photoFile: file, photoDataUrl: e.target.result });
+    dom.pinPhotoPreview.innerHTML = `<img src="${e.target.result}" alt="Photo">`;
+    dom.pinPhotoPreview.hidden = false;
+    refreshPinsList();
+  };
+  reader.readAsDataURL(file);
+}
+
+function onPinFieldChange() {
+  if (!activePinId || !planner) return;
+  planner.updatePin(activePinId, {
+    roomLabel: dom.pinRoomLabel.value,
+    fovDeg: parseInt(dom.pinFov.value) || 60,
+    brief: dom.pinBrief.value
+  });
+  refreshPinsList();
+}
+
+// ─── Generate ──────────────────────────────────────────────────────────────────
+
+async function onGenerate() {
+  if (!planner) { alert("Upload and analyse a floor plan first."); return; }
+
+  const globalBrief = dom.globalBrief.value.trim();
+  const pins = planner.getCameraPinsWithFiles();
+
+  // Build per-room render requests from camera pins + placed furniture
+  const renderSources = [];
+  const detectedRooms = floorPlanState.detectedRooms || [];
+
+  if (pins.length) {
+    for (const pin of pins) {
+      const roomLabel = pin.roomLabel || "unknown";
+      const detectedRoom = detectedRooms.find(r => r.label === roomLabel);
+
+      // Require real dimensions — no silent fallback
+      let widthM  = parseFloat(detectedRoom?.widthM);
+      let lengthM = parseFloat(detectedRoom?.lengthM);
+      if (!widthM || !lengthM) {
+        const entered = promptRoomDims(roomLabel);
+        if (!entered) return; // user cancelled
+        widthM = entered.w;
+        lengthM = entered.l;
+        // Store back so subsequent pins don't re-prompt
+        if (detectedRoom) { detectedRoom.widthM = widthM; detectedRoom.lengthM = lengthM; }
       }
-      if (!room.brief) {
-        throw new Error(`Room ${room.label}: design brief is required.`);
-      }
-      if (!room.photos.length && !room.generateFromPlan) {
-        throw new Error(`Room ${room.label}: add photos OR enable "Generate from floor plan".`);
-      }
-    }
 
-    dom.outputPanel.hidden = false;
-    dom.statusBox.textContent = "Extracting style + generating furnished concepts (OpenAI)…";
-
-    // Show floor plan analysis strip if we have it
-    if (floorPlanState.detectedRooms) {
-      const strip = document.createElement("div");
-      strip.className = "fp-analysis-strip";
-      const a = floorPlanState.detectedRooms;
-      const parent = dom.outputPanel;
-      strip.innerHTML = `<strong>Floor plan:</strong> ${a.length} rooms detected via AI analysis.`;
-      parent.insertBefore(strip, parent.firstChild);
-    }
-    const floorPlanLabels = String(dom.floorPlanLabels.value || "").trim();
-
-    const roomResults = [];
-    const allPlacements = [];
-    const perRoomSummary = [];
-    let fallbackCount = 0;
-
-    for (const room of rooms) {
-      // Use AI-detected dimensions/notes if available, fall back to card input, then defaults
-      const detectedRoom = floorPlanState.detectedRooms
-        ? floorPlanState.detectedRooms.find(dr => dr.label === room.label)
-        : null;
-      const widthM = parseFloat(detectedRoom?.widthM || room.widthM) || 4.2;
-      const lengthM = parseFloat(detectedRoom?.lengthM || room.lengthM) || 4.2;
       const archNotes = detectedRoom?.notes || "";
-      const roomType = detectedRoom?.roomType || "other";
+      const roomType  = detectedRoom?.roomType || "other";
+      const placements = planner.getPlacementsForRoom(roomLabel);
+      const brief = [pin.brief, globalBrief].filter(Boolean).join(". ");
 
-      const style = await extractRoomStyle(room);
+      renderSources.push({
+        pinId: pin.id, roomLabel, widthM, lengthM, archNotes, roomType,
+        placements, brief, photoFile: pin.photoFile, photoDataUrl: pin.photoDataUrl
+      });
+    }
+  } else {
+    // No pins: generate from all detected rooms
+    if (!detectedRooms.length) {
+      alert("Please analyse the floor plan first so room dimensions are known.");
+      return;
+    }
+    for (const room of detectedRooms) {
+      if (room.roomType === "bathroom" || room.roomType === "utility") continue;
+
+      let widthM  = parseFloat(room.widthM);
+      let lengthM = parseFloat(room.lengthM);
+      if (!widthM || !lengthM) {
+        const entered = promptRoomDims(room.label);
+        if (!entered) return;
+        widthM = entered.w;
+        lengthM = entered.l;
+        room.widthM = widthM;
+        room.lengthM = lengthM;
+      }
+
+      const placements = planner.getPlacementsForRoom(room.label);
+      renderSources.push({
+        pinId: null, roomLabel: room.label,
+        widthM, lengthM,
+        archNotes: room.notes || "", roomType: room.roomType,
+        placements, brief: globalBrief || room.name,
+        photoFile: null, photoDataUrl: null
+      });
+    }
+  }
+
+  if (!renderSources.length) { alert("Add camera pins or analyse the floor plan first."); return; }
+
+  dom.outputPanel.hidden = false;
+  document.querySelector(".workspace").classList.add("output-open");
+  dom.generateBtn.disabled = true;
+  dom.generateBtn.textContent = "Generating…";
+  dom.generateStatus.hidden = false;
+  dom.generateStatus.textContent = "Extracting styles + generating renders…";
+
+  let fallbackCount = 0;
+  const roomResults = [];
+  const allPlacements = [];
+  const perRoomSummary = [];
+
+  try {
+    for (const src of renderSources) {
+      dom.generateStatus.textContent = `Rendering ${src.roomLabel}…`;
+
+      const styleInput = { label: src.roomLabel, brief: src.brief, name: src.roomLabel, inspo: [], photos: [] };
+      const style = await extractRoomStyle(styleInput);
       const laminate = pickLaminateFromStyle(style);
-      const selectedModules = pickModulesFromBrief(`${room.brief}\n${style.style_summary || ""}\n${roomType}`, widthM * lengthM);
 
-      const placement = placeModules(selectedModules, widthM, lengthM);
-      allPlacements.push(...placement.placements.map((p) => ({ ...p, roomLabel: room.label })));
+      // Convert planner placements to the format expected by legacy BOM/prompt code
+      const legacyPlacements = src.placements.map(f => ({
+        module: MODULE_LIBRARY.find(m => m.id === f.moduleId) || { label: f.label, w: f.wM, d: f.dM, h: f.hM || 2.1 },
+        wall: f.wall || "south",
+        x: f.xM, z: f.yM, rotationY: f.rotationY || 0
+      }));
+      const placementObj = { placements: legacyPlacements, warnings: [] };
+      allPlacements.push(...legacyPlacements.map(p => ({ ...p, roomLabel: src.roomLabel })));
 
+      const selectedModules = legacyPlacements.map(p => p.module);
       const renders = [];
-      if (room.photos.length) {
-        for (let i = 0; i < room.photos.length; i += 1) {
-          const file = room.photos[i];
-          try {
-            const edited = await createOpenAiFurnishedRender(
-              file,
-              {
-                model: DEFAULT_OPENAI_IMAGE_MODEL,
-                roomWidth: widthM,
-                roomLength: lengthM,
-                brief: room.brief,
-                styleSummary: style.style_summary || "",
-                laminate,
-                placements: placement.placements,
-                roomLabel: room.label,
-                archNotes
-              },
-              i
-            );
-            renders.push(edited);
-          } catch (error) {
-            fallbackCount += 1;
-            const fb = await createLocalFurnishedRender(file, placement.placements, laminate, i);
-            fb.note = `OpenAI failed: ${error.message}`;
-            renders.push(fb);
-          }
+
+      if (src.photoFile) {
+        try {
+          const edited = await createOpenAiFurnishedRender(src.photoFile, {
+            model: DEFAULT_OPENAI_IMAGE_MODEL,
+            roomWidth: src.widthM, roomLength: src.lengthM,
+            brief: src.brief, styleSummary: style.style_summary || "",
+            laminate, placements: legacyPlacements,
+            roomLabel: src.roomLabel, archNotes: src.archNotes
+          }, 0);
+          renders.push(edited);
+        } catch (err) {
+          fallbackCount++;
+          const fb = await createLocalFurnishedRender(src.photoFile, legacyPlacements, laminate, 0);
+          fb.note = `OpenAI failed: ${err.message}`;
+          renders.push(fb);
         }
-      } else if (room.generateFromPlan) {
-        const crop = floorPlanState.roomRectsById[room._roomId];
-        const cropPngBase64 = crop
-          ? cropCanvasRegionToPngBase64(dom.floorPlanCanvas, crop, 1400)
-          : cropCanvasRegionToPngBase64(dom.floorPlanCanvas, { x: 0, y: 0, w: dom.floorPlanCanvas.width, h: dom.floorPlanCanvas.height }, 1400);
-        for (let i = 0; i < 2; i += 1) {
+      } else {
+        // Generate from floor plan crop of the room bbox
+        const detectedRoom = detectedRooms.find(r => r.label === src.roomLabel);
+        const bgW = planner.bgImage?.width || 800, bgH = planner.bgImage?.height || 600;
+        const cropRect = detectedRoom
+          ? {
+              x: detectedRoom.bbox.xPct * bgW, y: detectedRoom.bbox.yPct * bgH,
+              w: detectedRoom.bbox.wPct * bgW,  h: detectedRoom.bbox.hPct * bgH
+            }
+          : { x: 0, y: 0, w: bgW, h: bgH };
+
+        const tempBg = document.createElement("canvas");
+        tempBg.width = bgW; tempBg.height = bgH;
+        tempBg.getContext("2d").drawImage(planner.bgImage, 0, 0);
+        const cropBase64 = cropCanvasRegionToPngBase64(tempBg, cropRect, 1400);
+
+        for (let i = 0; i < 2; i++) {
           try {
             const edited = await createOpenAiFurnishedRenderFromBase64(
-              `floorplan_${room.label}_concept_${i + 1}.png`,
-              cropPngBase64,
-              "image/png",
+              `floorplan_${src.roomLabel}_concept_${i + 1}.png`,
+              cropBase64, "image/png",
               {
                 model: DEFAULT_OPENAI_IMAGE_MODEL,
-                roomWidth: widthM,
-                roomLength: lengthM,
-                brief: room.brief,
-                styleSummary: style.style_summary || "",
-                laminate,
-                placements: placement.placements,
-                roomLabel: room.label,
-                fromFloorPlan: true,
-                archNotes
-              },
-              i
-            );
+                roomWidth: src.widthM, roomLength: src.lengthM,
+                brief: src.brief, styleSummary: style.style_summary || "",
+                laminate, placements: legacyPlacements,
+                roomLabel: src.roomLabel, fromFloorPlan: true, archNotes: src.archNotes
+              }, i);
             renders.push(edited);
-          } catch (error) {
-            fallbackCount += 1;
+          } catch (err) {
+            fallbackCount++;
             renders.push({
-              name: `floorplan_${room.label}_concept_${i + 1}.png`,
-              dataUrl: `data:image/png;base64,${cropPngBase64}`,
+              name: `floorplan_${src.roomLabel}_concept_${i+1}.png`,
+              dataUrl: `data:image/png;base64,${cropBase64}`,
               source: "floorplan",
-              note: `OpenAI failed (showing plan crop): ${error.message}`
+              note: `OpenAI failed: ${err.message}`
             });
           }
         }
       }
 
-      roomResults.push({
-        room,
-        style,
-        laminate,
-        selectedModules,
-        placement,
-        renders
-      });
-
-      perRoomSummary.push(formatRoomSummary({ room, style, laminate, selectedModules, placement }));
+      const roomLike = { label: src.roomLabel, name: src.roomLabel, widthM: src.widthM, lengthM: src.lengthM, brief: src.brief, photos: src.photoFile ? [src.photoFile] : [], inspo: [], generateFromPlan: !src.photoFile };
+      roomResults.push({ room: roomLike, style, laminate, selectedModules, placement: placementObj, renders });
+      perRoomSummary.push(formatRoomSummary({ room: roomLike, style, laminate, selectedModules, placement: placementObj }));
     }
 
     drawRoomResults(roomResults);
 
-    const scene = buildSceneJson({ floorPlan: floorPlanFile.name, floorPlanLabels, rooms: roomResults });
+    const scene = buildSceneJson({ floorPlan: floorPlanState.file?.name || "", floorPlanLabels: "", rooms: roomResults });
     const boq = buildBoqFromRooms(roomResults);
     paintBoq(boq.rows, boq.grandTotal);
 
     dom.placementSummary.textContent = [
-      `Floor plan file: ${floorPlanFile.name}`,
-      floorPlanLabels ? `Floor plan labels/notes: ${floorPlanLabels}` : null,
+      `Floor plan: ${floorPlanState.file?.name || ""}`,
       "",
       ...perRoomSummary
-    ]
-      .filter(Boolean)
-      .join("\n");
+    ].filter(v => v !== null).join("\n");
 
     dom.statusBox.textContent = fallbackCount
-      ? `Done. ${fallbackCount} image(s) used local fallback due to OpenAI errors.`
-      : "Done. Generated furnished rooms + standardized BOM.";
+      ? `Done. ${fallbackCount} render(s) used local fallback.`
+      : "Done. Generated furnished renders + BOM.";
 
     latestArtifacts = { scene, boq };
-  } catch (error) {
-    dom.outputPanel.hidden = false;
-    dom.statusBox.textContent = error.message;
+    dom.downloadScene.disabled = false;
+    dom.downloadBoq.disabled = false;
+  } catch (err) {
+    dom.statusBox.textContent = `Error: ${err.message}`;
   } finally {
-    generateBtn.disabled = false;
-    generateBtn.textContent = "Generate furnished rooms + BOM";
+    dom.generateBtn.disabled = false;
+    dom.generateBtn.textContent = "✦ Generate Renders + BOM";
+    dom.generateStatus.hidden = true;
   }
 }
+
+
 
 function pickModulesFromBrief(brief, roomArea) {
   const normalized = brief.toLowerCase();
@@ -804,8 +1000,8 @@ function drawRoomResults(roomResults) {
     const wrap = document.createElement("section");
     wrap.className = "room-result-card";
 
-    const widthM = parseFloat(result.room.widthM) || 4.2;
-    const lengthM = parseFloat(result.room.lengthM) || 4.2;
+    const widthM  = parseFloat(result.room.widthM)  || null;
+    const lengthM = parseFloat(result.room.lengthM) || null;
 
     // ── Head
     const head = document.createElement("div");
@@ -1424,20 +1620,20 @@ function resetFloorPlanState() {
   }
 }
 
-async function renderFloorPlanToCanvas(file) {
-  if (!dom.floorPlanCanvas) return;
+async function renderFloorPlanToCanvas(file, targetCanvas) {
+  const canvas = targetCanvas || dom.plannerCanvas;
+  if (!canvas) return;
   if (file.type === "application/pdf") {
-    await renderPdfFirstPage(file);
+    await renderPdfFirstPage(file, canvas);
     return;
   }
   if (file.type.startsWith("image/")) {
-    await renderImageToCanvas(file);
+    await renderImageToCanvas(file, canvas);
   }
 }
 
-async function renderImageToCanvas(file) {
+async function renderImageToCanvas(file, canvas) {
   const img = await readImage(file);
-  const canvas = dom.floorPlanCanvas;
   const maxW = 860;
   const scale = img.width > maxW ? maxW / img.width : 1;
   canvas.width = Math.max(2, Math.round(img.width * scale));
@@ -1445,13 +1641,9 @@ async function renderImageToCanvas(file) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  floorPlanState.rendered = true;
-  floorPlanState._renderWidth = canvas.width;
-  floorPlanState._renderHeight = canvas.height;
 }
 
-async function renderPdfFirstPage(file) {
-  const canvas = dom.floorPlanCanvas;
+async function renderPdfFirstPage(file, canvas) {
   const pdfjsLib = window.pdfjsLib;
   if (!pdfjsLib) {
     throw new Error("PDF renderer not available (pdf.js failed to load).");
@@ -1472,9 +1664,6 @@ async function renderPdfFirstPage(file) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   await page.render({ canvasContext: ctx, viewport }).promise;
-  floorPlanState.rendered = true;
-  floorPlanState._renderWidth = canvas.width;
-  floorPlanState._renderHeight = canvas.height;
 }
 
 function startRectPick({ title, onPicked }) {

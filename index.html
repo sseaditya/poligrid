@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Interior Fitout Planner</title>
-    <meta name="description" content="AI-powered interior fitout planner for Indian apartments. Upload a floor plan, auto-detect rooms, place furniture, generate furnished concepts and BOM." />
+    <meta name="description" content="AI-powered interior fitout planner — place furniture on your floor plan, pin camera viewpoints, generate furnished renders and BOM." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -12,115 +12,163 @@
   </head>
   <body>
     <div class="noise"></div>
-    <main class="app-shell">
 
-      <!-- ── INPUT PANEL ─────────────────────────────────────── -->
-      <section class="panel input-panel">
-        <h1>Interior Fitout Planner</h1>
-        <p class="subhead">Upload a floor plan → AI detects rooms → auto-place furniture → generate furnished concepts + BOM.</p>
+    <!-- ── TOP BAR ────────────────────────────────────────────────────────── -->
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <span class="logo-text">Poligrid</span>
+        <span class="logo-sub">Interior Fitout Planner</span>
+      </div>
+      <div class="top-bar-actions">
+        <button id="downloadScene" class="ghost-sm" disabled>↓ Scene JSON</button>
+        <button id="downloadBoq"   class="ghost-sm" disabled>↓ BOM CSV</button>
+      </div>
+    </header>
 
-        <form id="planner-form">
-          <div class="section-head">
-            <div>
-              <h2>Inputs</h2>
-              <p class="note">Step 1: floor plan. Step 2: rooms. Step 3: brief + inspiration.</p>
-            </div>
+    <div class="workspace">
+
+      <!-- ── LEFT SIDEBAR ──────────────────────────────────────────────────── -->
+      <aside class="sidebar">
+
+        <!-- Step 1: Floor Plan -->
+        <div class="sidebar-section">
+          <div class="step-label"><span class="step-num">1</span> Floor Plan</div>
+          <label class="file-drop-label" for="floorPlan">
+            <span id="floorPlanName" class="file-drop-prompt">Click or drag PDF / image</span>
+            <input type="file" id="floorPlan" accept="application/pdf,image/*" />
+          </label>
+          <button id="analyzeBtn" class="primary-btn" disabled>🔍 Analyse Plan</button>
+          <div id="analysisPanel" class="analysis-chip" hidden>
+            <span id="analysisStatusText" class="chip-text"></span>
           </div>
-
-          <!-- ── FLOOR PLAN ──────────────────────────────────── -->
-          <div class="form-section">
-            <h3>1) Floor plan</h3>
-            <label>
-              Floor plan (PDF preferred)
-              <input type="file" id="floorPlan" accept="application/pdf,image/*" required />
-            </label>
-            <label>
-              Labels / notes (optional)
-              <textarea id="floorPlanLabels" rows="2" placeholder="Example: Living=101, Kitchen=102, Master Bed=201."></textarea>
-            </label>
-            <div id="floorPlanPreview" class="preview-card" hidden>
-              <canvas id="floorPlanCanvas" aria-label="Floor plan preview"></canvas>
-              <div class="preview-meta">
-                <span id="floorPlanPreviewName"></span>
-                <button type="button" id="analyzeBtn" class="ghost analyse-btn">🔍 Analyse Plan</button>
-              </div>
-            </div>
-
-            <!-- Analysis status + detected rooms -->
-            <div id="analysisPanel" class="analysis-panel" hidden>
-              <div id="analysisStatus" class="analysis-status">
-                <span id="analysisStatusText"></span>
-              </div>
-              <div id="analysisSummaryWrap" hidden>
-                <p id="analysisSummaryText" class="analysis-summary-text"></p>
-                <div id="detectedRoomsList" class="detected-rooms-list"></div>
-                <p class="mini-note" style="margin-top:6px">Drag boxes on the floor plan to adjust room boundaries.</p>
-              </div>
-            </div>
+          <div id="analysisSummaryWrap" hidden>
+            <p id="analysisSummaryText" class="summary-text"></p>
+            <div id="detectedRoomsList" class="rooms-chip-list"></div>
           </div>
-
-          <!-- ── ROOMS ──────────────────────────────────────── -->
-          <div class="form-section">
-            <div class="row-between">
-              <h3>2) Rooms (add one at a time)</h3>
-              <button type="button" id="addRoomBtn" class="ghost">Add room</button>
-            </div>
-            <div id="roomsList" class="rooms-list"></div>
-          </div>
-
-          <!-- ── GENERATE ───────────────────────────────────── -->
-          <div class="form-section">
-            <h3>3) Generate</h3>
-            <button type="submit" id="generateBtn">Generate furnished rooms + BOM</button>
-          </div>
-        </form>
-
-        <p class="note">No database. Update inputs and click generate again.</p>
-      </section>
-
-      <!-- ── OUTPUT PANEL ───────────────────────────────────── -->
-      <section class="panel output-panel" id="outputPanel" hidden>
-        <div class="status" id="statusBox"></div>
-
-        <h2>Per-room furnished concepts</h2>
-        <div id="roomResults" class="room-results"></div>
-
-        <h2>Downloads</h2>
-        <div class="button-row">
-          <button id="downloadScene">Download Scene JSON</button>
-          <button id="downloadBoq">Download BOM CSV</button>
         </div>
 
-        <h2>Standardized BOM + Pricing (INR)</h2>
+        <!-- Step 2: Canvas Tools -->
+        <div class="sidebar-section" id="canvasControlsSection" hidden>
+          <div class="step-label"><span class="step-num">2</span> Furniture &amp; Camera Pins</div>
+
+          <div class="tool-tabs">
+            <button class="tool-tab active" id="tabSelect" data-mode="select">✥ Select</button>
+            <button class="tool-tab" id="tabPin" data-mode="pin">📷 Pin</button>
+          </div>
+
+          <!-- Furniture palette -->
+          <div class="palette-section" id="furniturePaletteSection">
+            <p class="palette-hint">Drag a module onto the plan, or type below:</p>
+            <div id="furniturePalette" class="furniture-palette"></div>
+            <div class="nl-row">
+              <input type="text" id="nlInput" placeholder='e.g. "Add a sofa to living room"' />
+              <button id="nlBtn" class="nl-btn">➤</button>
+            </div>
+            <div id="nlStatus" class="nl-status" hidden></div>
+          </div>
+
+          <!-- Selection info -->
+          <div id="selectionPanel" class="selection-panel" hidden>
+            <div id="selectionLabel" class="sel-label"></div>
+            <div class="sel-actions">
+              <button id="rotateBtn" class="ghost-sm">↺ Rotate</button>
+              <button id="deleteBtn" class="ghost-sm danger-sm">✕ Remove</button>
+            </div>
+          </div>
+
+          <!-- Placed furniture list -->
+          <div class="placed-list-wrap">
+            <div class="placed-list-head">Placed furniture</div>
+            <div id="placedList" class="placed-list"></div>
+          </div>
+        </div>
+
+        <!-- Step 3: Camera Pins -->
+        <div class="sidebar-section" id="pinsPanelSection" hidden>
+          <div class="step-label"><span class="step-num">3</span> Camera Viewpoints</div>
+          <p class="palette-hint">Double-click a pin on the plan to attach a photo + brief.</p>
+          <div id="pinsList" class="pins-list"></div>
+        </div>
+
+        <!-- Step 4: Brief + Generate -->
+        <div class="sidebar-section">
+          <div class="step-label"><span class="step-num">4</span> Brief &amp; Generate</div>
+          <label class="field-label">
+            Global design brief
+            <textarea id="globalBrief" rows="3" placeholder="e.g. Warm modern Indian, matte walnut, minimal handles, concealed wiring…"></textarea>
+          </label>
+          <button id="generateBtn" class="primary-btn" disabled>✦ Generate Renders + BOM</button>
+          <div id="generateStatus" class="analysis-chip" hidden></div>
+        </div>
+      </aside>
+
+      <!-- ── MAIN CANVAS ────────────────────────────────────────────────────── -->
+      <main class="canvas-area">
+        <div class="canvas-placeholder" id="canvasPlaceholder">
+          <div class="placeholder-inner">
+            <p class="placeholder-icon">🏠</p>
+            <p class="placeholder-text">Upload a floor plan to get started</p>
+          </div>
+        </div>
+        <div class="canvas-wrap" id="canvasWrap" hidden>
+          <canvas id="plannerCanvas" tabindex="0" aria-label="Interactive floor plan workspace"></canvas>
+        </div>
+
+        <!-- ── Camera pin editor popover ──────────────────────────────────── -->
+        <div class="pin-popover" id="pinPopover" hidden>
+          <div class="pin-popover-head">
+            <span id="pinPopoverTitle">Camera Pin</span>
+            <button class="ghost-sm" id="pinPopoverClose">✕</button>
+          </div>
+          <div class="pin-popover-body">
+            <label class="field-label">
+              Attach photo
+              <input type="file" id="pinPhotoInput" accept="image/*" />
+            </label>
+            <div id="pinPhotoPreview" class="pin-photo-preview" hidden></div>
+            <label class="field-label">
+              Room label
+              <input type="text" id="pinRoomLabel" placeholder="e.g. Living Room" />
+            </label>
+            <label class="field-label">
+              FOV °
+              <input type="number" id="pinFov" value="60" min="20" max="120" step="5" />
+            </label>
+            <label class="field-label">
+              Brief for this view
+              <textarea id="pinBrief" rows="2" placeholder="e.g. TV wall, warm lighting"></textarea>
+            </label>
+          </div>
+        </div>
+      </main>
+
+      <!-- ── OUTPUT PANEL ───────────────────────────────────────────────────── -->
+      <section class="output-panel" id="outputPanel" hidden>
+        <h2>Furnished Renders</h2>
+        <div id="statusBox" class="status-box"></div>
+        <div id="roomResults" class="room-results"></div>
+
+        <h2>BOM + Pricing (INR)</h2>
         <div class="table-wrap">
           <table id="boqTable">
             <thead>
-              <tr>
-                <th>Item</th>
-                <th>Quantity</th>
-                <th>Unit</th>
-                <th>Rate</th>
-                <th>Amount</th>
-              </tr>
+              <tr><th>Item</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Amount</th></tr>
             </thead>
             <tbody></tbody>
             <tfoot>
-              <tr>
-                <td colspan="4">Grand Total</td>
-                <td id="grandTotal">-</td>
-              </tr>
+              <tr><td colspan="4">Grand Total</td><td id="grandTotal">—</td></tr>
             </tfoot>
           </table>
         </div>
 
-        <h3>Run summary</h3>
+        <h3>Placement Summary</h3>
         <pre id="placementSummary"></pre>
       </section>
-
-    </main>
+    </div>
 
     <script src="/node_modules/pdfjs-dist/build/pdf.min.js"></script>
     <script src="analysis.js"></script>
+    <script src="planner-canvas.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

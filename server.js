@@ -52,6 +52,12 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, result);
     }
 
+    if (req.method === "POST" && url.pathname === "/api/furniture/suggest") {
+      const body = await readJson(req);
+      const result = await suggestFurnitureWithOpenAi(body);
+      return sendJson(res, 200, result);
+    }
+
     if (req.method === "GET" || req.method === "HEAD") {
       return serveStatic(url.pathname, req.method === "HEAD", res);
     }
@@ -274,6 +280,60 @@ async function matchRoomImageWithOpenAi(body) {
   return { model, match: json };
 }
 
+async function suggestFurnitureWithOpenAi(body) {
+  const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
+  const model = String(body.model || DEFAULT_OPENAI_TEXT_MODEL).trim();
+  const request = String(body.request || "").trim();
+  const roomLabel = String(body.roomLabel || "").trim();
+  const roomType = String(body.roomType || "").trim();
+  const availableModules = Array.isArray(body.availableModules) ? body.availableModules : [];
+
+  if (!request) throw httpError(400, "Missing request for furniture suggestion.");
+
+  const moduleList = availableModules
+    .map(m => `  - id:"${m.id}" label:"${m.label}" w:${m.w}m d:${m.d}m h:${m.h}m type:${m.type}`)
+    .join("\n");
+
+  const prompt = [
+    "You are an interior design assistant for Indian apartments.",
+    "The user wants to add furniture to their floor plan.",
+    `User request: "${request}"`,
+    roomLabel ? `Target room: ${roomLabel} (${roomType})` : "",
+    "",
+    "Available furniture modules (pick 1-3 most relevant):",
+    moduleList,
+    "",
+    "Return STRICT JSON only:",
+    '{ "suggestions": [ { "id": string, "label": string, "reason": string } ] }',
+    "Match the request to module IDs from the list above. Max 3 suggestions."
+  ].filter(Boolean).join("\n");
+
+  const payload = {
+    model,
+    reasoning: { effort: "low" },
+    input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
+    max_output_tokens: 300
+  };
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const raw = await response.text();
+  if (!response.ok) throw httpError(response.status, extractApiError(raw));
+
+  const parsed = safeJson(raw);
+  const text = extractResponsesText(parsed);
+  const cleaned = text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
+  const json = safeJson(cleaned);
+  if (!json || !Array.isArray(json.suggestions)) {
+    throw httpError(502, "Furniture suggestion returned unexpected output.");
+  }
+  return { model, suggestions: json.suggestions };
+}
+
 async function extractStyleWithOpenAi(body) {
   const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
   const model = String(body.model || DEFAULT_OPENAI_TEXT_MODEL).trim();
@@ -323,6 +383,7 @@ async function extractStyleWithOpenAi(body) {
 
   const payload = {
     model,
+    reasoning: { effort: "low" },
     input: [{ role: "user", content }],
     max_output_tokens: 700
   };
