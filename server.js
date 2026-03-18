@@ -58,6 +58,18 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, result);
     }
 
+    if (req.method === "POST" && url.pathname === "/api/furniture/autoplace") {
+      const body = await readJson(req);
+      const result = await autoPlaceFurnitureWithOpenAi(body);
+      return sendJson(res, 200, result);
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/chat/placement") {
+      const body = await readJson(req);
+      const result = await chatPlacementWithOpenAi(body);
+      return sendJson(res, 200, result);
+    }
+
     if (req.method === "GET" || req.method === "HEAD") {
       return serveStatic(url.pathname, req.method === "HEAD", res);
     }
@@ -331,6 +343,164 @@ async function suggestFurnitureWithOpenAi(body) {
     throw httpError(502, "Furniture suggestion returned unexpected output.");
   }
   return { model, suggestions: json.suggestions };
+}
+
+async function autoPlaceFurnitureWithOpenAi(body) {
+  const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
+  const model = String(body.model || DEFAULT_OPENAI_TEXT_MODEL).trim();
+  const rooms = body.rooms || [];
+  const brief = String(body.brief || "").trim();
+  const context = body.context || {};
+
+  if (!rooms.length) throw httpError(400, "Missing rooms for autoplace.");
+
+  const roomSummary = rooms.map(r =>
+    `- ${r.label} (${r.roomType}): ${r.widthM || "?"}m × ${r.lengthM || "?"}m`
+  ).join("\n");
+
+  const moduleList = (body.moduleLibrary || []).map(m =>
+    `${m.id}: "${m.label}" w=${m.w}m d=${m.d}m h=${m.h}m [${(m.keywords||[]).join(", ")}]`
+  ).join("\n");
+
+  const prompt = [
+    "You are a professional Indian interior designer creating a furniture layout plan.",
+    "Strictly follow interior design rules: maintain clearance paths, don't block doors/windows, respect room function.",
+    "",
+    "Property context:",
+    context.bhk ? `- ${context.bhk}` : "",
+    context.propertyType ? `- Type: ${context.propertyType}` : "",
+    context.totalAreaM2 ? `- Total area: ${context.totalAreaM2} m²` : "",
+    context.notes ? `- Notes: ${context.notes}` : "",
+    "",
+    `Design brief: ${brief || "Modern Indian, minimal, functional"}`,
+    "",
+    "Rooms:",
+    roomSummary,
+    "",
+    "Available furniture modules:",
+    moduleList,
+    "",
+    "For each room, pick the most appropriate furniture and return their placement coordinates.",
+    "Coordinates are from the room's top-left corner. x=width axis, y=depth axis, both in meters.",
+    "Respect clearances: min 0.9m walkway, 0.6m beside beds, at least 0.3m from walls.",
+    "",
+    "Return STRICT JSON only:",
+    `{`,
+    `  "placements": [`,
+    `    {`,
+    `      "moduleId": string,`,
+    `      "label": string,`,
+    `      "roomLabel": string,`,
+    `      "xM": number,`,
+    `      "yM": number,`,
+    `      "wM": number,`,
+    `      "dM": number,`,
+    `      "rotationDeg": number,`,
+    `      "wall": "north"|"south"|"east"|"west"|"center"`,
+    `      "rationale": string`,
+    `    }`,
+    `  ]`,
+    `}`
+  ].filter(Boolean).join("\n");
+
+  const payload = {
+    model,
+    reasoning: { effort: "low" },
+    input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
+    max_output_tokens: 4000
+  };
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const raw = await response.text();
+  if (!response.ok) throw httpError(response.status, extractApiError(raw));
+
+  const parsed = safeJson(raw);
+  const text = extractResponsesText(parsed);
+  const json = extractJsonFromText(text);
+  if (!json || !Array.isArray(json.placements)) {
+    console.error("Autoplace failed to parse. Raw text:", text.slice(0, 500));
+    throw httpError(502, "Autoplace returned unexpected output.");
+  }
+  return { model, placements: json.placements };
+}
+
+async function chatPlacementWithOpenAi(body) {
+  const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
+  const model = String(body.model || DEFAULT_OPENAI_TEXT_MODEL).trim();
+  const message = String(body.message || "").trim();
+  const rooms = body.rooms || [];
+  const currentPlacements = body.currentPlacements || [];
+  const moduleLibrary = body.moduleLibrary || [];
+
+  if (!message) throw httpError(400, "Missing message.");
+
+  const currentLayout = currentPlacements.map(p =>
+    `[id:${p.id}] ${p.label} in ${p.roomLabel} at (${(p.xM||0).toFixed(1)}, ${(p.yM||0).toFixed(1)}), ${(p.wM||0).toFixed(1)}×${(p.dM||0).toFixed(1)}m`
+  ).join("\n") || "(empty)";
+
+  const moduleList = moduleLibrary.map(m =>
+    `${m.id}: "${m.label}" default ${m.w}×${m.d}m`
+  ).join("\n");
+
+  const roomList = rooms.map(r =>
+    `${r.label} (${r.roomType}) ${r.widthM}×${r.lengthM}m`
+  ).join(", ");
+
+  const prompt = [
+    "You are an interior design AI assistant. The user has a furniture layout open and is asking you to make changes.",
+    "",
+    `Rooms: ${roomList}`,
+    "",
+    "Available furniture modules:",
+    moduleList,
+    "",
+    "Current placement:",
+    currentLayout,
+    "",
+    `User request: "${message}"`,
+    "",
+    "Understand the user's intent and return ONE structured action. Actions:",
+    "- add: add a new piece  { action:'add', moduleId, label, roomLabel, xM, yM, wM, dM, rotationDeg, rationale }" ,
+    "- move: move existing  { action:'move', id, xM, yM, rationale }",
+    "- remove: delete        { action:'remove', id, rationale }",
+    "- resize: change dims   { action:'resize', id, wM, dM, rationale }",
+    "- message: explain/ask  { action:'message', text }",
+    "",
+    "Also include a 'reply' string: a short natural language response to the user (1–2 sentences).",
+    "",
+    "Return STRICT JSON only:",
+    `{ "reply": string, "action": { ...as above } }`
+  ].filter(Boolean).join("\n");
+
+  const payload = {
+    model,
+    reasoning: { effort: "low" },
+    input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
+    max_output_tokens: 4000
+  };
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const raw = await response.text();
+  if (!response.ok) throw httpError(response.status, extractApiError(raw));
+
+  const parsed = safeJson(raw);
+  const text = extractResponsesText(parsed);
+  const json = extractJsonFromText(text);
+  if (!json || !json.action) {
+    console.error("Chat placement failed to parse. Raw text:", text.slice(0, 500));
+    throw httpError(502, "Chat placement returned unexpected output.");
+  }
+  return { model, reply: json.reply || "", action: json.action };
 }
 
 async function extractStyleWithOpenAi(body) {

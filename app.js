@@ -135,64 +135,105 @@ const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1.5";
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 
 const dom = {
-  floorPlan:          document.getElementById("floorPlan"),
-  floorPlanName:      document.getElementById("floorPlanName"),
-  analyzeBtn:         document.getElementById("analyzeBtn"),
-  analysisPanel:      document.getElementById("analysisPanel"),
-  analysisStatusText: document.getElementById("analysisStatusText"),
-  analysisSummaryWrap:document.getElementById("analysisSummaryWrap"),
-  analysisSummaryText:document.getElementById("analysisSummaryText"),
-  detectedRoomsList:  document.getElementById("detectedRoomsList"),
-  canvasPlaceholder:  document.getElementById("canvasPlaceholder"),
-  canvasWrap:         document.getElementById("canvasWrap"),
-  plannerCanvas:      document.getElementById("plannerCanvas"),
-  canvasControlsSection: document.getElementById("canvasControlsSection"),
-  pinsPanelSection:   document.getElementById("pinsPanelSection"),
-  tabSelect:          document.getElementById("tabSelect"),
-  tabPin:             document.getElementById("tabPin"),
-  furniturePalette:   document.getElementById("furniturePalette"),
-  nlInput:            document.getElementById("nlInput"),
-  nlBtn:              document.getElementById("nlBtn"),
-  nlStatus:           document.getElementById("nlStatus"),
-  selectionPanel:     document.getElementById("selectionPanel"),
-  selectionLabel:     document.getElementById("selectionLabel"),
-  rotateBtn:          document.getElementById("rotateBtn"),
-  deleteBtn:          document.getElementById("deleteBtn"),
-  placedList:         document.getElementById("placedList"),
-  pinsList:           document.getElementById("pinsList"),
-  globalBrief:        document.getElementById("globalBrief"),
-  generateBtn:        document.getElementById("generateBtn"),
-  generateStatus:     document.getElementById("generateStatus"),
-  outputPanel:        document.getElementById("outputPanel"),
-  roomResults:        document.getElementById("roomResults"),
-  statusBox:          document.getElementById("statusBox"),
-  placementSummary:   document.getElementById("placementSummary"),
+  // Phase 1
+  floorPlan:          el("floorPlan"),
+  floorPlanName:      el("floorPlanName"),
+  inspirationImages:  el("inspirationImages"),
+  inspirationNames:   el("inspirationNames"),
+  inspirationPreviews:el("inspirationPreviews"),
+  analyzeBtn:         el("analyzeBtn"),
+  analysisChip:       el("analysisChip"),
+  // Phase 2
+  panel2:             el("panel2"),
+  roomChipList:       el("roomChipList"),
+  addRoomBtn:         el("addRoomBtn"),
+  analysisSummaryWrap:el("analysisSummaryWrap"),
+  analysisSummaryText:el("analysisSummaryText"),
+  confirmRoomsBtn:    el("confirmRoomsBtn"),
+  // Phase 3
+  panel3:             el("panel3"),
+  tabSelect:          el("tabSelect"),
+  tabDraw:            el("tabDraw"),
+  furniturePalette:   el("furniturePalette"),
+  selectionPanel:     el("selectionPanel"),
+  selectionLabel:     el("selectionLabel"),
+  selectionDims:      el("selectionDims"),
+  rotateBtn:          el("rotateBtn"),
+  deleteBtn:          el("deleteBtn"),
+  placedList:         el("placedList"),
+  placedCount:        el("placedCount"),
+  confirmPlacementBtn:el("confirmPlacementBtn"),
+  // Phase 4
+  panel4:             el("panel4"),
+  tabSelectP4:        el("tabSelectP4"),
+  tabPin:             el("tabPin"),
+  pinsList:           el("pinsList"),
+  noPinsHint:         el("noPinsHint"),
+  confirmPinsBtn:     el("confirmPinsBtn"),
+  // Phase 5
+  panel5:             el("panel5"),
+  globalBrief:        el("globalBrief"),
+  generateBtn:        el("generateBtn"),
+  generateStatus:     el("generateStatus"),
+  // Canvas
+  canvasPlaceholder:  el("canvasPlaceholder"),
+  canvasWrap:         el("canvasWrap"),
+  floorBgCanvas:      el("floorBgCanvas"),
+  roomEditorCanvas:   el("roomEditorCanvas"),
+  plannerCanvas:      el("plannerCanvas"),
+  // Chat
+  chatPanel:          el("chatPanel"),
+  chatHistory:        el("chatHistory"),
+  chatInput:          el("chatInput"),
+  chatSendBtn:        el("chatSendBtn"),
+  chatToggle:         el("chatToggle"),
+  // Pin popover
+  pinPopover:         el("pinPopover"),
+  pinPopoverTitle:    el("pinPopoverTitle"),
+  pinPopoverClose:    el("pinPopoverClose"),
+  pinPhotoInput:      el("pinPhotoInput"),
+  pinPhotoPreview:    el("pinPhotoPreview"),
+  pinRoomLabel:       el("pinRoomLabel"),
+  pinFov:             el("pinFov"),
+  pinBrief:           el("pinBrief"),
+  // Output
+  outputPanel:        el("outputPanel"),
+  closeOutput:        el("closeOutput"),
+  roomResults:        el("roomResults"),
+  statusBox:          el("statusBox"),
+  boqRooms:           el("boqRooms"),
   boqTableBody:       document.querySelector("#boqTable tbody"),
-  grandTotal:         document.getElementById("grandTotal"),
-  downloadScene:      document.getElementById("downloadScene"),
-  downloadBoq:        document.getElementById("downloadBoq"),
-  // Camera pin popover
-  pinPopover:         document.getElementById("pinPopover"),
-  pinPopoverTitle:    document.getElementById("pinPopoverTitle"),
-  pinPopoverClose:    document.getElementById("pinPopoverClose"),
-  pinPhotoInput:      document.getElementById("pinPhotoInput"),
-  pinPhotoPreview:    document.getElementById("pinPhotoPreview"),
-  pinRoomLabel:       document.getElementById("pinRoomLabel"),
-  pinFov:             document.getElementById("pinFov"),
-  pinBrief:           document.getElementById("pinBrief")
+  grandTotal:         el("grandTotal"),
+  placementSummary:   el("placementSummary"),
+  downloadScene:      el("downloadScene"),
+  downloadBoq:        el("downloadBoq"),
 };
 
-// ─── State ────────────────────────────────────────────────────────────────────
+function el(id) { return document.getElementById(id); }
 
-let planner = null; // PlannerCanvas instance
+// ─── App State ─────────────────────────────────────────────────────────────────
+
+let currentPhase = 1;
+let planner = null;
+let roomEditor = null;
+let activePinId = null;
 let latestArtifacts = null;
-let activePinId = null; // pin being edited in popover
 
-const floorPlanState = {
-  file: null,
-  kind: null,
-  rendered: false,
-  detectedRooms: null
+const appState = {
+  // Phase 1
+  floorFile:         null,
+  inspirationFiles:  [],
+  context: {
+    propertyType: "Apartment",
+    bhk: "2BHK",
+    totalAreaM2: null,
+    notes: ""
+  },
+  // Phase 2
+  detectedRooms: null,
+  confirmedRooms: null,
+  // Phase 3
+  // (planner holds furniture state)
 };
 
 const ROOM_DOT_COLORS = {
@@ -201,281 +242,533 @@ const ROOM_DOT_COLORS = {
   balcony:"#288070", foyer:"#a09020", utility:"#707070", other:"#6050a0"
 };
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
+// ─── Phase state machine ───────────────────────────────────────────────────────
+
+function advancePhase(n) {
+  currentPhase = n;
+  // Update pills
+  for (let i = 1; i <= 5; i++) {
+    const pill = el(`pill${i}`);
+    if (!pill) continue;
+    pill.classList.toggle("active", i === n);
+    pill.classList.toggle("done", i < n);
+    pill.disabled = i > n;
+  }
+  // Connectors
+  for (let i = 1; i <= 4; i++) {
+    const conn = el(`conn${i}${i+1}`);
+    if (conn) conn.style.background = i < n ? "var(--success)" : "var(--border)";
+  }
+  // Show/hide panels
+  for (let i = 1; i <= 5; i++) {
+    const p = el(`panel${i}`);
+    if (p) p.hidden = i !== n;
+  }
+}
+
+// ─── Init ──────────────────────────────────────────────────────────────────────
 
 init();
 
 function init() {
+  // Phase 1 bindings
   dom.floorPlan.addEventListener("change", onFloorPlanPicked);
+  dom.inspirationImages.addEventListener("change", onInspirationPicked);
   dom.analyzeBtn.addEventListener("click", onAnalyzePlan);
+
+  // Context form — segmented controls
+  document.querySelectorAll(".seg-control").forEach(ctrl => {
+    ctrl.addEventListener("click", e => {
+      const btn = e.target.closest(".seg-btn");
+      if (!btn) return;
+      ctrl.querySelectorAll(".seg-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const id = ctrl.id;
+      if (id === "propTypeCtrl") appState.context.propertyType = btn.dataset.val;
+      if (id === "bhkCtrl")      appState.context.bhk          = btn.dataset.val;
+    });
+  });
+  el("totalAreaInput")?.addEventListener("input", e => {
+    appState.context.totalAreaM2 = parseFloat(e.target.value) || null;
+  });
+  el("ctxNotes")?.addEventListener("input", e => {
+    appState.context.notes = e.target.value;
+  });
+
+  // Phase 2 bindings
+  dom.addRoomBtn.addEventListener("click", () => roomEditor?.addRoom());
+  dom.confirmRoomsBtn.addEventListener("click", onConfirmRooms);
+
+  // Phase 3 bindings
   dom.tabSelect.addEventListener("click", () => setMode("select"));
-  dom.tabPin.addEventListener("click", () => setMode("pin"));
+  dom.tabDraw.addEventListener("click",   () => setMode("draw"));
   dom.rotateBtn.addEventListener("click", () => planner?.rotateSelected());
   dom.deleteBtn.addEventListener("click", () => planner?.removeSelected());
-  dom.nlBtn.addEventListener("click", onNlAdd);
-  dom.nlInput.addEventListener("keydown", e => { if (e.key === "Enter") onNlAdd(); });
+  dom.confirmPlacementBtn.addEventListener("click", () => advancePhase(4));
+
+  // Phase 4 bindings — pin tools
+  dom.tabSelectP4.addEventListener("click", () => setMode("select", dom.tabSelectP4, dom.tabPin));
+  dom.tabPin.addEventListener("click",       () => setMode("pin",    dom.tabSelectP4, dom.tabPin));
+  dom.confirmPinsBtn.addEventListener("click", () => advancePhase(5));
+
+  // Phase 5 bindings
   dom.generateBtn.addEventListener("click", onGenerate);
-  dom.pinPopoverClose.addEventListener("click", () => { dom.pinPopover.hidden = true; });
+
+  // Chat panel
+  dom.chatSendBtn.addEventListener("click", onChatSend);
+  dom.chatInput.addEventListener("keydown", e => { if (e.key === "Enter") onChatSend(); });
+  dom.chatToggle.addEventListener("click", () => {
+    const h = dom.chatHistory;
+    const closed = h.style.display === "none";
+    h.style.display = closed ? "" : "none";
+    dom.chatInput.parentElement.style.display = closed ? "" : "none";
+    dom.chatToggle.textContent = closed ? "−" : "+";
+  });
+
+  // Pin popover
+  dom.pinPopoverClose.addEventListener("click", () => { dom.pinPopover.hidden = true; activePinId = null; });
   dom.pinPhotoInput.addEventListener("change", onPinPhotoUpload);
   dom.pinRoomLabel.addEventListener("input", onPinFieldChange);
-  dom.pinFov.addEventListener("input", onPinFieldChange);
-  dom.pinBrief.addEventListener("input", onPinFieldChange);
+  dom.pinFov.addEventListener("input",       onPinFieldChange);
+  dom.pinBrief.addEventListener("input",     onPinFieldChange);
+
+  // Output
+  dom.closeOutput?.addEventListener("click", () => { dom.outputPanel.hidden = true; document.querySelector(".workspace")?.classList.remove("output-open"); });
   dom.downloadScene.addEventListener("click", () => {
-    if (latestArtifacts) downloadText("furnished_scene.json", JSON.stringify(latestArtifacts.scene, null, 2), "application/json");
+    if (latestArtifacts) downloadText("scene.json", JSON.stringify(latestArtifacts.scene, null, 2), "application/json");
   });
   dom.downloadBoq.addEventListener("click", () => {
-    if (latestArtifacts) downloadText("bom_pricing.csv", latestArtifacts.boq.csv, "text/csv");
+    if (latestArtifacts) downloadText("boq.csv", latestArtifacts.boq.csv, "text/csv");
   });
 
   buildPalette();
+  advancePhase(1);
+}
+
+// ─── Phase 1: Upload + Analyse ─────────────────────────────────────────────────
+
+function onFloorPlanPicked() {
+  const file = dom.floorPlan.files?.[0];
+  if (!file) return;
+  appState.floorFile = file;
+  dom.floorPlanName.textContent = file.name;
+  dom.analyzeBtn.disabled = false;
+}
+
+function onInspirationPicked() {
+  const files = Array.from(dom.inspirationImages.files || []);
+  appState.inspirationFiles = files;
+  dom.inspirationNames.textContent = files.length ? `${files.length} image(s)` : "Add inspiration images (optional)";
+  dom.inspirationPreviews.innerHTML = "";
+  files.forEach(f => {
+    const img = document.createElement("img");
+    img.className = "insp-thumb";
+    const reader = new FileReader();
+    reader.onload = e => { img.src = e.target.result; };
+    reader.readAsDataURL(f);
+    dom.inspirationPreviews.appendChild(img);
+  });
+}
+
+async function onAnalyzePlan() {
+  const file = appState.floorFile;
+  if (!file) { alert("Upload a floor plan first."); return; }
+  const PA = window.PoligridAnalysis;
+  if (!PA) { alert("Analysis module not loaded."); return; }
+
+  dom.analyzeBtn.disabled = true;
+  dom.analysisChip.hidden = false;
+  dom.analysisChip.textContent = "Rendering floor plan…";
+
+  try {
+    // Render floor plan to bgCanvas
+    const bgCanvas = dom.floorBgCanvas;
+    await renderFloorPlanToCanvas(file, bgCanvas);
+
+    dom.analysisChip.textContent = "Analysing with AI…";
+
+    // Run analysis
+    const analysis = await PA.analyzeFloorPlan(bgCanvas);
+    appState.detectedRooms = analysis.rooms || [];
+
+    dom.analysisChip.textContent = `✓ ${analysis.rooms.length} room(s) · ${analysis.bhkType || ""} · ${analysis.totalAreaM2 || "?"}m²`;
+    dom.analysisSummaryText.textContent = analysis.summary || "";
+    dom.analysisSummaryWrap.hidden = false;
+
+    // Size overlay canvases to match bgCanvas
+    dom.roomEditorCanvas.width  = bgCanvas.width;
+    dom.roomEditorCanvas.height = bgCanvas.height;
+
+    // Show canvas
+    dom.canvasPlaceholder.hidden = true;
+    dom.canvasWrap.hidden = false;
+
+    // Init RoomEditor
+    roomEditor = new RoomEditor(dom.roomEditorCanvas, bgCanvas, {
+      onRoomsChange: onRoomsChange,
+      onSelect: onRoomSelected
+    });
+    roomEditor.setRooms(analysis.rooms, bgCanvas.width, bgCanvas.height);
+
+    // Build room chips in sidebar
+    buildRoomChips(analysis.rooms);
+
+    // Advance to Phase 2
+    advancePhase(2);
+
+  } catch (err) {
+    dom.analysisChip.textContent = `⚠ ${err.message}`;
+    dom.analyzeBtn.disabled = false;
+    console.error(err);
+  }
+}
+
+// ─── Phase 2: Room Editing ─────────────────────────────────────────────────────
+
+function onRoomsChange(rooms) {
+  appState.detectedRooms = rooms;
+  buildRoomChips(rooms);
+}
+
+function onRoomSelected(room) {
+  // When a room is selected in the editor, highlight its chip
+  document.querySelectorAll(".room-chip").forEach(c => {
+    c.classList.toggle("selected", room && c.dataset.id === room.label);
+  });
+}
+
+function buildRoomChips(rooms) {
+  dom.roomChipList.innerHTML = "";
+  for (const room of rooms) {
+    const col = ROOM_DOT_COLORS[room.roomType] || "#888";
+    const chip = document.createElement("div");
+    chip.className = "room-chip";
+    chip.dataset.id = room.label;
+    chip.innerHTML = `
+      <span class="room-chip-dot" style="background:${col}"></span>
+      <span class="room-chip-name">${escapeHtml(room.name || room.label)}</span>
+      <span class="room-chip-dims">${room.widthM ? room.widthM.toFixed(1)+"×"+room.lengthM.toFixed(1)+"m" : "?"}</span>
+      <button class="room-chip-del" data-id="${escapeHtml(room.label)}" title="Delete room">✕</button>`;
+    chip.querySelector(".room-chip-del").addEventListener("click", e => {
+      e.stopPropagation();
+      roomEditor?.deleteRoom(chip.dataset.id);
+    });
+    chip.addEventListener("click", () => {
+      // Select room in editor (by clicking we just highlight)
+      document.querySelectorAll(".room-chip").forEach(c => c.classList.remove("selected"));
+      chip.classList.add("selected");
+    });
+    dom.roomChipList.appendChild(chip);
+  }
+}
+
+async function onConfirmRooms() {
+  const rooms = roomEditor ? roomEditor.getRooms() : (appState.detectedRooms || []);
+  appState.confirmedRooms = rooms;
+
+  if (!rooms.length) { alert("No rooms to confirm."); return; }
+
+  // Check for missing dims
+  const missing = rooms.filter(r => !r.widthM || !r.lengthM);
+  if (missing.length) {
+    const ok = confirm(`${missing.length} room(s) have no dimensions. Continue anyway? (You can set dims via double-click on the canvas)`);
+    if (!ok) return;
+  }
+
+  dom.confirmRoomsBtn.disabled = true;
+  dom.confirmRoomsBtn.textContent = "Auto-placing furniture…";
+
+  try {
+    // Hide room editor, show planner canvas
+    dom.roomEditorCanvas.hidden = true;
+    dom.plannerCanvas.hidden = false;
+    dom.plannerCanvas.width  = dom.floorBgCanvas.width;
+    dom.plannerCanvas.height = dom.floorBgCanvas.height;
+
+    // Init PlannerCanvas
+    planner = new PlannerCanvas(dom.plannerCanvas, {
+      onStateChange: onSceneChange,
+      onPinSelect: openPinPopover
+    });
+    planner.setFloorPlanImage(dom.floorBgCanvas);
+    planner.setDetectedRooms(rooms);
+
+    // AI auto-place
+    await doAutoplace(rooms);
+
+    refreshPlacedList();
+    advancePhase(3);
+
+    // Show chat panel
+    dom.chatPanel.hidden = false;
+
+  } catch (err) {
+    alert("Auto-place failed: " + err.message);
+    console.error(err);
+  } finally {
+    dom.confirmRoomsBtn.disabled = false;
+    dom.confirmRoomsBtn.textContent = "Confirm Rooms →";
+  }
+}
+
+async function doAutoplace(rooms) {
+  const brief = dom.globalBrief?.value.trim() || "";
+  const res = await postJson("/api/furniture/autoplace", {
+    rooms,
+    brief,
+    context: appState.context,
+    moduleLibrary: MODULE_LIBRARY
+  });
+
+  if (res.placements && Array.isArray(res.placements)) {
+    // Convert AI placements to PlannerCanvas format
+    planner.furniturePlacements = [];
+    for (const p of res.placements) {
+      const mod = MODULE_LIBRARY.find(m => m.id === p.moduleId) || {
+        id: p.moduleId, label: p.label || p.moduleId,
+        w: p.wM || 1.2, d: p.dM || 0.6, h: 0.9,
+        type: "cabinet", shelves: 0, partitions: 0, shutters: 0, drawers: 0
+      };
+      const room = rooms.find(r => r.label === p.roomLabel);
+      // p.xM, p.yM are relative to room origin; convert to global canvas meters
+      const roomOffsetX = room ? (room.bbox.xPct * dom.floorBgCanvas.width / planner.scale) : 0;
+      const roomOffsetY = room ? (room.bbox.yPct * dom.floorBgCanvas.height / planner.scale) : 0;
+      planner.furniturePlacements.push({
+        id: `ai_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        moduleId: mod.id,
+        label: mod.label,
+        xM: roomOffsetX + (p.xM || 1),
+        yM: roomOffsetY + (p.yM || 1),
+        wM: p.wM || mod.w,
+        dM: p.dM || mod.d,
+        hM: mod.h,
+        rotationY: p.rotationDeg || 0,
+        color: FURN_COLORS[planner.furniturePlacements.length % FURN_COLORS.length],
+        roomLabel: p.roomLabel || "",
+        roomType: room?.roomType || "other",
+        wall: p.wall || "center",
+        rationale: p.rationale || ""
+      });
+    }
+    planner.render();
+  } else {
+    // Fallback: local placement
+    planner.autoPlaceAll(MODULE_LIBRARY);
+  }
+}
+
+const FURN_COLORS = [
+  "#3a6a5a","#b86d35","#5a6a9a","#9a5a6a",
+  "#6a9a5a","#9a8a3a","#5a8a9a","#9a6a9a","#6a5a8a","#8a6a3a"
+];
+
+// ─── Phase 3: Furniture + Chat ─────────────────────────────────────────────────
+
+function setMode(mode, tab1, tab2) {
+  if (!planner) return;
+  planner.setMode(mode);
+  // Phase 3 tabs
+  if (tab1 && tab2) {
+    tab1.classList.toggle("active", mode === "select");
+    tab2.classList.toggle("active", mode !== "select");
+  }
+  dom.tabSelect?.classList.toggle("active", mode === "select");
+  dom.tabDraw?.classList.toggle("active",   mode === "draw");
+  dom.tabSelectP4?.classList.toggle("active", mode === "select");
+  dom.tabPin?.classList.toggle("active",     mode === "pin");
 }
 
 function buildPalette() {
   dom.furniturePalette.innerHTML = "";
-  for (const m of MODULE_LIBRARY) {
+  MODULE_LIBRARY.forEach((m, idx) => {
     const item = document.createElement("div");
     item.className = "palette-item";
     item.draggable = true;
-    item.innerHTML = `<span>${escapeHtml(m.label)}</span><span class="palette-item-dim">${m.w}×${m.d}m</span>`;
-    item.addEventListener("dragstart", () => { planner?.startExternalDrop(m); });
+    item.innerHTML = `
+      <span class="palette-dot" style="background:${FURN_COLORS[idx % FURN_COLORS.length]}"></span>
+      <span>${escapeHtml(m.label)}</span>
+      <span class="palette-dims">${m.w}×${m.d}m</span>`;
+    item.addEventListener("dragstart", () => planner?.startExternalDrop(m));
     item.addEventListener("click", () => {
       if (!planner) return;
       planner.addFurnitureFromSuggestion(MODULE_LIBRARY, { id: m.id, label: m.label }, null);
       refreshPlacedList();
     });
     dom.furniturePalette.appendChild(item);
-  }
-}
-
-function setMode(mode) {
-  if (!planner) return;
-  planner.setMode(mode);
-  dom.tabSelect.classList.toggle("active", mode === "select");
-  dom.tabPin.classList.toggle("active", mode === "pin");
-}
-
-// ─── Floor plan upload ────────────────────────────────────────────────────────
-
-async function onFloorPlanPicked() {
-  const file = dom.floorPlan.files?.[0];
-  if (!file) return;
-  floorPlanState.file = file;
-  floorPlanState.kind = file.type === "application/pdf" ? "pdf" : file.type.startsWith("image/") ? "image" : null;
-  if (!floorPlanState.kind) { alert("Only PDF or image files are supported."); return; }
-
-  dom.floorPlanName.textContent = file.name;
-  dom.analyzeBtn.disabled = false;
-
-  // Render floor plan to a hidden canvas, then pass it to PlannerCanvas
-  dom.canvasPlaceholder.hidden = false;
-  dom.canvasWrap.hidden = true;
-  floorPlanState.rendered = false;
-  floorPlanState.detectedRooms = null;
-
-  // Use a temporary off-screen canvas to render the plan
-  const tempCanvas = document.createElement("canvas");
-  await renderFloorPlanToCanvas(file, tempCanvas);
-  floorPlanState.rendered = true;
-
-  // Show canvas workspace
-  dom.canvasPlaceholder.hidden = true;
-  dom.canvasWrap.hidden = false;
-
-  // Init PlannerCanvas
-  planner = new PlannerCanvas(dom.plannerCanvas, {
-    onStateChange: onSceneChange,
-    onPinSelect: openPinPopover
   });
-  planner.setFloorPlanImage(tempCanvas);
 }
-
-// ─── Floor plan analysis ──────────────────────────────────────────────────────
-
-async function onAnalyzePlan() {
-  if (!floorPlanState.rendered || !planner) { alert("Upload a floor plan first."); return; }
-  const PA = window.PoligridAnalysis;
-  if (!PA) { alert("Analysis module not loaded."); return; }
-
-  dom.analysisPanel.hidden = false;
-  dom.analysisStatusText.textContent = "Analysing with AI…";
-
-  try {
-    // Use a temp canvas matching the bg image to run analysis
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = planner.bgImage.width;
-    tempCanvas.height = planner.bgImage.height;
-    tempCanvas.getContext("2d").drawImage(planner.bgImage, 0, 0);
-
-    const analysis = await PA.analyzeFloorPlan(tempCanvas);
-    floorPlanState.detectedRooms = analysis.rooms || [];
-
-    dom.analysisStatusText.textContent = `✓ ${analysis.rooms.length} rooms · ${analysis.bhkType || ""} · ${analysis.totalAreaM2 || "?"}m²`;
-    dom.analysisSummaryText.textContent = analysis.summary || "";
-
-    renderRoomChips(analysis.rooms);
-    dom.analysisSummaryWrap.hidden = false;
-
-    // Pass rooms to PlannerCanvas — sets overlays + auto-places furniture
-    planner.setDetectedRooms(analysis.rooms);
-    planner.autoPlaceAll(MODULE_LIBRARY);
-
-    // Show canvas tools
-    dom.canvasControlsSection.hidden = false;
-    dom.pinsPanelSection.hidden = false;
-    dom.generateBtn.disabled = false;
-
-    refreshPlacedList();
-    refreshPinsList();
-  } catch (err) {
-    dom.analysisStatusText.textContent = `⚠ ${err.message}`;
-  }
-}
-
-function renderRoomChips(rooms) {
-  dom.detectedRoomsList.innerHTML = "";
-  for (const room of rooms) {
-    const chip = document.createElement("span");
-    chip.className = "room-chip";
-    chip.title = room.notes || "";
-    chip.innerHTML = `
-      <span class="room-chip-dot" style="background:${ROOM_DOT_COLORS[room.roomType]||"#6050a0"}"></span>
-      ${escapeHtml(room.label)}
-      <span class="room-chip-dim">${room.widthM||"?"}×${room.lengthM||"?"}m</span>`;
-    dom.detectedRoomsList.appendChild(chip);
-  }
-}
-
-// ─── NL furniture add ─────────────────────────────────────────────────────────
-
-async function onNlAdd() {
-  const text = dom.nlInput.value.trim();
-  if (!text || !planner) return;
-
-  dom.nlStatus.hidden = false;
-  dom.nlStatus.textContent = "Thinking…";
-
-  try {
-    const resp = await fetch("/api/furniture/suggest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        request: text,
-        availableModules: MODULE_LIBRARY.map(m => ({ id: m.id, label: m.label, w: m.w, d: m.d, h: m.h, type: m.type }))
-      })
-    });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || "Suggest failed");
-
-    const suggestions = data.suggestions || [];
-    if (!suggestions.length) { dom.nlStatus.textContent = "No matching module found."; return; }
-
-    // Add top suggestion
-    const top = suggestions[0];
-    planner.addFurnitureFromSuggestion(MODULE_LIBRARY, top, null);
-    dom.nlStatus.textContent = `✓ Added: ${top.label}`;
-    dom.nlInput.value = "";
-    refreshPlacedList();
-  } catch (err) {
-    dom.nlStatus.textContent = `⚠ ${err.message}`;
-  }
-}
-
-// ─── Scene change callback ────────────────────────────────────────────────────
 
 function onSceneChange(state) {
   refreshPlacedList();
   refreshPinsList();
-  // Enable generate once we have at least one camera pin
-  dom.generateBtn.disabled = !state.cameraPins.length && !floorPlanState.detectedRooms;
+  const hasPins = state.cameraPins && state.cameraPins.length > 0;
+  dom.generateBtn.disabled = !hasPins;
+  dom.downloadScene.disabled = false;
+  if (state.selected?.type === "furniture") {
+    const f = state.furniturePlacements?.find(x => x.id === state.selected.id);
+    if (f) {
+      dom.selectionPanel.hidden = false;
+      dom.selectionLabel.textContent = f.label;
+      dom.selectionDims.textContent  = `${f.wM.toFixed(2)}m × ${f.dM.toFixed(2)}m`;
+    }
+  } else {
+    dom.selectionPanel.hidden = true;
+  }
 }
 
 function refreshPlacedList() {
   if (!planner) return;
+  const items = planner.furniturePlacements;
+  dom.placedCount.textContent = items.length;
   dom.placedList.innerHTML = "";
-  for (const f of planner.furniturePlacements) {
-    const item = document.createElement("div");
-    item.className = "placed-item" + (planner.selected?.id === f.id ? " active" : "");
-    item.innerHTML = `
-      <span class="placed-dot" style="background:${f.color}"></span>
-      <span>${escapeHtml(f.label)}</span>
-      <span class="placed-room">${escapeHtml(f.roomLabel || "")}</span>`;
-    item.addEventListener("click", () => {
+  items.forEach((f, idx) => {
+    const row = document.createElement("div");
+    row.className = "placed-item";
+    row.innerHTML = `
+      <span class="placed-item-dot" style="background:${f.color}"></span>
+      <span style="flex:1">${escapeHtml(f.label)}</span>
+      <span style="font-size:9px;color:var(--text-dim)">${f.roomLabel || ""}</span>`;
+    row.addEventListener("click", () => {
+      if (!planner) return;
       planner.selected = { type: "furniture", id: f.id };
       planner.render();
-      updateSelectionPanel();
     });
-    dom.placedList.appendChild(item);
-  }
-  updateSelectionPanel();
+    dom.placedList.appendChild(row);
+  });
 }
 
-function updateSelectionPanel() {
-  if (!planner || !planner.selected) {
-    dom.selectionPanel.hidden = true;
-    return;
-  }
-  dom.selectionPanel.hidden = false;
-  if (planner.selected.type === "furniture") {
-    const f = planner.furniturePlacements.find(f => f.id === planner.selected.id);
-    dom.selectionLabel.textContent = f ? `${f.label} (${f.wM.toFixed(1)}×${f.dM.toFixed(1)}m)` : "";
-    dom.rotateBtn.hidden = false;
-  } else {
-    const p = planner.cameraPins.find(p => p.id === planner.selected.id);
-    dom.selectionLabel.textContent = p ? `📷 Pin — ${p.roomLabel || "no room"}` : "";
-    dom.rotateBtn.hidden = true;
+// ─── Chat ──────────────────────────────────────────────────────────────────────
+
+async function onChatSend() {
+  const msg = dom.chatInput.value.trim();
+  if (!msg || !planner) return;
+  dom.chatInput.value = "";
+  addChatBubble(msg, "user");
+  const thinking = addChatBubble("Thinking…", "ai thinking");
+
+  try {
+    const res = await postJson("/api/chat/placement", {
+      message: msg,
+      rooms: appState.confirmedRooms || [],
+      currentPlacements: planner.furniturePlacements,
+      moduleLibrary: MODULE_LIBRARY
+    });
+    thinking.textContent = res.reply || "";
+    thinking.classList.remove("thinking");
+
+    // Apply action
+    const action = res.action;
+    if (!action) return;
+    const tag = document.createElement("span");
+    tag.className = "chat-action-tag";
+
+    if (action.action === "add") {
+      const mod = MODULE_LIBRARY.find(m => m.id === action.moduleId) || {
+        id: action.moduleId || "custom", label: action.label || "Item",
+        w: action.wM || 1.2, d: action.dM || 0.6, h: 0.9,
+        type: "cabinet", shelves: 0, partitions: 0, shutters: 0, drawers: 0
+      };
+      const room = (appState.confirmedRooms || []).find(r => r.label === action.roomLabel);
+      const roomOffX = room ? (room.bbox.xPct * dom.floorBgCanvas.width  / planner.scale) : 1;
+      const roomOffY = room ? (room.bbox.yPct * dom.floorBgCanvas.height / planner.scale) : 1;
+      planner.furniturePlacements.push({
+        id: `chat_${Date.now()}`,
+        moduleId: mod.id,
+        label: mod.label,
+        xM: roomOffX + (action.xM || 1),
+        yM: roomOffY + (action.yM || 1),
+        wM: action.wM || mod.w,
+        dM: action.dM || mod.d,
+        hM: mod.h,
+        rotationY: action.rotationDeg || 0,
+        color: FURN_COLORS[planner.furniturePlacements.length % FURN_COLORS.length],
+        roomLabel: action.roomLabel || "",
+        roomType: room?.roomType || "other",
+        wall: action.wall || "center"
+      });
+      planner.render();
+      tag.textContent = `+ Added ${mod.label}`;
+
+    } else if (action.action === "move") {
+      const f = planner.furniturePlacements.find(x => x.id === action.id);
+      if (f) { f.xM = action.xM || f.xM; f.yM = action.yM || f.yM; planner.render(); }
+      tag.textContent = `↹ Moved`;
+
+    } else if (action.action === "remove") {
+      planner.furniturePlacements = planner.furniturePlacements.filter(x => x.id !== action.id);
+      planner.render();
+      tag.textContent = `✕ Removed`;
+
+    } else if (action.action === "resize") {
+      const f = planner.furniturePlacements.find(x => x.id === action.id);
+      if (f) { if (action.wM) f.wM = action.wM; if (action.dM) f.dM = action.dM; planner.render(); }
+      tag.textContent = `⇔ Resized`;
+    }
+
+    if (tag.textContent) thinking.appendChild(tag);
+    refreshPlacedList();
+
+  } catch (err) {
+    thinking.textContent = `⚠ ${err.message}`;
+    thinking.classList.remove("thinking");
   }
 }
+
+function addChatBubble(text, cls) {
+  const b = document.createElement("div");
+  b.className = `chat-bubble ${cls}`;
+  b.textContent = text;
+  dom.chatHistory.appendChild(b);
+  dom.chatHistory.scrollTop = dom.chatHistory.scrollHeight;
+  return b;
+}
+
+// ─── Phase 4: Camera pins ──────────────────────────────────────────────────────
 
 function refreshPinsList() {
   if (!planner) return;
+  const pins = planner.getCameraPinsWithFiles();
+  dom.noPinsHint.hidden = pins.length > 0;
   dom.pinsList.innerHTML = "";
-  for (const pin of planner.cameraPins) {
-    const card = document.createElement("div");
-    card.className = "pin-card" + (activePinId === pin.id ? " active" : "");
-    const thumbHtml = pin.photoDataUrl
-      ? `<img class="pin-thumb" src="${pin.photoDataUrl}" alt="photo">`
-      : `<div class="pin-thumb-placeholder">📷</div>`;
-    card.innerHTML = `
-      <div class="pin-card-head">
-        ${thumbHtml}
-        <div class="pin-info">
-          <div class="pin-name">${escapeHtml(pin.roomLabel || "Pin")}</div>
-          <div class="pin-dir">${Math.round(pin.angleDeg)}° · FOV ${pin.fovDeg}°</div>
-        </div>
-        <button class="ghost-sm" data-pin-edit="${pin.id}">Edit</button>
+  for (const pin of pins) {
+    const item = document.createElement("div");
+    item.className = "pin-item";
+    const hasPhoto = !!pin.photoDataUrl;
+    item.innerHTML = `
+      <div class="pin-item-head">
+        ${hasPhoto ? `<img class="pin-item-thumb" src="${pin.photoDataUrl}" alt=""/>` : ""}
+        <span class="pin-item-label">📷 ${escapeHtml(pin.roomLabel || "Untitled pin")}</span>
+        <button class="pin-item-edit ghost-sm" data-id="${pin.id}">Edit</button>
       </div>
-      ${pin.brief ? `<div class="mini-note" style="margin-top:4px">${escapeHtml(pin.brief)}</div>` : ""}`;
-    card.querySelector("[data-pin-edit]").addEventListener("click", () => openPinPopover(pin));
-    dom.pinsList.appendChild(card);
+      <div class="pin-item-sub">FOV ${pin.fovDeg || 60}° · ${pin.brief ? pin.brief.slice(0, 40) : "No brief"}</div>`;
+    item.querySelector(".pin-item-edit").addEventListener("click", () => openPinPopover(pin));
+    dom.pinsList.appendChild(item);
   }
+  dom.generateBtn.disabled = pins.length === 0;
 }
-
-// ─── Camera pin popover ───────────────────────────────────────────────────────
 
 function openPinPopover(pin) {
   activePinId = pin.id;
-  dom.pinPopoverTitle.textContent = `📷 ${pin.roomLabel || "Camera Pin"}`;
+  dom.pinPopoverTitle.textContent = `Pin — ${pin.roomLabel || "Untitled"}`;
   dom.pinRoomLabel.value = pin.roomLabel || "";
-  dom.pinFov.value = String(pin.fovDeg || 60);
-  dom.pinBrief.value = pin.brief || "";
+  dom.pinFov.value       = pin.fovDeg || 60;
+  dom.pinBrief.value     = pin.brief  || "";
+  dom.pinPhotoPreview.hidden = !pin.photoDataUrl;
   if (pin.photoDataUrl) {
-    dom.pinPhotoPreview.innerHTML = `<img src="${pin.photoDataUrl}" alt="Photo">`;
-    dom.pinPhotoPreview.hidden = false;
-  } else {
-    dom.pinPhotoPreview.hidden = true;
+    dom.pinPhotoPreview.innerHTML = `<img src="${pin.photoDataUrl}" alt="Photo preview"/>`;
   }
   dom.pinPopover.hidden = false;
-  refreshPinsList();
 }
 
 function onPinPhotoUpload() {
+  if (!activePinId || !planner) return;
   const file = dom.pinPhotoInput.files?.[0];
-  if (!file || !activePinId || !planner) return;
+  if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
     planner.updatePin(activePinId, { photoFile: file, photoDataUrl: e.target.result });
-    dom.pinPhotoPreview.innerHTML = `<img src="${e.target.result}" alt="Photo">`;
     dom.pinPhotoPreview.hidden = false;
+    dom.pinPhotoPreview.innerHTML = `<img src="${e.target.result}" alt="Pin photo"/>`;
     refreshPinsList();
   };
   reader.readAsDataURL(file);
@@ -485,1172 +778,399 @@ function onPinFieldChange() {
   if (!activePinId || !planner) return;
   planner.updatePin(activePinId, {
     roomLabel: dom.pinRoomLabel.value,
-    fovDeg: parseInt(dom.pinFov.value) || 60,
-    brief: dom.pinBrief.value
+    fovDeg:    parseFloat(dom.pinFov.value) || 60,
+    brief:     dom.pinBrief.value
   });
   refreshPinsList();
 }
 
-// ─── Generate ──────────────────────────────────────────────────────────────────
+// ─── Phase 5: Generate ─────────────────────────────────────────────────────────
 
 function promptRoomDims(roomLabel) {
-  const wStr = prompt(`Enter width for ${roomLabel} (in meters, e.g. 4.2):`, "4.2");
+  const wStr = prompt(`Enter width for "${roomLabel}" (meters, e.g. 4.2):`, "4.2");
   if (wStr === null) return null;
-  const lStr = prompt(`Enter length for ${roomLabel} (in meters, e.g. 3.5):`, "4.2");
+  const lStr = prompt(`Enter length for "${roomLabel}" (meters, e.g. 3.5):`, "3.5");
   if (lStr === null) return null;
-  const w = parseFloat(wStr);
-  const l = parseFloat(lStr);
-  if (isNaN(w) || isNaN(l) || w <= 0 || l <= 0) {
-    alert("Invalid dimensions entered.");
-    return null;
-  }
+  const w = parseFloat(wStr), l = parseFloat(lStr);
+  if (isNaN(w) || isNaN(l) || w <= 0 || l <= 0) { alert("Invalid dimensions."); return null; }
   return { w, l };
 }
 
 async function onGenerate() {
-  if (!planner) { alert("Upload and analyse a floor plan first."); return; }
+  if (!planner) { alert("Complete the floor plan setup first."); return; }
 
   const globalBrief = dom.globalBrief.value.trim();
   const pins = planner.getCameraPinsWithFiles();
-
-  // Build per-room render requests from camera pins + placed furniture
+  const confirmedRooms = appState.confirmedRooms || appState.detectedRooms || [];
   const renderSources = [];
-  const detectedRooms = floorPlanState.detectedRooms || [];
 
   if (pins.length) {
     for (const pin of pins) {
       const roomLabel = pin.roomLabel || "unknown";
-      const detectedRoom = detectedRooms.find(r => r.label === roomLabel);
-
-      // Require real dimensions — no silent fallback
+      const detectedRoom = confirmedRooms.find(r => r.label === roomLabel);
       let widthM  = parseFloat(detectedRoom?.widthM);
       let lengthM = parseFloat(detectedRoom?.lengthM);
       if (!widthM || !lengthM) {
         const entered = promptRoomDims(roomLabel);
-        if (!entered) return; // user cancelled
-        widthM = entered.w;
-        lengthM = entered.l;
-        // Store back so subsequent pins don't re-prompt
+        if (!entered) return;
+        widthM = entered.w; lengthM = entered.l;
         if (detectedRoom) { detectedRoom.widthM = widthM; detectedRoom.lengthM = lengthM; }
       }
-
-      const archNotes = detectedRoom?.notes || "";
-      const roomType  = detectedRoom?.roomType || "other";
-      const placements = planner.getPlacementsForRoom(roomLabel);
-      const brief = [pin.brief, globalBrief].filter(Boolean).join(". ");
-
       renderSources.push({
-        pinId: pin.id, roomLabel, widthM, lengthM, archNotes, roomType,
-        placements, brief, photoFile: pin.photoFile, photoDataUrl: pin.photoDataUrl
+        pinId: pin.id, roomLabel, widthM, lengthM,
+        archNotes: detectedRoom?.notes || "",
+        roomType: detectedRoom?.roomType || "other",
+        placements: planner.getPlacementsForRoom(roomLabel),
+        brief: [pin.brief, globalBrief].filter(Boolean).join(". "),
+        photoFile: pin.photoFile, photoDataUrl: pin.photoDataUrl
       });
     }
   } else {
-    // No pins: generate from all detected rooms
-    if (!detectedRooms.length) {
-      alert("Please analyse the floor plan first so room dimensions are known.");
-      return;
-    }
-    for (const room of detectedRooms) {
+    if (!confirmedRooms.length) { alert("Please analyse the floor plan first."); return; }
+    for (const room of confirmedRooms) {
       if (room.roomType === "bathroom" || room.roomType === "utility") continue;
-
-      let widthM  = parseFloat(room.widthM);
-      let lengthM = parseFloat(room.lengthM);
+      let widthM = parseFloat(room.widthM), lengthM = parseFloat(room.lengthM);
       if (!widthM || !lengthM) {
         const entered = promptRoomDims(room.label);
         if (!entered) return;
-        widthM = entered.w;
-        lengthM = entered.l;
-        room.widthM = widthM;
-        room.lengthM = lengthM;
+        widthM = entered.w; lengthM = entered.l;
+        room.widthM = widthM; room.lengthM = lengthM;
       }
-
-      const placements = planner.getPlacementsForRoom(room.label);
       renderSources.push({
-        pinId: null, roomLabel: room.label,
-        widthM, lengthM,
+        pinId: null, roomLabel: room.label, widthM, lengthM,
         archNotes: room.notes || "", roomType: room.roomType,
-        placements, brief: globalBrief || room.name,
+        placements: planner.getPlacementsForRoom(room.label),
+        brief: globalBrief || room.name,
         photoFile: null, photoDataUrl: null
       });
     }
   }
 
-  if (!renderSources.length) { alert("Add camera pins or analyse the floor plan first."); return; }
+  if (!renderSources.length) { alert("Nothing to generate."); return; }
 
   dom.outputPanel.hidden = false;
-  document.querySelector(".workspace").classList.add("output-open");
+  document.querySelector(".workspace")?.classList.add("output-open");
   dom.generateBtn.disabled = true;
   dom.generateBtn.textContent = "Generating…";
   dom.generateStatus.hidden = false;
-  dom.generateStatus.textContent = "Extracting styles + generating renders…";
-
-  let fallbackCount = 0;
-  const roomResults = [];
-  const allPlacements = [];
-  const perRoomSummary = [];
+  dom.generateStatus.textContent = "Extracting styles + preparing renders…";
+  dom.statusBox.textContent = "";
+  dom.roomResults.innerHTML = "";
 
   try {
+    const inspirationDataUrls = await Promise.all(
+      appState.inspirationFiles.map(f => readDataUrl(f))
+    );
+
+    const roomResults = [];
     for (const src of renderSources) {
-      dom.generateStatus.textContent = `Rendering ${src.roomLabel}…`;
-
-      const styleInput = { label: src.roomLabel, brief: src.brief, name: src.roomLabel, inspo: [], photos: [] };
-      const style = await extractRoomStyle(styleInput);
-      const laminate = pickLaminateFromStyle(style);
-
-      // Convert planner placements to the format expected by legacy BOM/prompt code
-      const legacyPlacements = src.placements.map(f => ({
-        module: MODULE_LIBRARY.find(m => m.id === f.moduleId) || { label: f.label, w: f.wM, d: f.dM, h: f.hM || 2.1 },
-        wall: f.wall || "south",
-        x: f.xM, z: f.yM, rotationY: f.rotationY || 0
-      }));
-      const placementObj = { placements: legacyPlacements, warnings: [] };
-      allPlacements.push(...legacyPlacements.map(p => ({ ...p, roomLabel: src.roomLabel })));
-
-      const selectedModules = legacyPlacements.map(p => p.module);
-      const renders = [];
-
-      if (src.photoFile) {
-        try {
-          const edited = await createOpenAiFurnishedRender(src.photoFile, {
-            model: DEFAULT_OPENAI_IMAGE_MODEL,
-            roomWidth: src.widthM, roomLength: src.lengthM,
-            brief: src.brief, styleSummary: style.style_summary || "",
-            laminate, placements: legacyPlacements,
-            roomLabel: src.roomLabel, archNotes: src.archNotes
-          }, 0);
-          renders.push(edited);
-        } catch (err) {
-          fallbackCount++;
-          const fb = await createLocalFurnishedRender(src.photoFile, legacyPlacements, laminate, 0);
-          fb.note = `OpenAI failed: ${err.message}`;
-          renders.push(fb);
-        }
-      } else {
-        // Generate from floor plan crop of the room bbox
-        const detectedRoom = detectedRooms.find(r => r.label === src.roomLabel);
-        const bgW = planner.bgImage?.width || 800, bgH = planner.bgImage?.height || 600;
-        const cropRect = detectedRoom
-          ? {
-              x: detectedRoom.bbox.xPct * bgW, y: detectedRoom.bbox.yPct * bgH,
-              w: detectedRoom.bbox.wPct * bgW,  h: detectedRoom.bbox.hPct * bgH
-            }
-          : { x: 0, y: 0, w: bgW, h: bgH };
-
-        const tempBg = document.createElement("canvas");
-        tempBg.width = bgW; tempBg.height = bgH;
-        tempBg.getContext("2d").drawImage(planner.bgImage, 0, 0);
-        const cropBase64 = cropCanvasRegionToPngBase64(tempBg, cropRect, 1400);
-
-        for (let i = 0; i < 2; i++) {
-          try {
-            const edited = await createOpenAiFurnishedRenderFromBase64(
-              `floorplan_${src.roomLabel}_concept_${i + 1}.png`,
-              cropBase64, "image/png",
-              {
-                model: DEFAULT_OPENAI_IMAGE_MODEL,
-                roomWidth: src.widthM, roomLength: src.lengthM,
-                brief: src.brief, styleSummary: style.style_summary || "",
-                laminate, placements: legacyPlacements,
-                roomLabel: src.roomLabel, fromFloorPlan: true, archNotes: src.archNotes
-              }, i);
-            renders.push(edited);
-          } catch (err) {
-            fallbackCount++;
-            renders.push({
-              name: `floorplan_${src.roomLabel}_concept_${i+1}.png`,
-              dataUrl: `data:image/png;base64,${cropBase64}`,
-              source: "floorplan",
-              note: `OpenAI failed: ${err.message}`
-            });
-          }
-        }
+      dom.generateStatus.textContent = `Generating: ${src.roomLabel}…`;
+      try {
+        const result = await generateRoom(src, inspirationDataUrls);
+        roomResults.push(result);
+        drawRoomResult(result);
+      } catch (err) {
+        console.error(`Failed ${src.roomLabel}:`, err);
+        dom.statusBox.textContent += `⚠ ${src.roomLabel}: ${err.message}\n`;
       }
-
-      const roomLike = { label: src.roomLabel, name: src.roomLabel, widthM: src.widthM, lengthM: src.lengthM, brief: src.brief, photos: src.photoFile ? [src.photoFile] : [], inspo: [], generateFromPlan: !src.photoFile };
-      roomResults.push({ room: roomLike, style, laminate, selectedModules, placement: placementObj, renders });
-      perRoomSummary.push(formatRoomSummary({ room: roomLike, style, laminate, selectedModules, placement: placementObj }));
     }
 
-    drawRoomResults(roomResults);
-
-    const scene = buildSceneJson({ floorPlan: floorPlanState.file?.name || "", floorPlanLabels: "", rooms: roomResults });
-    const boq = buildBoqFromRooms(roomResults);
-    paintBoq(boq.rows, boq.grandTotal);
-
-    dom.placementSummary.textContent = [
-      `Floor plan: ${floorPlanState.file?.name || ""}`,
-      "",
-      ...perRoomSummary
-    ].filter(v => v !== null).join("\n");
-
-    dom.statusBox.textContent = fallbackCount
-      ? `Done. ${fallbackCount} render(s) used local fallback.`
-      : "Done. Generated furnished renders + BOM.";
-
-    latestArtifacts = { scene, boq };
+    // BOQ
+    drawBoq(roomResults);
+    latestArtifacts = buildArtifacts(planner.getSceneState(), roomResults);
     dom.downloadScene.disabled = false;
     dom.downloadBoq.disabled = false;
+    dom.generateStatus.textContent = "✓ Done";
+
   } catch (err) {
-    dom.statusBox.textContent = `Error: ${err.message}`;
+    dom.generateStatus.textContent = `⚠ ${err.message}`;
+    console.error(err);
   } finally {
     dom.generateBtn.disabled = false;
-    dom.generateBtn.textContent = "✦ Generate Renders + BOM";
-    dom.generateStatus.hidden = true;
+    dom.generateBtn.textContent = "✦ Generate Renders + BOQ";
   }
 }
 
+async function generateRoom(src, inspirationDataUrls) {
+  const PA = window.PoligridAnalysis;
 
+  // 1. Extract style
+  const styleRes = await postJson("/api/style/extract", {
+    roomLabel:    src.roomLabel,
+    roomType:     src.roomType,
+    brief:        src.brief,
+    inspirationImages: inspirationDataUrls,
+    enableLaminateSelection: true
+  });
+  const style = styleRes.style || {};
+  const laminate = pickLaminate(LAMINATE_LIBRARY, style.tags || []);
 
-function pickModulesFromBrief(brief, roomArea) {
-  const normalized = brief.toLowerCase();
-  const picked = [];
+  // 2. Pick modules + build placement map
+  const placements = src.placements.length > 0 ? src.placements :
+    pickModulesFromBrief(MODULE_LIBRARY, src.brief, src.widthM, src.lengthM);
 
-  for (const module of MODULE_LIBRARY) {
-    let score = 0;
-    for (const keyword of module.keywords) {
-      if (normalized.includes(keyword)) {
-        score += 1;
-      }
-    }
-    if (score > 0) {
-      picked.push({ ...module, score: score + module.priority / 10 });
-    }
-  }
+  // 3. Render
+  const renders = await generateRendersForRoom(src, placements, laminate, style, inspirationDataUrls);
 
-  if (!picked.length) {
-    ["tv_unit", "study", "shoe"].forEach((id) => {
-      const fallback = MODULE_LIBRARY.find((m) => m.id === id);
-      if (fallback) {
-        picked.push({ ...fallback, score: 0.1 });
-      }
+  return {
+    room: { label: src.roomLabel, name: src.roomLabel, roomType: src.roomType, widthM: src.widthM, lengthM: src.lengthM },
+    laminate, style, placements, renders
+  };
+}
+
+async function generateRendersForRoom(src, placements, laminate, style, inspirationDataUrls) {
+  const renders = [];
+  const prompt = buildRenderPrompt(src, placements, laminate, style);
+
+  const sources = [];
+  if (src.photoDataUrl) sources.push(src.photoDataUrl);
+  sources.push(...inspirationDataUrls.slice(0, 2));
+
+  const res = await postJson("/api/render/openai", {
+    roomLabel:   src.roomLabel,
+    roomType:    src.roomType,
+    widthM:      src.widthM,
+    lengthM:     src.lengthM,
+    brief:       src.brief,
+    prompt,
+    sourceImages: sources,
+    laminate:    { name: laminate.name, color: laminate.color },
+    model:       DEFAULT_OPENAI_IMAGE_MODEL
+  });
+  if (res.images && Array.isArray(res.images)) {
+    res.images.forEach((img, i) => {
+      renders.push({ name: `View ${i + 1}`, dataUrl: img.dataUrl || img, source: "openai" });
     });
   }
-
-  picked.sort((a, b) => b.score - a.score);
-
-  const capped = [];
-  let occupiedArea = 0;
-  for (const module of picked) {
-    const moduleFootprint = module.w * module.d;
-    if (occupiedArea + moduleFootprint <= roomArea * 0.58) {
-      capped.push(module);
-      occupiedArea += moduleFootprint;
-    }
-  }
-
-  if (!capped.length) {
-    capped.push(MODULE_LIBRARY.find((m) => m.id === "study"));
-  }
-
-  return capped;
+  return renders;
 }
 
-function placeModules(modules, roomWidth, roomLength) {
-  const clear = 0.32;
-  const gaps = 0.08;
-  const walls = {
-    south: { used: clear, cap: roomWidth - clear, runAxis: "x" },
-    north: { used: clear, cap: roomWidth - clear, runAxis: "x" },
-    west: { used: clear, cap: roomLength - clear, runAxis: "z" },
-    east: { used: clear, cap: roomLength - clear, runAxis: "z" }
-  };
+function buildRenderPrompt(src, placements, laminate, style) {
+  const items = placements.map(p =>
+    `- ${p.label}: ${(p.wM||0).toFixed(1)}m wide × ${(p.dM||0).toFixed(1)}m deep, placed at (${(p.xM||0).toFixed(1)}, ${(p.yM||0).toFixed(1)}) — wall: ${p.wall || "unspecified"}`
+  ).join("\n");
 
-  const placements = [];
-  const warnings = [];
-
-  for (const module of modules) {
-    const candidateWalls = ["south", "north", "west", "east"]
-      .map((name) => {
-        const wall = walls[name];
-        const available = wall.cap - wall.used;
-        return { name, available };
-      })
-      .sort((a, b) => b.available - a.available);
-
-    let placed = false;
-    for (const candidate of candidateWalls) {
-      const wall = walls[candidate.name];
-      if (candidate.available < module.w + gaps) {
-        continue;
-      }
-      if (module.d > Math.min(roomWidth, roomLength) * 0.42) {
-        warnings.push(`${module.label} depth is high vs room size; verify clearances manually.`);
-      }
-
-      const slotCenter = wall.used + module.w / 2;
-      let x = roomWidth / 2;
-      let z = roomLength / 2;
-      let rotationY = 0;
-
-      if (candidate.name === "south") {
-        x = slotCenter;
-        z = module.d / 2 + 0.02;
-        rotationY = 0;
-      } else if (candidate.name === "north") {
-        x = slotCenter;
-        z = roomLength - module.d / 2 - 0.02;
-        rotationY = 180;
-      } else if (candidate.name === "west") {
-        x = module.d / 2 + 0.02;
-        z = slotCenter;
-        rotationY = 90;
-      } else if (candidate.name === "east") {
-        x = roomWidth - module.d / 2 - 0.02;
-        z = slotCenter;
-        rotationY = -90;
-      }
-
-      placements.push({
-        module,
-        wall: candidate.name,
-        x,
-        y: module.h / 2,
-        z,
-        rotationY
-      });
-
-      wall.used += module.w + gaps;
-      placed = true;
-      break;
-    }
-
-    if (!placed) {
-      warnings.push(`${module.label} could not be auto-placed without overlap. Increase room size or remove modules.`);
-    }
-  }
-
-  return { placements, warnings };
-}
-
-async function createLocalFurnishedRender(file, placements, laminate, index) {
-  const image = await readImage(file);
-  const canvas = document.createElement("canvas");
-  canvas.width = image.width;
-  canvas.height = image.height;
-  const ctx = canvas.getContext("2d");
-
-  ctx.drawImage(image, 0, 0);
-
-  const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, "rgba(255, 255, 255, 0.04)");
-  gradient.addColorStop(1, "rgba(247, 222, 180, 0.24)");
-  ctx.fillStyle = gradient;
-  ctx.globalCompositeOperation = "soft-light";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.globalCompositeOperation = "source-over";
-
-  const drawable = placements.slice(0, 5);
-  const colW = canvas.width / Math.max(1, drawable.length);
-  drawable.forEach((entry, idx) => {
-    const baseX = idx * colW + colW * 0.14;
-    const width = colW * 0.72;
-    const height = Math.max(34, (entry.module.h / 2.7) * canvas.height * 0.22);
-    const y = canvas.height * 0.74 - idx * 8;
-
-    drawFurnitureBlock(ctx, baseX, y, width, height, laminate.color, entry.module.label);
-  });
-
-  const label = `Concept ${index + 1}`;
-  ctx.fillStyle = "rgba(18, 18, 18, 0.62)";
-  ctx.fillRect(12, 12, 136, 28);
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "600 15px 'Space Grotesk'";
-  ctx.fillText(label, 20, 31);
-
-  return {
-    name: file.name,
-    dataUrl: canvas.toDataURL("image/png"),
-    source: "local"
-  };
-}
-
-// (Old multi-engine UI removed; OpenAI is used via server-side key only.)
-
-async function createOpenAiFurnishedRender(file, context, index) {
-  const imageBase64 = await fileToBase64(file);
-  const prompt = buildImageEditPrompt(context);
-  const result = await callRenderApi("openai", {
-    model: context.model,
-    prompt,
-    imageBase64,
-    mimeType: file.type || "image/jpeg"
-  });
-
-  return {
-    name: file.name,
-    dataUrl: result.dataUrl,
-    source: "openai",
-    note: `Room ${context.roomLabel || ""} · concept ${index + 1}`
-  };
-}
-
-async function createOpenAiFurnishedRenderFromBase64(name, imageBase64, mimeType, context, index) {
-  const prompt = buildImageEditPrompt(context);
-  const result = await callRenderApi("openai", {
-    model: context.model,
-    prompt,
-    imageBase64,
-    mimeType: mimeType || "image/png"
-  });
-
-  return {
-    name,
-    dataUrl: result.dataUrl,
-    source: "openai",
-    note: `Room ${context.roomLabel || ""} · concept ${index + 1}${context.fromFloorPlan ? " (from floor plan)" : ""}`
-  };
-}
-
-function buildImageEditPrompt(context) {
-  const moduleList = context.placements.map((p) => `${p.module.label} (${p.module.w}m×${p.module.d}m, ${p.wall} wall)`).join(", ");
   return [
-    "You are an interior render assistant.",
-    context.fromFloorPlan
-      ? "The input image is a cropped floor plan of a single room."
-      : "Edit the input room photo by adding only realistic furniture and millwork.",
-    "Strict rules:",
-    "1) Respect room geometry and scale.",
-    "2) Keep existing walls, windows, doors, and structural elements unchanged.",
-    context.fromFloorPlan
-      ? "3) Produce a photorealistic furnished 3D interior render consistent with the plan geometry."
-      : "3) Add furniture only; lighting can be improved for realism.",
-    "4) Photoreal output, natural shadows, no cartoon style.",
-    "5) Do not add text overlays, labels, watermarks, or annotations.",
-    "6) Ensure furniture placement is coherent with room shape — pieces along walls, clearance in centre.",
-    `Room size approximately ${context.roomWidth}m × ${context.roomLength}m.`,
-    context.archNotes ? `Architectural notes: ${context.archNotes}` : "",
-    `Design brief: ${context.brief}`,
-    context.styleSummary ? `Inspiration-derived style direction: ${context.styleSummary}` : "",
-    `Furniture layout (position by wall): ${moduleList || "TV unit, storage, study module"}.`,
-    `Primary laminate tone: ${context.laminate.name} (${context.laminate.code}).`
-  ]
-    .filter(Boolean)
-    .join("\n");
+    `Generate a photorealistic furnished interior render for: ${src.roomLabel} (${src.roomType}).`,
+    `Room dimensions: ${src.widthM.toFixed(1)}m × ${src.lengthM.toFixed(1)}m.`,
+    style.style_summary ? `Design style: ${style.style_summary}.` : "",
+    src.brief ? `Brief: ${src.brief}.` : "",
+    `Laminate finish: ${laminate.name}.`,
+    items ? `Furniture placed on the floor plan:\n${items}` : "",
+    src.photoDataUrl ? "Reference photo is provided — augment this view with the furniture layout above." : "",
+    "Respect actual proportions. Use warm natural lighting. Photorealistic quality.",
+    "Do NOT add text, labels, or watermarks."
+  ].filter(Boolean).join("\n");
 }
 
-function cropCanvasRegionToPngBase64(canvas, rect, maxSidePx = 1400) {
-  if (!canvas) return "";
-  const srcW = Math.max(2, Math.round(rect.w));
-  const srcH = Math.max(2, Math.round(rect.h));
-  const scale = Math.min(1, maxSidePx / Math.max(srcW, srcH));
-  const outW = Math.max(2, Math.round(srcW * scale));
-  const outH = Math.max(2, Math.round(srcH * scale));
+// ─── Draw Output ───────────────────────────────────────────────────────────────
 
-  const tmp = document.createElement("canvas");
-  tmp.width = outW;
-  tmp.height = outH;
-  const ctx = tmp.getContext("2d");
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, outW, outH);
-  ctx.drawImage(canvas, rect.x, rect.y, srcW, srcH, 0, 0, outW, outH);
+function drawRoomResult(result) {
+  const wrap = document.createElement("section");
+  wrap.className = "room-result-card";
+  const w = result.room.widthM, l = result.room.lengthM;
 
-  const dataUrl = tmp.toDataURL("image/png");
-  return dataUrl.split(",")[1] || "";
-}
+  wrap.innerHTML = `
+    <div class="room-result-head">
+      <span class="room-result-label">${escapeHtml(result.room.name || result.room.label)}</span>
+      <span class="room-result-dims">${w ? w.toFixed(1)+"×"+l.toFixed(1)+"m" : ""} · ${escapeHtml(result.laminate.name)}</span>
+    </div>`;
 
-async function callRenderApi(provider, payload) {
-  const response = await fetch(`/api/render/${provider}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-
-  const raw = await response.text();
-  let parsed;
-  try {
-    parsed = raw ? JSON.parse(raw) : {};
-  } catch {
-    parsed = null;
+  for (const render of result.renders) {
+    const imgWrap = document.createElement("div");
+    imgWrap.className = "room-result-img-wrap";
+    const img = document.createElement("img");
+    img.src = render.dataUrl;
+    img.className = "room-result-img";
+    img.alt = `Render — ${result.room.label}`;
+    imgWrap.appendChild(img);
+    wrap.appendChild(imgWrap);
   }
 
-  if (!response.ok) {
-    const message = parsed?.error || parseApiError(raw);
-    throw new Error(message);
+  if (result.placements.length) {
+    const items = document.createElement("div");
+    items.className = "room-result-items";
+    for (const p of result.placements) {
+      const row = document.createElement("div");
+      row.className = "room-item-row";
+      row.innerHTML = `<span class="room-item-name">${escapeHtml(p.label)}</span><span class="room-item-dims">${(p.wM||0).toFixed(1)}×${(p.dM||0).toFixed(1)}×${(p.hM||0).toFixed(1)}m</span>`;
+      items.appendChild(row);
+    }
+    wrap.appendChild(items);
   }
-  if (!parsed?.dataUrl) {
-    throw new Error("Render API returned no image.");
-  }
-  return parsed;
+
+  dom.roomResults.appendChild(wrap);
 }
 
-function parseApiError(text) {
-  try {
-    const parsed = JSON.parse(text);
-    return parsed?.error?.message || text || "Unknown API error";
-  } catch {
-    return text || "Unknown API error";
-  }
-}
+function drawBoq(roomResults) {
+  dom.boqRooms.innerHTML = "";
+  const tbody = dom.boqTableBody;
+  tbody.innerHTML = "";
+  let grandTotal = 0;
 
-function drawFurnitureBlock(ctx, x, y, w, h, color, label) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x + w, y);
-  ctx.lineTo(x + w - 10, y + h);
-  ctx.lineTo(x + 10, y + h);
-  ctx.closePath();
-  ctx.fillStyle = color;
-  ctx.globalAlpha = 0.82;
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
-  const capHeight = Math.max(9, h * 0.18);
-  ctx.fillStyle = "rgba(255,255,255,0.28)";
-  ctx.fillRect(x + 10, y + 4, Math.max(22, w - 20), capHeight);
-
-  ctx.fillStyle = "rgba(0,0,0,0.58)";
-  ctx.font = "500 12px 'Space Grotesk'";
-  const short = label.length > 18 ? `${label.slice(0, 16)}..` : label;
-  ctx.fillText(short, x + 12, y + h - 8);
-  ctx.restore();
-}
-
-function drawRoomResults(roomResults) {
-  dom.roomResults.innerHTML = "";
   for (const result of roomResults) {
-    const wrap = document.createElement("section");
-    wrap.className = "room-result-card";
+    const boq = buildBoq(result.placements, result.laminate);
+    grandTotal += boq.totalINR;
 
-    const widthM  = parseFloat(result.room.widthM)  || null;
-    const lengthM = parseFloat(result.room.lengthM) || null;
+    const section = document.createElement("div");
+    section.className = "boq-room-section";
+    section.innerHTML = `<div class="boq-room-label">${escapeHtml(result.room.name || result.room.label)}</div>`;
 
-    // ── Head
-    const head = document.createElement("div");
-    head.className = "room-result-head";
-    head.innerHTML = `
-      <div>
-        <div class="pill">Room ${escapeHtml(result.room.label)}</div>
-        <div class="mini-note">${escapeHtml(result.room.name || "")}</div>
-      </div>
-      <div class="mini-note" style="text-align:right">
-        Laminate: ${escapeHtml(result.laminate.name)}<br>
-        <span style="font-size:0.8rem;color:var(--muted)">${widthM}m × ${lengthM}m</span>
-      </div>
-    `;
-
-    // ── Body
-    const body = document.createElement("div");
-    body.className = "room-result-body";
-
-    const styleBox = document.createElement("div");
-    styleBox.className = "status";
-    styleBox.textContent = result.style?.style_summary ? `Style: ${result.style.style_summary}` : "Style extracted.";
-    body.appendChild(styleBox);
-
-    // Render grid
-    const grid = document.createElement("div");
-    grid.className = "room-render-grid";
-
-    for (const render of result.renders) {
-      const card = document.createElement("article");
-      card.className = "render-card";
-
-      const img = document.createElement("img");
-      img.src = render.dataUrl;
-      img.alt = `Furnished render for room ${result.room.label}`;
-
-      const meta = document.createElement("div");
-      meta.className = "render-meta";
-
-      const name = document.createElement("span");
-      name.textContent = `${render.name} (${render.source || "local"})`;
-
-      const dl = document.createElement("button");
-      dl.type = "button";
-      dl.textContent = "Download PNG";
-      dl.addEventListener("click", () =>
-        downloadDataUrl(`room_${sanitizeName(result.room.label)}_${sanitizeName(render.name)}.png`, render.dataUrl)
-      );
-
-      meta.append(name, dl);
-      card.append(img, meta);
-      if (render.note) {
-        const note = document.createElement("div");
-        note.className = "render-note";
-        note.textContent = render.note;
-        card.appendChild(note);
-      }
-      grid.appendChild(card);
+    for (const line of boq.lines) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(line.item)}</td>
+        <td>${line.dims || "—"}</td>
+        <td>${line.qty.toFixed(2)}</td>
+        <td>${escapeHtml(line.unit)}</td>
+        <td>₹${line.rate.toLocaleString("en-IN")}</td>
+        <td>₹${line.amount.toLocaleString("en-IN")}</td>`;
+      tbody.appendChild(tr);
     }
-    body.appendChild(grid);
-
-    // ── Placement Map section
-    if (result.placement && result.placement.placements.length) {
-      const PA = window.PoligridAnalysis;
-      const mapSection = document.createElement("div");
-      mapSection.className = "placement-map-section";
-
-      const mapH4 = document.createElement("h4");
-      mapH4.textContent = "Furniture Placement Map";
-      mapSection.appendChild(mapH4);
-
-      const mapWrap = document.createElement("div");
-      mapWrap.className = "placement-map-wrap";
-
-      const mapCanvas = document.createElement("canvas");
-      // Scale canvas to room proportions — max 600px wide
-      const mapMaxW = 600;
-      const mapScale = Math.min(mapMaxW / widthM, 120);
-      mapCanvas.width = Math.round(widthM * mapScale + 80);
-      mapCanvas.height = Math.round(lengthM * mapScale + 80);
-      mapWrap.appendChild(mapCanvas);
-      mapSection.appendChild(mapWrap);
-
-      // Controls
-      const controls = document.createElement("div");
-      controls.className = "placement-map-controls";
-
-      const ctrlNote = document.createElement("span");
-      ctrlNote.className = "ctrl-note";
-      ctrlNote.textContent = "Click to select. Drag to reposition.";
-      controls.appendChild(ctrlNote);
-
-      const flipBtn = document.createElement("button");
-      flipBtn.type = "button";
-      flipBtn.textContent = "↺ Flip";
-
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.textContent = "✕ Remove";
-      removeBtn.className = "remove-btn";
-
-      controls.append(flipBtn, removeBtn);
-      mapSection.appendChild(controls);
-
-      if (result.placement.warnings.length) {
-        const warn = document.createElement("p");
-        warn.className = "mini-note";
-        warn.style.color = "#b86d35";
-        warn.textContent = "⚠ " + result.placement.warnings.join(" · ");
-        mapSection.appendChild(warn);
-      }
-
-      wrap.append(head, body, mapSection);
-
-      // Init interactive map after DOM is in place
-      requestAnimationFrame(() => {
-        if (PA && PA.makePlacementMapInteractive) {
-          const roomObj = {
-            widthM,
-            lengthM,
-            label: result.room.label,
-            name: result.room.name
-          };
-          const roomInteractive = PA.makePlacementMapInteractive(
-            mapCanvas,
-            roomObj,
-            result.placement.placements,
-            (updatedPlacements) => {
-              result.placement.placements = updatedPlacements;
-            }
-          );
-          flipBtn.addEventListener("click", () => roomInteractive.flipSelected());
-          removeBtn.addEventListener("click", () => roomInteractive.removeSelected());
-        } else {
-          // Fallback static render
-          if (PA && PA.renderPlacementMap) {
-            PA.renderPlacementMap(mapCanvas, { widthM, lengthM, label: result.room.label, name: result.room.name }, result.placement.placements, null);
-          }
-        }
-      });
-    } else {
-      wrap.append(head, body);
-    }
-
-    dom.roomResults.appendChild(wrap);
   }
+
+  dom.grandTotal.textContent = `₹${grandTotal.toLocaleString("en-IN")}`;
+
+  // Placement summary
+  const allPlacements = roomResults.flatMap(r => r.placements);
+  dom.placementSummary.textContent = allPlacements.map(p =>
+    `${p.label}: ${(p.wM||0).toFixed(2)}W × ${(p.dM||0).toFixed(2)}D × ${(p.hM||0).toFixed(2)}H m  @ (${(p.xM||0).toFixed(2)}, ${(p.yM||0).toFixed(2)}) — ${p.roomLabel}`
+  ).join("\n");
 }
 
+function buildArtifacts(sceneState, roomResults) {
+  const boqLines = [];
+  let grandTotal = 0;
+  for (const r of roomResults) {
+    const boq = buildBoq(r.placements, r.laminate);
+    grandTotal += boq.totalINR;
+    boqLines.push(...boq.lines.map(l => ({ ...l, room: r.room.label })));
+  }
+  const csvHeader = "Room,Item,W×D×H,Qty,Unit,Rate INR,Amount INR\n";
+  const csv = csvHeader + boqLines.map(l =>
+    `${l.room},${l.item},${l.dims||""},${l.qty.toFixed(2)},${l.unit},${l.rate},${l.amount}`
+  ).join("\n");
 
-function buildObjModel(room, placements, laminate) {
-  const vertices = [];
-  const chunks = [];
-  let vOffset = 1;
+  return { scene: sceneState, boq: { lines: boqLines, grandTotal, csv } };
+}
 
-  const addBox = (name, material, cx, cy, cz, w, h, d) => {
-    const x1 = cx - w / 2;
-    const x2 = cx + w / 2;
-    const y1 = cy - h / 2;
-    const y2 = cy + h / 2;
-    const z1 = cz - d / 2;
-    const z2 = cz + d / 2;
+// ─── Business logic ────────────────────────────────────────────────────────────
 
-    const boxVertices = [
-      [x1, y1, z1],
-      [x2, y1, z1],
-      [x2, y2, z1],
-      [x1, y2, z1],
-      [x1, y1, z2],
-      [x2, y1, z2],
-      [x2, y2, z2],
-      [x1, y2, z2]
-    ];
+function pickLaminate(library, styleTags) {
+  const norm = (styleTags || []).map(t => t.toLowerCase());
+  let best = null, bestScore = -1;
+  for (const lam of library) {
+    const score = (lam.tags || []).filter(t => norm.includes(t.toLowerCase())).length;
+    if (score > bestScore) { best = lam; bestScore = score; }
+  }
+  return best || library[0];
+}
 
-    for (const v of boxVertices) {
-      vertices.push(`v ${v[0].toFixed(4)} ${v[1].toFixed(4)} ${v[2].toFixed(4)}`);
-    }
-
-    const faces = [
-      [1, 2, 3],
-      [1, 3, 4],
-      [5, 6, 7],
-      [5, 7, 8],
-      [1, 5, 8],
-      [1, 8, 4],
-      [2, 6, 7],
-      [2, 7, 3],
-      [4, 3, 7],
-      [4, 7, 8],
-      [1, 2, 6],
-      [1, 6, 5]
-    ];
-
-    const lines = [`g ${name}`, `usemtl ${material}`];
-    for (const f of faces) {
-      lines.push(`f ${f[0] + vOffset - 1} ${f[1] + vOffset - 1} ${f[2] + vOffset - 1}`);
-    }
-    chunks.push(lines.join("\n"));
-    vOffset += 8;
-  };
-
-  addBox("floor", "lam_floor", room.width / 2, -0.02, room.length / 2, room.width, 0.04, room.length);
-  addBox("wall_south", "wall_paint", room.width / 2, 1.45, 0.03, room.width, 2.9, 0.06);
-  addBox("wall_north", "wall_paint", room.width / 2, 1.45, room.length - 0.03, room.width, 2.9, 0.06);
-  addBox("wall_west", "wall_paint", 0.03, 1.45, room.length / 2, 0.06, 2.9, room.length);
-  addBox("wall_east", "wall_paint", room.width - 0.03, 1.45, room.length / 2, 0.06, 2.9, room.length);
-
-  placements.forEach((entry, index) => {
-    const alongX = Math.abs(entry.rotationY) !== 90;
-    const ww = alongX ? entry.module.w : entry.module.d;
-    const dd = alongX ? entry.module.d : entry.module.w;
-    addBox(`furn_${index + 1}_${entry.module.id}`, "laminate_main", entry.x, entry.module.h / 2, entry.z, ww, entry.module.h, dd);
-  });
-
-  const obj = ["mtllib furnished_scene.mtl", ...vertices, ...chunks].join("\n");
-
-  const mtl = [
-    "newmtl laminate_main",
-    `Kd ${hexToRgb01(laminate.color).join(" ")}`,
-    "Ka 0.2 0.2 0.2",
-    "Ks 0.1 0.1 0.1",
-    "Ns 30",
-    "",
-    "newmtl lam_floor",
-    "Kd 0.71 0.67 0.61",
-    "",
-    "newmtl wall_paint",
-    "Kd 0.9 0.9 0.9"
-  ].join("\n");
-
-  const scene = {
-    units: "meters",
-    room,
-    laminate,
-    objects: placements.map((entry) => ({
-      id: entry.module.id,
-      label: entry.module.label,
-      position: { x: entry.x, y: entry.y, z: entry.z },
-      rotationY: entry.rotationY,
-      dimensions: { w: entry.module.w, h: entry.module.h, d: entry.module.d },
-      wall: entry.wall
-    }))
-  };
-
-  return { obj, mtl, scene };
+function pickModulesFromBrief(library, brief, widthM, lengthM) {
+  const norm = (brief || "").toLowerCase();
+  const roomArea = (widthM || 4) * (lengthM || 4);
+  const picked = [];
+  for (const m of library) {
+    let score = 0;
+    for (const kw of m.keywords || []) { if (norm.includes(kw)) score++; }
+    if (score > 0) picked.push({ ...m, score: score + m.priority / 10 });
+  }
+  if (!picked.length && library.length) picked.push({ ...library[0], score: 0.1 });
+  picked.sort((a, b) => b.score - a.score);
+  const capped = [];
+  let area = 0;
+  for (const m of picked) {
+    if (area + m.w * m.d <= roomArea * 0.5) { capped.push(m); area += m.w * m.d; }
+  }
+  return (capped.length ? capped : [picked[0]]).map(m => ({
+    id: m.id, label: m.label, moduleId: m.id,
+    xM: 0.3, yM: 0.3, wM: m.w, dM: m.d, hM: m.h,
+    type: m.type, shelves: m.shelves, partitions: m.partitions,
+    shutters: m.shutters, drawers: m.drawers,
+    roomLabel: "", wall: "south"
+  }));
 }
 
 function buildBoq(placements, laminate) {
-  const totals = {
-    boardSqM: 0,
-    laminateSqM: 0,
-    edgeM: 0,
-    hinges: 0,
-    channels: 0,
-    handles: 0,
-    cuts: 0,
-    grooves: 0
-  };
+  const totals = computeMaterialTotals(placements);
+  const laminateRate = laminate ? laminate.ratePerSqFt : 94;
+  const laminateSqFt = totals.laminateSqM * 10.764;
 
-  for (const entry of placements) {
-    const module = entry.module;
+  const lines = [
+    { item: "18mm Plywood (BWR)", dims: "", qty: totals.boardSqM, unit: "sqm", rate: COST_RATES.plywood18, amount: Math.round(totals.boardSqM * COST_RATES.plywood18) },
+    { item: `Laminate — ${laminate?.name || ""}`, dims: "", qty: laminateSqFt, unit: "sqft", rate: laminateRate, amount: Math.round(laminateSqFt * laminateRate) },
+    { item: "PVC Edge Band", dims: "", qty: totals.edgeM, unit: "m", rate: COST_RATES.edgeBandPerM, amount: Math.round(totals.edgeM * COST_RATES.edgeBandPerM) },
+    { item: "Soft-close Hinges", dims: "", qty: totals.hinges, unit: "pcs", rate: COST_RATES.hinge, amount: Math.round(totals.hinges * COST_RATES.hinge) },
+    { item: "Drawer Channels", dims: "", qty: totals.channels, unit: "pairs", rate: COST_RATES.channelPair, amount: Math.round(totals.channels * COST_RATES.channelPair) },
+    { item: "Handles", dims: "", qty: totals.handles, unit: "pcs", rate: COST_RATES.handle, amount: Math.round(totals.handles * COST_RATES.handle) },
+    { item: "CNC Cutting", dims: "", qty: totals.cuts, unit: "cuts", rate: COST_RATES.cuttingPerCut, amount: Math.round(totals.cuts * COST_RATES.cuttingPerCut) },
+    { item: "Back Panel Grooves", dims: "", qty: totals.grooves, unit: "m", rate: COST_RATES.groovePerM, amount: Math.round(totals.grooves * COST_RATES.groovePerM) },
+    { item: "Transport + Installation", dims: "", qty: 1, unit: "lump sum", rate: COST_RATES.transportInstall, amount: COST_RATES.transportInstall }
+  ];
+
+  // Per-item lines for placed furniture
+  for (const p of placements) {
+    lines.push({
+      item: p.label,
+      dims: `${(p.wM||0).toFixed(2)}×${(p.dM||0).toFixed(2)}×${(p.hM||0).toFixed(2)}`,
+      qty: 1, unit: "unit",
+      rate: 0, amount: 0
+    });
+  }
+
+  const totalINR = lines.reduce((s, l) => s + l.amount, 0);
+  return { lines, totalINR };
+}
+
+function computeMaterialTotals(placements) {
+  const totals = { boardSqM:0, laminateSqM:0, edgeM:0, hinges:0, channels:0, handles:0, cuts:0, grooves:0 };
+  for (const p of placements) {
+    const module = MODULE_LIBRARY.find(m => m.id === (p.moduleId || p.id)) || p;
+    if (!module) continue;
+    const w = p.wM || module.w || 1, h = p.hM || module.h || 2, d = p.dM || module.d || 0.6;
+    const shelves = module.shelves || 0, partitions = module.partitions || 0;
+    const shutters = module.shutters || 0, drawers = module.drawers || 0;
+
     if (module.type === "cabinet" || module.type === "study") {
-      const side = 2 * module.d * module.h;
-      const topBottom = 2 * module.w * module.d;
-      const shelf = module.shelves * module.w * module.d;
-      const partition = module.partitions * module.d * module.h;
-      const back = 0.45 * module.w * module.h;
-      const shutterArea = module.shutters > 0 ? module.w * module.h * 0.92 : 0;
-
+      const side = 2 * h * d;
+      const topBottom = 2 * w * d;
+      const shelf = shelves * w * d;
+      const partition = partitions * h * d;
+      const back = w * h * 0.09;
+      const shutterArea = shutters > 0 ? w * h * 0.92 : 0;
       totals.boardSqM += side + topBottom + shelf + partition + back;
       totals.laminateSqM += (side + topBottom + shelf + partition + shutterArea) * 1.05;
-      totals.edgeM += module.shutters * (2 * (module.w / Math.max(1, module.shutters)) + 2 * module.h) + module.shelves * module.w * 0.35;
-      totals.hinges += Math.max(2, module.shutters * 2);
-      totals.channels += module.drawers;
-      totals.handles += Math.max(module.shutters, module.drawers);
-      totals.cuts += Math.round(8 + module.shelves + module.partitions + module.shutters * 2);
-      totals.grooves += module.w * 1.8;
+      totals.edgeM += shutters * (2 * (w / Math.max(1, shutters)) + 2 * h) + shelves * w * 0.35;
+      totals.hinges += Math.max(2, shutters * 2);
+      totals.channels += drawers;
+      totals.handles += Math.max(shutters, drawers);
+      totals.cuts += Math.round(8 + shelves + partitions + shutters * 2);
+      totals.grooves += w * 1.8;
     } else if (module.type === "bed") {
-      totals.boardSqM += 7.2;
-      totals.laminateSqM += 8.4;
-      totals.edgeM += 14;
-      totals.hinges += 4;
-      totals.handles += 4;
-      totals.cuts += 24;
-      totals.grooves += 3.5;
+      totals.boardSqM += 7.2; totals.laminateSqM += 8.4; totals.edgeM += 14;
+      totals.hinges += 4; totals.handles += 4; totals.cuts += 24; totals.grooves += 3.5;
     }
   }
-
-  totals.boardSqM *= 1.12;
-  totals.laminateSqM *= 1.1;
-  totals.edgeM *= 1.08;
-
-  const boardSqFt = totals.boardSqM * 10.7639;
-  const laminateSqFt = totals.laminateSqM * 10.7639;
-  const laminateSheets = Math.ceil(laminateSqFt / 32);
-
-  const rows = [];
-  const pushRow = (item, qty, unit, rate, amount) => {
-    rows.push({
-      item,
-      qty,
-      unit,
-      rate,
-      amount
-    });
-  };
-
-  const plywoodCost = boardSqFt * COST_RATES.plywood18;
-  const laminateCost = laminateSqFt * laminate.ratePerSqFt;
-  const edgeCost = totals.edgeM * COST_RATES.edgeBandPerM;
-  const hingeCost = totals.hinges * COST_RATES.hinge;
-  const channelCost = totals.channels * COST_RATES.channelPair;
-  const handleCost = totals.handles * COST_RATES.handle;
-  const cutCost = totals.cuts * COST_RATES.cuttingPerCut;
-  const grooveCost = totals.grooves * COST_RATES.groovePerM;
-
-  pushRow("18mm BWP Plywood (first quality)", round(boardSqFt, 2), "sqft", COST_RATES.plywood18, plywoodCost);
-  pushRow(`Laminate ${laminate.code} ${laminate.name}`, round(laminateSqFt, 2), "sqft", laminate.ratePerSqFt, laminateCost);
-  pushRow("Laminate sheets reference", laminateSheets, "sheets (8x4)", 0, 0);
-  pushRow("Edge banding 1mm", round(totals.edgeM, 2), "rm", COST_RATES.edgeBandPerM, edgeCost);
-  pushRow("Soft close hinges", totals.hinges, "nos", COST_RATES.hinge, hingeCost);
-  pushRow("Telescopic channels", totals.channels, "pairs", COST_RATES.channelPair, channelCost);
-  pushRow("Handles", totals.handles, "nos", COST_RATES.handle, handleCost);
-  pushRow("Cutting charges", totals.cuts, "cuts", COST_RATES.cuttingPerCut, cutCost);
-  pushRow("Grooving charges", round(totals.grooves, 2), "rm", COST_RATES.groovePerM, grooveCost);
-
-  const materialHardwareSubtotal =
-    plywoodCost + laminateCost + edgeCost + hingeCost + channelCost + handleCost + cutCost + grooveCost;
-  const consumables = materialHardwareSubtotal * 0.06;
-  const labor = materialHardwareSubtotal * 0.22;
-  const contingency = materialHardwareSubtotal * 0.08;
-
-  pushRow("Adhesives, screws, fasteners", 1, "lot", round(consumables, 0), consumables);
-  pushRow("Fabrication and polishing labor", 1, "lot", round(labor, 0), labor);
-  pushRow("Transport and installation", 1, "lot", COST_RATES.transportInstall, COST_RATES.transportInstall);
-  pushRow("Contingency", 1, "lot", round(contingency, 0), contingency);
-
-  const grandTotal = rows.reduce((sum, row) => sum + row.amount, 0);
-
-  const csvLines = ["Item,Quantity,Unit,Rate,Amount"];
-  for (const row of rows) {
-    csvLines.push(`"${row.item}",${row.qty},${row.unit},${round(row.rate, 2)},${round(row.amount, 2)}`);
-  }
-  csvLines.push(`"Grand Total",,, ,${round(grandTotal, 2)}`);
-
-  return {
-    rows,
-    grandTotal,
-    csv: csvLines.join("\n")
-  };
+  totals.boardSqM *= 1.12; totals.laminateSqM *= 1.1; totals.edgeM *= 1.08;
+  return totals;
 }
 
-function paintBoq(rows, grandTotal) {
-  dom.boqTableBody.innerHTML = "";
-  for (const row of rows) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${row.item}</td>
-      <td>${row.qty}</td>
-      <td>${row.unit}</td>
-      <td>${formatInr(row.rate)}</td>
-      <td>${formatInr(row.amount)}</td>
-    `;
-    dom.boqTableBody.appendChild(tr);
-  }
-  dom.grandTotal.textContent = formatInr(grandTotal);
-}
-
-function formatRoomSummary(ctx) {
-  const summary = [];
-  summary.push(`\nRoom ${ctx.room.label}${ctx.room.name ? ` (${ctx.room.name})` : ""}`);
-  summary.push(`- Dimensions: ${ctx.room.widthM}m x ${ctx.room.lengthM}m`);
-  summary.push(`- Laminate: ${ctx.laminate.code} ${ctx.laminate.name}`);
-  summary.push("- Selected modules:");
-  ctx.selectedModules.forEach((m) => summary.push(`  - ${m.label} (${m.w}m x ${m.d}m x ${m.h}m)`));
-  summary.push("- Auto-placement:");
-  ctx.placement.placements.forEach((p, idx) => {
-    summary.push(
-      `  ${idx + 1}. ${p.module.label} on ${p.wall} wall at (x:${round(p.x, 2)}, z:${round(p.z, 2)}) rotY:${p.rotationY}`
-    );
-  });
-  if (ctx.placement.warnings.length) {
-    summary.push("- Warnings:");
-    ctx.placement.warnings.forEach((w) => summary.push(`  - ${w}`));
-  }
-  return summary.join("\n");
-}
-
-function formatInr(value) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0
-  }).format(value);
-}
-
-function round(value, digits = 2) {
-  const factor = 10 ** digits;
-  return Math.round(value * factor) / factor;
-}
-
-function readImage(file) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const url = URL.createObjectURL(file);
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error(`Could not load image: ${file.name}`));
-    };
-    image.src = url;
-  });
-}
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || "");
-      const base64 = result.includes(",") ? result.split(",")[1] : result;
-      if (!base64) {
-        reject(new Error(`Could not encode image: ${file.name}`));
-        return;
-      }
-      resolve(base64);
-    };
-    reader.onerror = () => reject(new Error(`Could not read image: ${file.name}`));
-    reader.readAsDataURL(file);
-  });
-}
-
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error(`Could not read image: ${file.name}`));
-    reader.readAsDataURL(file);
-  });
-}
-
-function sanitizeName(name) {
-  return name.replace(/[^a-z0-9]/gi, "_").toLowerCase();
-}
-
-function downloadText(filename, content, mime = "text/plain") {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function downloadDataUrl(filename, dataUrl) {
-  const a = document.createElement("a");
-  a.href = dataUrl;
-  a.download = filename;
-  a.click();
-}
-
-function hexToRgb01(hex) {
-  const clean = hex.replace("#", "");
-  const r = parseInt(clean.slice(0, 2), 16) / 255;
-  const g = parseInt(clean.slice(2, 4), 16) / 255;
-  const b = parseInt(clean.slice(4, 6), 16) / 255;
-  return [round(r, 4), round(g, 4), round(b, 4)];
-}
-
-function addRoom() {
-  const id = `room_${roomIdSeq++}`;
-  roomsState.push(id);
-  renderRoomsList();
-}
-
-function removeRoom(roomId) {
-  roomsState = roomsState.filter((id) => id !== roomId);
-  renderRoomsList();
-}
-
-function renderRoomsList() {
-  dom.roomsList.innerHTML = "";
-  for (const roomId of roomsState) {
-    const card = document.createElement("div");
-    card.className = "room-card";
-    card.dataset.roomId = roomId;
-
-    card.innerHTML = `
-      <div class="room-card-head">
-        <div class="pill">${escapeHtml(roomId.replace("room_", "Room "))}</div>
-        <button type="button" class="ghost" data-action="remove-room">Remove</button>
-      </div>
-      <div class="room-card-body">
-        <div class="room-grid">
-          <label>
-            Room number / label (matches floor plan)
-            <input type="text" data-field="label" placeholder="Example: 101" required />
-          </label>
-          <label>
-            Room name (optional)
-            <input type="text" data-field="name" placeholder="Example: Living room" />
-          </label>
-          <input type="hidden" data-field="widthM" value="4.2" />
-          <input type="hidden" data-field="lengthM" value="4.2" />
-          <label class="full">
-            Room photos (multiple)
-            <input type="file" accept="image/*" multiple data-field="photos" />
-            <div class="mini-note">Optional. If omitted, we can generate concepts from the floor plan for this room.</div>
-          </label>
-          <label class="full">
-            Image source fallback
-            <div class="inline-row">
-              <input type="checkbox" data-field="generateFromPlan" checked />
-              <span class="mini-note">Generate concepts from the floor plan if room photos are not uploaded.</span>
-            </div>
-          </label>
-          <label class="full">
-            Inspiration images (optional, multiple)
-            <input type="file" accept="image/*" multiple data-field="inspo" />
-            <div class="mini-note">Used to extract a consistent style direction and auto-select laminate tone.</div>
-          </label>
-          <label class="full">
-            Design brief (per room)
-            <textarea rows="4" data-field="brief" placeholder="Example: Warm modern living, TV wall + low storage, concealed wiring, minimal handles." required></textarea>
-          </label>
-        </div>
-      </div>
-    `;
-
-    // Photo upload → room matching
-    const photosInput = card.querySelector('[data-field="photos"]');
-    let matchBadge = null;
-    photosInput && photosInput.addEventListener("change", async () => {
-      if (matchBadge) { matchBadge.remove(); matchBadge = null; }
-      const PA = window.PoligridAnalysis;
-      if (!PA || !photosInput.files || !photosInput.files[0]) return;
-      if (!floorPlanState.rendered) return;
-      const photo = photosInput.files[0];
-      const labelInput = card.querySelector('[data-field="label"]');
-      try {
-        const match = await PA.matchRoomImage(
-          photo,
-          dom.floorPlanCanvas,
-          floorPlanState.detectedRooms || []
-        );
-        if (!match || !match.matchedLabel) return;
-        const pct = Math.round((match.confidence || 0) * 100);
-        matchBadge = document.createElement("div");
-        matchBadge.className = "match-badge";
-        matchBadge.innerHTML = `
-          <span class="match-text">Suggested room: <strong>${escapeHtml(match.matchedLabel)} — ${escapeHtml(match.matchedName || "")}</strong><br>
-          <span style="font-size:0.8rem;opacity:0.8">${escapeHtml(match.reasoning || "")}</span></span>
-          <span class="match-confidence">${pct}%</span>
-          <button type="button" data-match-action="accept" data-label="${escapeHtml(match.matchedLabel)}" data-name="${escapeHtml(match.matchedName || "")}">✓ Accept</button>
-          <button type="button" class="reject-btn" data-match-action="reject">✕ Ignore</button>
-        `;
-        matchBadge.addEventListener("click", (e) => {
-          const btn = e.target.closest("button");
-          if (!btn) return;
-          if (btn.dataset.matchAction === "accept") {
-            if (labelInput && !labelInput.value) labelInput.value = btn.dataset.label;
-            const nameInput = card.querySelector('[data-field="name"]');
-            if (nameInput && !nameInput.value) nameInput.value = btn.dataset.name;
-          }
-          matchBadge.remove();
-          matchBadge = null;
-        });
-        card.querySelector(".room-card-body").appendChild(matchBadge);
-      } catch (_) {
-        // Match failures are non-fatal; silently skip
-      }
-    });
-
-    // Remove room button
-    card.addEventListener("click", (e) => {
-      const btn = e.target && e.target.closest ? e.target.closest("button[data-action]") : null;
-      if (!btn) return;
-      if (btn.dataset.action === "remove-room") removeRoom(roomId);
-    });
-
-    dom.roomsList.appendChild(card);
-  }
-}
-
-function readRoomsFromDom() {
-  const cards = [...dom.roomsList.querySelectorAll(".room-card")];
-  return cards.map((card) => {
-    const getInput = (field) => card.querySelector(`[data-field="${field}"]`);
-    const label = String(getInput("label")?.value || "").trim();
-    const name = String(getInput("name")?.value || "").trim();
-    const widthM = parseFloat(getInput("widthM")?.value || "0");
-    const lengthM = parseFloat(getInput("lengthM")?.value || "0");
-    const brief = String(getInput("brief")?.value || "").trim();
-    const photos = getInput("photos")?.files ? [...getInput("photos").files] : [];
-    const inspo = getInput("inspo")?.files ? [...getInput("inspo").files] : [];
-    const generateFromPlan = Boolean(getInput("generateFromPlan")?.checked);
-    return { _roomId: card.dataset.roomId, label, name, widthM, lengthM, brief, photos, inspo, generateFromPlan };
-  });
-}
-
-function resetFloorPlanState() {
-  floorPlanState.file = null;
-  floorPlanState.kind = null;
-  floorPlanState.page = 1;
-  floorPlanState.rendered = false;
-  floorPlanState._renderWidth = 0;
-  floorPlanState._renderHeight = 0;
-  floorPlanState.roomRectsById = {};
-  floorPlanState.detectedRooms = null;
-  if (roomBoxEditorCleanup) { roomBoxEditorCleanup(); roomBoxEditorCleanup = null; }
-  if (dom.floorPlanCanvas) {
-    const ctx = dom.floorPlanCanvas.getContext("2d");
-    ctx?.clearRect(0, 0, dom.floorPlanCanvas.width, dom.floorPlanCanvas.height);
-  }
-}
+// ─── Floor plan rendering ───────────────────────────────────────────────────────
 
 async function renderFloorPlanToCanvas(file, targetCanvas) {
-  const canvas = targetCanvas || dom.plannerCanvas;
-  if (!canvas) return;
+  if (!targetCanvas) return;
   if (file.type === "application/pdf") {
-    await renderPdfFirstPage(file, canvas);
-    return;
-  }
-  if (file.type.startsWith("image/")) {
-    await renderImageToCanvas(file, canvas);
+    await renderPdfFirstPage(file, targetCanvas);
+  } else if (file.type.startsWith("image/")) {
+    await renderImageToCanvas(file, targetCanvas);
   }
 }
 
 async function renderImageToCanvas(file, canvas) {
   const img = await readImage(file);
-  const maxW = 860;
+  const maxW = 960;
   const scale = img.width > maxW ? maxW / img.width : 1;
-  canvas.width = Math.max(2, Math.round(img.width * scale));
+  canvas.width  = Math.max(2, Math.round(img.width  * scale));
   canvas.height = Math.max(2, Math.round(img.height * scale));
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1659,364 +1179,73 @@ async function renderImageToCanvas(file, canvas) {
 
 async function renderPdfFirstPage(file, canvas) {
   const pdfjsLib = window.pdfjsLib;
-  if (!pdfjsLib) {
-    throw new Error("PDF renderer not available (pdf.js failed to load).");
-  }
+  if (!pdfjsLib) throw new Error("PDF renderer not available.");
   pdfjsLib.GlobalWorkerOptions.workerSrc = "/node_modules/pdfjs-dist/build/pdf.worker.min.js";
-
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
   const page = await pdf.getPage(1);
-  const maxW = 860;
+  const maxW = 960;
   const unscaled = page.getViewport({ scale: 1 });
   const scale = unscaled.width > maxW ? maxW / unscaled.width : 1.25;
   const viewport = page.getViewport({ scale });
-
-  canvas.width = Math.max(2, Math.round(viewport.width));
+  canvas.width  = Math.max(2, Math.round(viewport.width));
   canvas.height = Math.max(2, Math.round(viewport.height));
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
   await page.render({ canvasContext: ctx, viewport }).promise;
 }
 
-function startRectPick({ title, onPicked }) {
-  const canvas = dom.floorPlanCanvas;
-  const ctx = canvas.getContext("2d");
-  const base = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  let start = null;
-  let dragging = false;
+// ─── Utilities ─────────────────────────────────────────────────────────────────
 
-  const onDown = (ev) => {
-    start = canvasPointFromEvent(canvas, ev);
-    dragging = true;
-  };
-  const onMove = (ev) => {
-    if (!dragging || !start) return;
-    const cur = canvasPointFromEvent(canvas, ev);
-    const rect = normalizeRect(start, cur);
-    ctx.putImageData(base, 0, 0);
-    drawRect(ctx, rect, "#00e5ff");
-    drawLabel(ctx, `${title}: release to set`, 12, 20);
-  };
-  const onUp = (ev) => {
-    if (!dragging || !start) return;
-    const end = canvasPointFromEvent(canvas, ev);
-    const rect = normalizeRect(start, end);
-    dragging = false;
-    start = null;
-    cleanup();
-    if (rect.w < 8 || rect.h < 8) {
-      alert("Room pick too small. Drag a bigger rectangle.");
-      return;
-    }
-    onPicked(rect);
-  };
-
-  function cleanup() {
-    canvas.removeEventListener("mousedown", onDown);
-    canvas.removeEventListener("mousemove", onMove);
-    canvas.removeEventListener("mouseup", onUp);
-    canvas.removeEventListener("mouseleave", onUp);
-    ctx.putImageData(base, 0, 0);
-  }
-
-  canvas.addEventListener("mousedown", onDown);
-  canvas.addEventListener("mousemove", onMove);
-  canvas.addEventListener("mouseup", onUp);
-  canvas.addEventListener("mouseleave", onUp);
-  ctx.putImageData(base, 0, 0);
-  drawLabel(ctx, `${title}: drag a rectangle`, 12, 20);
-}
-
-function canvasPointFromEvent(canvas, ev) {
-  const rect = canvas.getBoundingClientRect();
-  const x = (ev.clientX - rect.left) * (canvas.width / rect.width);
-  const y = (ev.clientY - rect.top) * (canvas.height / rect.height);
-  return { x, y };
-}
-
-function normalizeRect(a, b) {
-  const x1 = Math.min(a.x, b.x);
-  const y1 = Math.min(a.y, b.y);
-  const x2 = Math.max(a.x, b.x);
-  const y2 = Math.max(a.y, b.y);
-  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
-}
-
-function drawLabel(ctx, text, x, y) {
-  ctx.save();
-  ctx.fillStyle = "rgba(18,18,18,0.72)";
-  ctx.fillRect(x - 6, y - 16, Math.min(540, text.length * 7.2 + 16), 22);
-  ctx.fillStyle = "#fff";
-  ctx.font = "600 13px 'Space Grotesk'";
-  ctx.fillText(text, x, y);
-  ctx.restore();
-}
-
-function drawMarker(ctx, x, y, color) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(x, y, 4.5, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawLine(ctx, x1, y1, x2, y2, color) {
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawRect(ctx, rect, color) {
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.setLineDash([6, 4]);
-  ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
-  ctx.setLineDash([]);
-  ctx.fillStyle = "rgba(0,229,255,0.12)";
-  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-  ctx.restore();
-}
-
-async function extractRoomStyle(room) {
-  if (!room.inspo || !room.inspo.length) {
-    // minimal style from brief only
-    return {
-      style_summary: room.brief.slice(0, 220),
-      finish_palette: { primary: "warm neutral", secondary: "wood", accent: "black" },
-      laminate_recommendation: { name: "matte neutral + warm wood", tone: "warm", finish: "matte", notes: "From brief only." },
-      furniture_requirements: [],
-      do_not_do: []
-    };
-  }
-  const inspoPayload = [];
-  for (const file of room.inspo.slice(0, 8)) {
-    inspoPayload.push({ base64: await fileToBase64(file), mimeType: file.type || "image/jpeg" });
-  }
-  const response = await fetch("/api/style/extract", {
+async function postJson(url, body) {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      roomLabel: room.label,
-      brief: room.brief,
-      inspirationImages: inspoPayload
-    })
+    body: JSON.stringify(body)
   });
-  const raw = await response.text();
-  const parsed = raw ? safeJson(raw) : null;
-  if (!response.ok) {
-    throw new Error(parsed?.error || raw || "Style extraction failed.");
-  }
-  return parsed?.style || {};
+  const text = await res.text();
+  let json;
+  try { json = JSON.parse(text); } catch { throw new Error(text.slice(0, 200)); }
+  if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+  return json;
 }
 
-function pickLaminateFromStyle(style) {
-  const txt = `${style?.style_summary || ""} ${style?.laminate_recommendation?.name || ""} ${style?.laminate_recommendation?.tone || ""}`.toLowerCase();
-  const score = (lam) => {
-    let s = 0;
-    for (const t of lam.tags || []) {
-      if (txt.includes(String(t).toLowerCase())) s += 1;
-    }
-    if (txt.includes("gloss") && lam.family.toLowerCase().includes("gloss")) s += 2;
-    if (txt.includes("matte") && lam.name.toLowerCase().includes("matte")) s += 2;
-    if (txt.includes("concrete") && lam.name.toLowerCase().includes("concrete")) s += 2;
-    return s;
-  };
-  const ranked = [...LAMINATE_LIBRARY].sort((a, b) => score(b) - score(a));
-  return ranked[0] || LAMINATE_LIBRARY[0];
+function readDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = e => resolve(e.target.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
 }
 
-function buildSceneJson(ctx) {
-  return {
-    units: "meters",
-    floorPlan: { fileName: ctx.floorPlan, labels: ctx.floorPlanLabels || "" },
-    rooms: ctx.rooms.map((r) => ({
-      label: r.room.label,
-      name: r.room.name,
-      dimensions: { widthM: r.room.widthM, lengthM: r.room.lengthM },
-      style: r.style,
-      laminate: r.laminate,
-      modules: r.selectedModules.map((m) => ({ id: m.id, label: m.label, w: m.w, h: m.h, d: m.d })),
-      placements: r.placement.placements.map((p) => ({
-        id: p.module.id,
-        label: p.module.label,
-        wall: p.wall,
-        position: { x: p.x, y: p.y, z: p.z },
-        rotationY: p.rotationY
-      }))
-    }))
-  };
+function readImage(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = e => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
 }
 
-function buildBoqFromRooms(roomResults) {
-  // Consolidated totals; laminate cost uses each room laminate selection.
-  const totals = {
-    boardSqM: 0,
-    laminateSqM: 0,
-    laminateCost: 0,
-    edgeM: 0,
-    hinges: 0,
-    channels: 0,
-    handles: 0,
-    cuts: 0,
-    grooves: 0
-  };
-
-  // Also create a very practical "cutlist-like" rollup that vendors expect.
-  // NOTE: Without exact carcass design/drawings, this is a standardized estimating cutlist:
-  // it’s meant to be consistent and reviewable, not CNC-ready.
-  const cutlist = {
-    sheets18mm_8x4: 0,
-    back6mm_8x4: 0,
-    edgeBand1mm_rm: 0,
-    hinges_nos: 0,
-    channels_pairs: 0,
-    handles_nos: 0
-  };
-
-  for (const rr of roomResults) {
-    const t = estimateTotalsFromPlacements(rr.placement.placements);
-    totals.boardSqM += t.boardSqM;
-    totals.laminateSqM += t.laminateSqM;
-    totals.edgeM += t.edgeM;
-    totals.hinges += t.hinges;
-    totals.channels += t.channels;
-    totals.handles += t.handles;
-    totals.cuts += t.cuts;
-    totals.grooves += t.grooves;
-
-    const laminateSqFt = t.laminateSqM * 10.7639;
-    totals.laminateCost += laminateSqFt * rr.laminate.ratePerSqFt;
-  }
-
-  const boardSqFt = totals.boardSqM * 10.7639;
-  const laminateSqFt = totals.laminateSqM * 10.7639;
-  const laminateSheets = Math.ceil(laminateSqFt / 32);
-
-  // Cutlist rollup assumptions
-  // - 18mm boards: estimate from sqft / 32 sqft per sheet, with 12% wastage already baked into totals.
-  // - Back panels: approximate as 18% of board area (common across wardrobes/TV/study), as 6mm ply/MDF.
-  cutlist.sheets18mm_8x4 = Math.ceil(boardSqFt / 32);
-  cutlist.back6mm_8x4 = Math.ceil((boardSqFt * 0.18) / 32);
-  cutlist.edgeBand1mm_rm = round(totals.edgeM, 2);
-  cutlist.hinges_nos = totals.hinges;
-  cutlist.channels_pairs = totals.channels;
-  cutlist.handles_nos = totals.handles;
-
-  const rows = [];
-  const pushRow = (item, qty, unit, rate, amount) => {
-    rows.push({ item, qty, unit, rate, amount });
-  };
-
-  const plywoodCost = boardSqFt * COST_RATES.plywood18;
-  const edgeCost = totals.edgeM * COST_RATES.edgeBandPerM;
-  const hingeCost = totals.hinges * COST_RATES.hinge;
-  const channelCost = totals.channels * COST_RATES.channelPair;
-  const handleCost = totals.handles * COST_RATES.handle;
-  const cutCost = totals.cuts * COST_RATES.cuttingPerCut;
-  const grooveCost = totals.grooves * COST_RATES.groovePerM;
-
-  pushRow("18mm BWP Plywood (first quality)", round(boardSqFt, 2), "sqft", COST_RATES.plywood18, plywoodCost);
-  pushRow("Laminate (auto-selected per room)", round(laminateSqFt, 2), "sqft", round(totals.laminateCost / Math.max(1, laminateSqFt), 2), totals.laminateCost);
-  pushRow("Laminate sheets reference", laminateSheets, "sheets (8x4)", 0, 0);
-  pushRow("18mm sheet reference", cutlist.sheets18mm_8x4, "sheets (8x4)", 0, 0);
-  pushRow("6mm back sheet reference", cutlist.back6mm_8x4, "sheets (8x4)", 0, 0);
-  pushRow("Edge banding 1mm", round(totals.edgeM, 2), "rm", COST_RATES.edgeBandPerM, edgeCost);
-  pushRow("Soft close hinges", totals.hinges, "nos", COST_RATES.hinge, hingeCost);
-  pushRow("Telescopic channels", totals.channels, "pairs", COST_RATES.channelPair, channelCost);
-  pushRow("Handles", totals.handles, "nos", COST_RATES.handle, handleCost);
-  pushRow("Cutting charges", totals.cuts, "cuts", COST_RATES.cuttingPerCut, cutCost);
-  pushRow("Grooving charges", round(totals.grooves, 2), "rm", COST_RATES.groovePerM, grooveCost);
-
-  const materialHardwareSubtotal =
-    plywoodCost + totals.laminateCost + edgeCost + hingeCost + channelCost + handleCost + cutCost + grooveCost;
-  const consumables = materialHardwareSubtotal * 0.06;
-  const labor = materialHardwareSubtotal * 0.22;
-  const contingency = materialHardwareSubtotal * 0.08;
-
-  pushRow("Adhesives, screws, fasteners", 1, "lot", round(consumables, 0), consumables);
-  pushRow("Fabrication and polishing labor", 1, "lot", round(labor, 0), labor);
-  pushRow("Transport and installation", 1, "lot", COST_RATES.transportInstall, COST_RATES.transportInstall);
-  pushRow("Contingency", 1, "lot", round(contingency, 0), contingency);
-
-  const grandTotal = rows.reduce((sum, row) => sum + row.amount, 0);
-  const csvLines = ["Item,Quantity,Unit,Rate,Amount"];
-  for (const row of rows) {
-    csvLines.push(`"${row.item}",${row.qty},${row.unit},${round(row.rate, 2)},${round(row.amount, 2)}`);
-  }
-  csvLines.push(`"Grand Total",,, ,${round(grandTotal, 2)}`);
-
-  return { rows, grandTotal, csv: csvLines.join("\n") };
-}
-
-function estimateTotalsFromPlacements(placements) {
-  const totals = {
-    boardSqM: 0,
-    laminateSqM: 0,
-    edgeM: 0,
-    hinges: 0,
-    channels: 0,
-    handles: 0,
-    cuts: 0,
-    grooves: 0
-  };
-
-  for (const entry of placements) {
-    const module = entry.module;
-    if (module.type === "cabinet" || module.type === "study") {
-      const side = 2 * module.d * module.h;
-      const topBottom = 2 * module.w * module.d;
-      const shelf = module.shelves * module.w * module.d;
-      const partition = module.partitions * module.d * module.h;
-      const back = 0.45 * module.w * module.h;
-      const shutterArea = module.shutters > 0 ? module.w * module.h * 0.92 : 0;
-
-      totals.boardSqM += side + topBottom + shelf + partition + back;
-      totals.laminateSqM += (side + topBottom + shelf + partition + shutterArea) * 1.05;
-      totals.edgeM += module.shutters * (2 * (module.w / Math.max(1, module.shutters)) + 2 * module.h) + module.shelves * module.w * 0.35;
-      totals.hinges += Math.max(2, module.shutters * 2);
-      totals.channels += module.drawers;
-      totals.handles += Math.max(module.shutters, module.drawers);
-      totals.cuts += Math.round(8 + module.shelves + module.partitions + module.shutters * 2);
-      totals.grooves += module.w * 1.8;
-    } else if (module.type === "bed") {
-      totals.boardSqM += 7.2;
-      totals.laminateSqM += 8.4;
-      totals.edgeM += 14;
-      totals.hinges += 4;
-      totals.handles += 4;
-      totals.cuts += 24;
-      totals.grooves += 3.5;
-    }
-  }
-
-  totals.boardSqM *= 1.12;
-  totals.laminateSqM *= 1.1;
-  totals.edgeM *= 1.08;
-  return totals;
-}
-
-function safeJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
+function downloadText(name, content, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = name;
+  a.click();
 }
 
 function escapeHtml(text) {
   return String(text || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+function safeJson(text) {
+  try { return JSON.parse(text); } catch { return null; }
 }
