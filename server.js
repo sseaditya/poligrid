@@ -181,7 +181,7 @@ async function analyzeFloorPlanWithOpenAi(body) {
         ]
       }
     ],
-    max_output_tokens: 2000
+    max_output_tokens: 10000
   };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -251,7 +251,7 @@ async function matchRoomImageWithOpenAi(body) {
     model,
     reasoning: { effort: "low" },
     input: [{ role: "user", content: contentItems }],
-    max_output_tokens: 400
+    max_output_tokens: 4000
   };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -311,7 +311,7 @@ async function suggestFurnitureWithOpenAi(body) {
     model,
     reasoning: { effort: "low" },
     input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
-    max_output_tokens: 300
+    max_output_tokens: 4000
   };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
