@@ -200,11 +200,10 @@ async function analyzeFloorPlanWithOpenAi(body) {
 
   const parsed = safeJson(raw);
   const text = extractResponsesText(parsed);
-  // Strip markdown code fences if present
-  const cleaned = text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
-  const json = safeJson(cleaned);
+  const json = extractJsonFromText(text);
   if (!json || !Array.isArray(json.rooms)) {
-    throw httpError(502, "Floor plan analysis returned unexpected output: " + text.slice(0, 200));
+    console.error("Floor plan analysis failed to parse. Raw text:", text.slice(0, 500));
+    throw httpError(502, "Floor plan analysis returned unexpected output.");
   }
 
   return { model, analysis: json };
@@ -271,9 +270,9 @@ async function matchRoomImageWithOpenAi(body) {
 
   const parsed = safeJson(raw);
   const text = extractResponsesText(parsed);
-  const cleaned = text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
-  const json = safeJson(cleaned);
+  const json = extractJsonFromText(text);
   if (!json || typeof json.matchedLabel !== "string") {
+    console.error("Room matching failed to parse. Raw text:", text.slice(0, 500));
     throw httpError(502, "Room matching returned unexpected output.");
   }
 
@@ -326,9 +325,9 @@ async function suggestFurnitureWithOpenAi(body) {
 
   const parsed = safeJson(raw);
   const text = extractResponsesText(parsed);
-  const cleaned = text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
-  const json = safeJson(cleaned);
+  const json = extractJsonFromText(text);
   if (!json || !Array.isArray(json.suggestions)) {
+    console.error("Furniture suggestion failed to parse. Raw text:", text.slice(0, 500));
     throw httpError(502, "Furniture suggestion returned unexpected output.");
   }
   return { model, suggestions: json.suggestions };
@@ -524,6 +523,25 @@ function safeJson(raw) {
   } catch {
     return null;
   }
+}
+
+function extractJsonFromText(text) {
+  let parsed = safeJson(text);
+  if (parsed) return parsed;
+  
+  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (match) {
+    parsed = safeJson(match[1].trim());
+    if (parsed) return parsed;
+  }
+  
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    parsed = safeJson(text.slice(start, end + 1));
+    if (parsed) return parsed;
+  }
+  return null;
 }
 
 function extractResponsesText(response) {

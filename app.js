@@ -493,6 +493,20 @@ function onPinFieldChange() {
 
 // ─── Generate ──────────────────────────────────────────────────────────────────
 
+function promptRoomDims(roomLabel) {
+  const wStr = prompt(`Enter width for ${roomLabel} (in meters, e.g. 4.2):`, "4.2");
+  if (wStr === null) return null;
+  const lStr = prompt(`Enter length for ${roomLabel} (in meters, e.g. 3.5):`, "4.2");
+  if (lStr === null) return null;
+  const w = parseFloat(wStr);
+  const l = parseFloat(lStr);
+  if (isNaN(w) || isNaN(l) || w <= 0 || l <= 0) {
+    alert("Invalid dimensions entered.");
+    return null;
+  }
+  return { w, l };
+}
+
 async function onGenerate() {
   if (!planner) { alert("Upload and analyse a floor plan first."); return; }
 
