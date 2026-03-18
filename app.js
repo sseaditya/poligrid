@@ -130,7 +130,7 @@ const COST_RATES = {
   transportInstall: 8500
 };
 
-const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1";
+const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1.5";
 
 const dom = {
   floorPlan: document.getElementById("floorPlan"),
@@ -138,6 +138,13 @@ const dom = {
   floorPlanPreview: document.getElementById("floorPlanPreview"),
   floorPlanCanvas: document.getElementById("floorPlanCanvas"),
   floorPlanPreviewName: document.getElementById("floorPlanPreviewName"),
+  analyzeBtn: document.getElementById("analyzeBtn"),
+  analysisPanel: document.getElementById("analysisPanel"),
+  analysisStatus: document.getElementById("analysisStatus"),
+  analysisStatusText: document.getElementById("analysisStatusText"),
+  analysisSummaryWrap: document.getElementById("analysisSummaryWrap"),
+  analysisSummaryText: document.getElementById("analysisSummaryText"),
+  detectedRoomsList: document.getElementById("detectedRoomsList"),
   addRoomBtn: document.getElementById("addRoomBtn"),
   roomsList: document.getElementById("roomsList"),
   plannerForm: document.getElementById("planner-form"),
@@ -154,6 +161,7 @@ const dom = {
 let latestArtifacts = null;
 let roomsState = [];
 let roomIdSeq = 1;
+let roomBoxEditorCleanup = null; // cleanup fn for the interactive overlay
 
 const floorPlanState = {
   file: null,
@@ -162,7 +170,8 @@ const floorPlanState = {
   rendered: false,
   _renderWidth: 0,
   _renderHeight: 0,
-  roomRectsById: {}
+  roomRectsById: {},
+  detectedRooms: null // from /api/analyze/floorplan
 };
 
 init();
@@ -171,6 +180,7 @@ function init() {
   dom.plannerForm.addEventListener("submit", onGenerate);
   dom.addRoomBtn.addEventListener("click", () => addRoom());
   dom.floorPlan.addEventListener("change", onFloorPlanPicked);
+  dom.analyzeBtn && dom.analyzeBtn.addEventListener("click", onAnalyzePlan);
   dom.downloadScene.addEventListener("click", () => {
     if (latestArtifacts) {
       downloadText("furnished_scene.json", JSON.stringify(latestArtifacts.scene, null, 2), "application/json");
@@ -201,7 +211,113 @@ async function onFloorPlanPicked() {
 
   dom.floorPlanPreviewName.textContent = file.name;
   dom.floorPlanPreview.hidden = false;
+  if (dom.analysisPanel) dom.analysisPanel.hidden = true;
   await renderFloorPlanToCanvas(file);
+}
+
+// ─── Floor Plan Analysis ──────────────────────────────────────
+
+async function onAnalyzePlan() {
+  if (!floorPlanState.rendered) {
+    alert("Upload a floor plan first.");
+    return;
+  }
+
+  const PA = window.PoligridAnalysis;
+  if (!PA) { alert("Analysis module not loaded."); return; }
+
+  // Show analysis panel with spinner
+  dom.analysisPanel.hidden = false;
+  dom.analysisSummaryWrap.hidden = true;
+  dom.analysisStatus.innerHTML = `<span class="spinner"></span><span id="analysisStatusText">Analysing floor plan with GPT-5.4…</span>`;
+
+  // Cleanup any previous editor
+  if (roomBoxEditorCleanup) { roomBoxEditorCleanup(); roomBoxEditorCleanup = null; }
+
+  try {
+    const analysis = await PA.analyzeFloorPlan(dom.floorPlanCanvas);
+    floorPlanState.detectedRooms = analysis.rooms || [];
+
+    // Update status
+    dom.analysisStatus.innerHTML = `<span style="color:var(--brand)">✓</span><span id="analysisStatusText">Found ${analysis.rooms.length} room(s) · ${analysis.bhkType || ""} · ${analysis.totalAreaM2 ? analysis.totalAreaM2 + " m²" : ""}</span>`;
+
+    // Show summary
+    dom.analysisSummaryText.textContent = analysis.summary || "";
+    renderDetectedRoomsPills(analysis.rooms);
+    dom.analysisSummaryWrap.hidden = false;
+
+    // Draw overlay + start editor
+    const ctx = dom.floorPlanCanvas.getContext("2d");
+    const snapshot = ctx.getImageData(0, 0, dom.floorPlanCanvas.width, dom.floorPlanCanvas.height);
+    PA.drawRoomOverlay(dom.floorPlanCanvas, analysis.rooms, null, null);
+
+    roomBoxEditorCleanup = PA.startRoomBoxEditor(
+      dom.floorPlanCanvas,
+      analysis.rooms,
+      floorPlanState.detectedRooms,
+      snapshot,
+      (label, newBbox) => {
+        const room = floorPlanState.detectedRooms.find(r => r.label === label);
+        if (room) room.bbox = newBbox;
+      }
+    );
+
+    // Auto-sync detected rooms into room cards
+    syncDetectedRoomsToCards(analysis.rooms);
+
+  } catch (err) {
+    dom.analysisStatus.innerHTML = `<span style="color:#b84040">⚠ ${escapeHtml(err.message)}</span>`;
+  }
+}
+
+function renderDetectedRoomsPills(rooms) {
+  const ROOM_DOT_COLORS = {
+    bedroom: "#8a4db5", living: "#2e8b57", kitchen: "#c97820",
+    bathroom: "#2080c0", dining: "#c04040", study: "#3070a0",
+    balcony: "#288070", foyer: "#a09020", utility: "#707070", other: "#6050a0"
+  };
+  dom.detectedRoomsList.innerHTML = "";
+  for (const room of rooms) {
+    const pill = document.createElement("span");
+    pill.className = "room-pill-detected";
+    pill.title = room.notes || "";
+    const dotColor = ROOM_DOT_COLORS[room.roomType] || "#6050a0";
+    pill.innerHTML = `
+      <span class="pill-type-dot" style="background:${dotColor}"></span>
+      <span>${escapeHtml(room.label)} — ${escapeHtml(room.name)}</span>
+      <span class="pill-dims">${room.widthM || "?"} × ${room.lengthM || "?"}m</span>
+    `;
+    dom.detectedRoomsList.appendChild(pill);
+  }
+}
+
+function syncDetectedRoomsToCards(detectedRooms) {
+  // Map existing cards to detected rooms by label
+  const cards = [...dom.roomsList.querySelectorAll(".room-card")];
+
+  for (let i = 0; i < detectedRooms.length; i++) {
+    const dr = detectedRooms[i];
+    // Skip bathrooms/utility from auto-syncing (they rarely need design briefs)
+    if (dr.roomType === "bathroom" || dr.roomType === "utility") continue;
+
+    let card = cards[i];
+    if (!card) {
+      addRoom();
+      const updatedCards = [...dom.roomsList.querySelectorAll(".room-card")];
+      card = updatedCards[updatedCards.length - 1];
+    }
+    if (!card) continue;
+
+    const labelInput = card.querySelector('[data-field="label"]');
+    const nameInput = card.querySelector('[data-field="name"]');
+    const widthInput = card.querySelector('[data-field="widthM"]');
+    const lengthInput = card.querySelector('[data-field="lengthM"]');
+
+    if (labelInput && !labelInput.value) labelInput.value = dr.label;
+    if (nameInput && !nameInput.value) nameInput.value = dr.name;
+    if (widthInput) widthInput.value = String(dr.widthM || 4.2);
+    if (lengthInput) lengthInput.value = String(dr.lengthM || 4.2);
+  }
 }
 
 async function onGenerate(event) {
@@ -233,8 +349,17 @@ async function onGenerate(event) {
     }
 
     dom.outputPanel.hidden = false;
-    dom.statusBox.textContent = "Extracting style from inspiration + generating furnished room concepts (OpenAI)...";
+    dom.statusBox.textContent = "Extracting style + generating furnished concepts (OpenAI)…";
 
+    // Show floor plan analysis strip if we have it
+    if (floorPlanState.detectedRooms) {
+      const strip = document.createElement("div");
+      strip.className = "fp-analysis-strip";
+      const a = floorPlanState.detectedRooms;
+      const parent = dom.outputPanel;
+      strip.innerHTML = `<strong>Floor plan:</strong> ${a.length} rooms detected via AI analysis.`;
+      parent.insertBefore(strip, parent.firstChild);
+    }
     const floorPlanLabels = String(dom.floorPlanLabels.value || "").trim();
 
     const roomResults = [];
@@ -243,11 +368,19 @@ async function onGenerate(event) {
     let fallbackCount = 0;
 
     for (const room of rooms) {
+      // Use AI-detected dimensions/notes if available, fall back to card input, then defaults
+      const detectedRoom = floorPlanState.detectedRooms
+        ? floorPlanState.detectedRooms.find(dr => dr.label === room.label)
+        : null;
+      const widthM = parseFloat(detectedRoom?.widthM || room.widthM) || 4.2;
+      const lengthM = parseFloat(detectedRoom?.lengthM || room.lengthM) || 4.2;
+      const archNotes = detectedRoom?.notes || "";
+      const roomType = detectedRoom?.roomType || "other";
+
       const style = await extractRoomStyle(room);
       const laminate = pickLaminateFromStyle(style);
-      const widthM = room.widthM || 4.2;
-      const lengthM = room.lengthM || 4.2;
-      const selectedModules = pickModulesFromBrief(`${room.brief}\n${style.style_summary || ""}`, widthM * lengthM);
+      const selectedModules = pickModulesFromBrief(`${room.brief}\n${style.style_summary || ""}\n${roomType}`, widthM * lengthM);
+
       const placement = placeModules(selectedModules, widthM, lengthM);
       allPlacements.push(...placement.placements.map((p) => ({ ...p, roomLabel: room.label })));
 
@@ -266,7 +399,8 @@ async function onGenerate(event) {
                 styleSummary: style.style_summary || "",
                 laminate,
                 placements: placement.placements,
-                roomLabel: room.label
+                roomLabel: room.label,
+                archNotes
               },
               i
             );
@@ -298,7 +432,8 @@ async function onGenerate(event) {
                 laminate,
                 placements: placement.placements,
                 roomLabel: room.label,
-                fromFloorPlan: true
+                fromFloorPlan: true,
+                archNotes
               },
               i
             );
@@ -557,7 +692,7 @@ async function createOpenAiFurnishedRenderFromBase64(name, imageBase64, mimeType
 }
 
 function buildImageEditPrompt(context) {
-  const moduleList = context.placements.map((p) => p.module.label).join(", ");
+  const moduleList = context.placements.map((p) => `${p.module.label} (${p.module.w}m×${p.module.d}m, ${p.wall} wall)`).join(", ");
   return [
     "You are an interior render assistant.",
     context.fromFloorPlan
@@ -571,10 +706,12 @@ function buildImageEditPrompt(context) {
       : "3) Add furniture only; lighting can be improved for realism.",
     "4) Photoreal output, natural shadows, no cartoon style.",
     "5) Do not add text overlays, labels, watermarks, or annotations.",
-    `Room size approximately ${context.roomWidth}m x ${context.roomLength}m.`,
+    "6) Ensure furniture placement is coherent with room shape — pieces along walls, clearance in centre.",
+    `Room size approximately ${context.roomWidth}m × ${context.roomLength}m.`,
+    context.archNotes ? `Architectural notes: ${context.archNotes}` : "",
     `Design brief: ${context.brief}`,
     context.styleSummary ? `Inspiration-derived style direction: ${context.styleSummary}` : "",
-    `Furniture modules to include if feasible: ${moduleList || "TV unit, storage, and study module"}.`,
+    `Furniture layout (position by wall): ${moduleList || "TV unit, storage, study module"}.`,
     `Primary laminate tone: ${context.laminate.name} (${context.laminate.code}).`
   ]
     .filter(Boolean)
@@ -667,6 +804,10 @@ function drawRoomResults(roomResults) {
     const wrap = document.createElement("section");
     wrap.className = "room-result-card";
 
+    const widthM = parseFloat(result.room.widthM) || 4.2;
+    const lengthM = parseFloat(result.room.lengthM) || 4.2;
+
+    // ── Head
     const head = document.createElement("div");
     head.className = "room-result-head";
     head.innerHTML = `
@@ -674,9 +815,13 @@ function drawRoomResults(roomResults) {
         <div class="pill">Room ${escapeHtml(result.room.label)}</div>
         <div class="mini-note">${escapeHtml(result.room.name || "")}</div>
       </div>
-      <div class="mini-note">Laminate: ${escapeHtml(result.laminate.name)}</div>
+      <div class="mini-note" style="text-align:right">
+        Laminate: ${escapeHtml(result.laminate.name)}<br>
+        <span style="font-size:0.8rem;color:var(--muted)">${widthM}m × ${lengthM}m</span>
+      </div>
     `;
 
+    // ── Body
     const body = document.createElement("div");
     body.className = "room-result-body";
 
@@ -685,6 +830,7 @@ function drawRoomResults(roomResults) {
     styleBox.textContent = result.style?.style_summary ? `Style: ${result.style.style_summary}` : "Style extracted.";
     body.appendChild(styleBox);
 
+    // Render grid
     const grid = document.createElement("div");
     grid.className = "room-render-grid";
 
@@ -719,12 +865,95 @@ function drawRoomResults(roomResults) {
       }
       grid.appendChild(card);
     }
-
     body.appendChild(grid);
-    wrap.append(head, body);
+
+    // ── Placement Map section
+    if (result.placement && result.placement.placements.length) {
+      const PA = window.PoligridAnalysis;
+      const mapSection = document.createElement("div");
+      mapSection.className = "placement-map-section";
+
+      const mapH4 = document.createElement("h4");
+      mapH4.textContent = "Furniture Placement Map";
+      mapSection.appendChild(mapH4);
+
+      const mapWrap = document.createElement("div");
+      mapWrap.className = "placement-map-wrap";
+
+      const mapCanvas = document.createElement("canvas");
+      // Scale canvas to room proportions — max 600px wide
+      const mapMaxW = 600;
+      const mapScale = Math.min(mapMaxW / widthM, 120);
+      mapCanvas.width = Math.round(widthM * mapScale + 80);
+      mapCanvas.height = Math.round(lengthM * mapScale + 80);
+      mapWrap.appendChild(mapCanvas);
+      mapSection.appendChild(mapWrap);
+
+      // Controls
+      const controls = document.createElement("div");
+      controls.className = "placement-map-controls";
+
+      const ctrlNote = document.createElement("span");
+      ctrlNote.className = "ctrl-note";
+      ctrlNote.textContent = "Click to select. Drag to reposition.";
+      controls.appendChild(ctrlNote);
+
+      const flipBtn = document.createElement("button");
+      flipBtn.type = "button";
+      flipBtn.textContent = "↺ Flip";
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = "✕ Remove";
+      removeBtn.className = "remove-btn";
+
+      controls.append(flipBtn, removeBtn);
+      mapSection.appendChild(controls);
+
+      if (result.placement.warnings.length) {
+        const warn = document.createElement("p");
+        warn.className = "mini-note";
+        warn.style.color = "#b86d35";
+        warn.textContent = "⚠ " + result.placement.warnings.join(" · ");
+        mapSection.appendChild(warn);
+      }
+
+      wrap.append(head, body, mapSection);
+
+      // Init interactive map after DOM is in place
+      requestAnimationFrame(() => {
+        if (PA && PA.makePlacementMapInteractive) {
+          const roomObj = {
+            widthM,
+            lengthM,
+            label: result.room.label,
+            name: result.room.name
+          };
+          const roomInteractive = PA.makePlacementMapInteractive(
+            mapCanvas,
+            roomObj,
+            result.placement.placements,
+            (updatedPlacements) => {
+              result.placement.placements = updatedPlacements;
+            }
+          );
+          flipBtn.addEventListener("click", () => roomInteractive.flipSelected());
+          removeBtn.addEventListener("click", () => roomInteractive.removeSelected());
+        } else {
+          // Fallback static render
+          if (PA && PA.renderPlacementMap) {
+            PA.renderPlacementMap(mapCanvas, { widthM, lengthM, label: result.room.label, name: result.room.name }, result.placement.placements, null);
+          }
+        }
+      });
+    } else {
+      wrap.append(head, body);
+    }
+
     dom.roomResults.appendChild(wrap);
   }
 }
+
 
 function buildObjModel(room, placements, laminate) {
   const vertices = [];
@@ -1108,12 +1337,55 @@ function renderRoomsList() {
       </div>
     `;
 
-    card.addEventListener("click", (e) => {
-      const btn = e.target && e.target.closest ? e.target.closest("button") : null;
-      if (!btn) return;
-      if (btn.dataset.action === "remove-room") {
-        removeRoom(roomId);
+    // Photo upload → room matching
+    const photosInput = card.querySelector('[data-field="photos"]');
+    let matchBadge = null;
+    photosInput && photosInput.addEventListener("change", async () => {
+      if (matchBadge) { matchBadge.remove(); matchBadge = null; }
+      const PA = window.PoligridAnalysis;
+      if (!PA || !photosInput.files || !photosInput.files[0]) return;
+      if (!floorPlanState.rendered) return;
+      const photo = photosInput.files[0];
+      const labelInput = card.querySelector('[data-field="label"]');
+      try {
+        const match = await PA.matchRoomImage(
+          photo,
+          dom.floorPlanCanvas,
+          floorPlanState.detectedRooms || []
+        );
+        if (!match || !match.matchedLabel) return;
+        const pct = Math.round((match.confidence || 0) * 100);
+        matchBadge = document.createElement("div");
+        matchBadge.className = "match-badge";
+        matchBadge.innerHTML = `
+          <span class="match-text">Suggested room: <strong>${escapeHtml(match.matchedLabel)} — ${escapeHtml(match.matchedName || "")}</strong><br>
+          <span style="font-size:0.8rem;opacity:0.8">${escapeHtml(match.reasoning || "")}</span></span>
+          <span class="match-confidence">${pct}%</span>
+          <button type="button" data-match-action="accept" data-label="${escapeHtml(match.matchedLabel)}" data-name="${escapeHtml(match.matchedName || "")}">✓ Accept</button>
+          <button type="button" class="reject-btn" data-match-action="reject">✕ Ignore</button>
+        `;
+        matchBadge.addEventListener("click", (e) => {
+          const btn = e.target.closest("button");
+          if (!btn) return;
+          if (btn.dataset.matchAction === "accept") {
+            if (labelInput && !labelInput.value) labelInput.value = btn.dataset.label;
+            const nameInput = card.querySelector('[data-field="name"]');
+            if (nameInput && !nameInput.value) nameInput.value = btn.dataset.name;
+          }
+          matchBadge.remove();
+          matchBadge = null;
+        });
+        card.querySelector(".room-card-body").appendChild(matchBadge);
+      } catch (_) {
+        // Match failures are non-fatal; silently skip
       }
+    });
+
+    // Remove room button
+    card.addEventListener("click", (e) => {
+      const btn = e.target && e.target.closest ? e.target.closest("button[data-action]") : null;
+      if (!btn) return;
+      if (btn.dataset.action === "remove-room") removeRoom(roomId);
     });
 
     dom.roomsList.appendChild(card);
@@ -1144,6 +1416,8 @@ function resetFloorPlanState() {
   floorPlanState._renderWidth = 0;
   floorPlanState._renderHeight = 0;
   floorPlanState.roomRectsById = {};
+  floorPlanState.detectedRooms = null;
+  if (roomBoxEditorCleanup) { roomBoxEditorCleanup(); roomBoxEditorCleanup = null; }
   if (dom.floorPlanCanvas) {
     const ctx = dom.floorPlanCanvas.getContext("2d");
     ctx?.clearRect(0, 0, dom.floorPlanCanvas.width, dom.floorPlanCanvas.height);

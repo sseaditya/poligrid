@@ -427,3 +427,201 @@ pre {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Analysis Panel ─────────────────────────────────────────── */
+
+.analyse-btn {
+  font-size: 0.85rem;
+  padding: 6px 12px;
+}
+
+.analysis-panel {
+  margin-top: 10px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.62);
+}
+
+.analysis-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  background: rgba(219,232,214,0.3);
+}
+
+.analysis-status .spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #9cb8a8;
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.analysis-summary-text {
+  margin: 10px 12px 6px;
+  font-size: 0.88rem;
+  color: var(--ink);
+  font-style: italic;
+}
+
+.detected-rooms-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.room-pill-detected {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.9);
+  border: 1.5px solid var(--line);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: default;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+
+.room-pill-detected:hover {
+  border-color: var(--brand);
+  box-shadow: 0 3px 10px rgba(58,106,90,0.15);
+}
+
+.room-pill-detected .pill-type-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.room-pill-detected .pill-dims {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+/* ── Room Photo Match Badge ──────────────────────────────────── */
+
+.match-badge {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(184,109,53,0.1);
+  border: 1px solid rgba(184,109,53,0.3);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  animation: fadeIn 0.3s ease;
+}
+
+.match-badge .match-text {
+  flex: 1;
+  color: #6f451f;
+}
+
+.match-badge .match-confidence {
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.match-badge button {
+  font-size: 0.78rem;
+  padding: 4px 10px;
+}
+
+.match-badge .reject-btn {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Placement Map ───────────────────────────────────────────── */
+
+.room-result-card .placement-map-section {
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  background: #f5f2ee;
+}
+
+.placement-map-section h4 {
+  font-family: "DM Serif Display", serif;
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.placement-map-wrap {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #f5f2ee;
+}
+
+.placement-map-wrap canvas {
+  display: block;
+  width: 100%;
+  cursor: grab;
+}
+
+.placement-map-wrap canvas:active {
+  cursor: grabbing;
+}
+
+.placement-map-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.placement-map-controls .ctrl-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+  flex: 1;
+}
+
+.placement-map-controls button {
+  font-size: 0.8rem;
+  padding: 5px 10px;
+}
+
+.placement-map-controls .remove-btn {
+  background: linear-gradient(120deg, #b84040, #8a2020);
+}
+
+/* ── Analysis summary strip on output ────────────────────────── */
+
+.fp-analysis-strip {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(219,232,214,0.4);
+  border: 1px solid var(--line);
+  font-size: 0.88rem;
+  margin-bottom: 14px;
+}
+
+.fp-analysis-strip strong {
+  color: var(--brand);
+}
+

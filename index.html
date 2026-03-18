@@ -4,26 +4,30 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Interior Fitout Planner</title>
+    <meta name="description" content="AI-powered interior fitout planner for Indian apartments. Upload a floor plan, auto-detect rooms, place furniture, generate furnished concepts and BOM." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div class="noise"></div>
     <main class="app-shell">
+
+      <!-- ── INPUT PANEL ─────────────────────────────────────── -->
       <section class="panel input-panel">
         <h1>Interior Fitout Planner</h1>
-        <p class="subhead">Upload a floor plan, then add rooms one-by-one with photos, brief, and inspiration. Generate furnished room concepts + standardized cutlist/BOM with pricing.</p>
+        <p class="subhead">Upload a floor plan → AI detects rooms → auto-place furniture → generate furnished concepts + BOM.</p>
 
         <form id="planner-form">
           <div class="section-head">
             <div>
               <h2>Inputs</h2>
-              <p class="note">Step 1: floor plan. Step 2: add rooms. Step 3: per-room brief + inspiration.</p>
+              <p class="note">Step 1: floor plan. Step 2: rooms. Step 3: brief + inspiration.</p>
             </div>
           </div>
 
+          <!-- ── FLOOR PLAN ──────────────────────────────────── -->
           <div class="form-section">
             <h3>1) Floor plan</h3>
             <label>
@@ -32,17 +36,30 @@
             </label>
             <label>
               Labels / notes (optional)
-              <textarea id="floorPlanLabels" rows="3" placeholder="Example: Living=101, Kitchen=102, Master Bed=201. Marked on plan."></textarea>
+              <textarea id="floorPlanLabels" rows="2" placeholder="Example: Living=101, Kitchen=102, Master Bed=201."></textarea>
             </label>
             <div id="floorPlanPreview" class="preview-card" hidden>
               <canvas id="floorPlanCanvas" aria-label="Floor plan preview"></canvas>
               <div class="preview-meta">
                 <span id="floorPlanPreviewName"></span>
-                <span class="mini-note">Used as fallback image source when room photos aren’t uploaded.</span>
+                <button type="button" id="analyzeBtn" class="ghost analyse-btn">🔍 Analyse Plan</button>
+              </div>
+            </div>
+
+            <!-- Analysis status + detected rooms -->
+            <div id="analysisPanel" class="analysis-panel" hidden>
+              <div id="analysisStatus" class="analysis-status">
+                <span id="analysisStatusText"></span>
+              </div>
+              <div id="analysisSummaryWrap" hidden>
+                <p id="analysisSummaryText" class="analysis-summary-text"></p>
+                <div id="detectedRoomsList" class="detected-rooms-list"></div>
+                <p class="mini-note" style="margin-top:6px">Drag boxes on the floor plan to adjust room boundaries.</p>
               </div>
             </div>
           </div>
 
+          <!-- ── ROOMS ──────────────────────────────────────── -->
           <div class="form-section">
             <div class="row-between">
               <h3>2) Rooms (add one at a time)</h3>
@@ -51,15 +68,17 @@
             <div id="roomsList" class="rooms-list"></div>
           </div>
 
+          <!-- ── GENERATE ───────────────────────────────────── -->
           <div class="form-section">
             <h3>3) Generate</h3>
             <button type="submit" id="generateBtn">Generate furnished rooms + BOM</button>
           </div>
         </form>
 
-        <p class="note">No database is used. Update any inputs and click generate again.</p>
+        <p class="note">No database. Update inputs and click generate again.</p>
       </section>
 
+      <!-- ── OUTPUT PANEL ───────────────────────────────────── -->
       <section class="panel output-panel" id="outputPanel" hidden>
         <div class="status" id="statusBox"></div>
 
@@ -97,9 +116,11 @@
         <h3>Run summary</h3>
         <pre id="placementSummary"></pre>
       </section>
+
     </main>
 
     <script src="/node_modules/pdfjs-dist/build/pdf.min.js"></script>
+    <script src="analysis.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
