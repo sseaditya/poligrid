@@ -136,77 +136,77 @@ const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1.5";
 
 const dom = {
   // Phase 1
-  floorPlan:          el("floorPlan"),
-  floorPlanName:      el("floorPlanName"),
-  inspirationImages:  el("inspirationImages"),
-  inspirationNames:   el("inspirationNames"),
-  inspirationPreviews:el("inspirationPreviews"),
-  analyzeBtn:         el("analyzeBtn"),
-  analysisChip:       el("analysisChip"),
+  floorPlan: el("floorPlan"),
+  floorPlanName: el("floorPlanName"),
+  inspirationImages: el("inspirationImages"),
+  inspirationNames: el("inspirationNames"),
+  inspirationPreviews: el("inspirationPreviews"),
+  analyzeBtn: el("analyzeBtn"),
+  analysisChip: el("analysisChip"),
   // Phase 2
-  panel2:             el("panel2"),
-  roomChipList:       el("roomChipList"),
-  addRoomBtn:         el("addRoomBtn"),
-  analysisSummaryWrap:el("analysisSummaryWrap"),
-  analysisSummaryText:el("analysisSummaryText"),
-  confirmRoomsBtn:    el("confirmRoomsBtn"),
+  panel2: el("panel2"),
+  roomChipList: el("roomChipList"),
+  addRoomBtn: el("addRoomBtn"),
+  analysisSummaryWrap: el("analysisSummaryWrap"),
+  analysisSummaryText: el("analysisSummaryText"),
+  confirmRoomsBtn: el("confirmRoomsBtn"),
   // Phase 3
-  panel3:             el("panel3"),
-  tabSelect:          el("tabSelect"),
-  tabDraw:            el("tabDraw"),
-  furniturePalette:   el("furniturePalette"),
-  selectionPanel:     el("selectionPanel"),
-  selectionLabel:     el("selectionLabel"),
-  selectionDims:      el("selectionDims"),
-  rotateBtn:          el("rotateBtn"),
-  deleteBtn:          el("deleteBtn"),
-  placedList:         el("placedList"),
-  placedCount:        el("placedCount"),
-  confirmPlacementBtn:el("confirmPlacementBtn"),
+  panel3: el("panel3"),
+  tabSelect: el("tabSelect"),
+  tabDraw: el("tabDraw"),
+  furniturePalette: el("furniturePalette"),
+  selectionPanel: el("selectionPanel"),
+  selectionLabel: el("selectionLabel"),
+  selectionDims: el("selectionDims"),
+  rotateBtn: el("rotateBtn"),
+  deleteBtn: el("deleteBtn"),
+  placedList: el("placedList"),
+  placedCount: el("placedCount"),
+  confirmPlacementBtn: el("confirmPlacementBtn"),
   // Phase 4
-  panel4:             el("panel4"),
-  tabSelectP4:        el("tabSelectP4"),
-  tabPin:             el("tabPin"),
-  pinsList:           el("pinsList"),
-  noPinsHint:         el("noPinsHint"),
-  confirmPinsBtn:     el("confirmPinsBtn"),
+  panel4: el("panel4"),
+  tabSelectP4: el("tabSelectP4"),
+  tabPin: el("tabPin"),
+  pinsList: el("pinsList"),
+  noPinsHint: el("noPinsHint"),
+  confirmPinsBtn: el("confirmPinsBtn"),
   // Phase 5
-  panel5:             el("panel5"),
-  globalBrief:        el("globalBrief"),
-  generateBtn:        el("generateBtn"),
-  generateStatus:     el("generateStatus"),
+  panel5: el("panel5"),
+  globalBrief: el("globalBrief"),
+  generateBtn: el("generateBtn"),
+  generateStatus: el("generateStatus"),
   // Canvas
-  canvasPlaceholder:  el("canvasPlaceholder"),
-  canvasWrap:         el("canvasWrap"),
-  floorBgCanvas:      el("floorBgCanvas"),
-  roomEditorCanvas:   el("roomEditorCanvas"),
-  plannerCanvas:      el("plannerCanvas"),
+  canvasPlaceholder: el("canvasPlaceholder"),
+  canvasWrap: el("canvasWrap"),
+  floorBgCanvas: el("floorBgCanvas"),
+  roomEditorCanvas: el("roomEditorCanvas"),
+  plannerCanvas: el("plannerCanvas"),
   // Chat
-  chatPanel:          el("chatPanel"),
-  chatHistory:        el("chatHistory"),
-  chatInput:          el("chatInput"),
-  chatSendBtn:        el("chatSendBtn"),
-  chatToggle:         el("chatToggle"),
+  chatPanel: el("chatPanel"),
+  chatHistory: el("chatHistory"),
+  chatInput: el("chatInput"),
+  chatSendBtn: el("chatSendBtn"),
+  chatToggle: el("chatToggle"),
   // Pin popover
-  pinPopover:         el("pinPopover"),
-  pinPopoverTitle:    el("pinPopoverTitle"),
-  pinPopoverClose:    el("pinPopoverClose"),
-  pinPhotoInput:      el("pinPhotoInput"),
-  pinPhotoPreview:    el("pinPhotoPreview"),
-  pinRoomLabel:       el("pinRoomLabel"),
-  pinFov:             el("pinFov"),
-  pinBrief:           el("pinBrief"),
+  pinPopover: el("pinPopover"),
+  pinPopoverTitle: el("pinPopoverTitle"),
+  pinPopoverClose: el("pinPopoverClose"),
+  pinPhotoInput: el("pinPhotoInput"),
+  pinPhotoPreview: el("pinPhotoPreview"),
+  pinRoomLabel: el("pinRoomLabel"),
+  pinFov: el("pinFov"),
+  pinBrief: el("pinBrief"),
   // Output
-  outputPanel:        el("outputPanel"),
-  closeOutput:        el("closeOutput"),
-  roomResults:        el("roomResults"),
-  statusBox:          el("statusBox"),
-  boqRooms:           el("boqRooms"),
-  boqTableBody:       document.querySelector("#boqTable tbody"),
-  grandTotal:         el("grandTotal"),
-  placementSummary:   el("placementSummary"),
-  downloadScene:      el("downloadScene"),
-  downloadBoq:        el("downloadBoq"),
+  outputPanel: el("outputPanel"),
+  closeOutput: el("closeOutput"),
+  roomResults: el("roomResults"),
+  statusBox: el("statusBox"),
+  boqRooms: el("boqRooms"),
+  boqTableBody: document.querySelector("#boqTable tbody"),
+  grandTotal: el("grandTotal"),
+  placementSummary: el("placementSummary"),
+  downloadScene: el("downloadScene"),
+  downloadBoq: el("downloadBoq"),
 };
 
 function el(id) { return document.getElementById(id); }
@@ -221,8 +221,8 @@ let latestArtifacts = null;
 
 const appState = {
   // Phase 1
-  floorFile:         null,
-  inspirationFiles:  [],
+  floorFile: null,
+  inspirationFiles: [],
   context: {
     propertyType: "Apartment",
     bhk: "2BHK",
@@ -237,10 +237,18 @@ const appState = {
 };
 
 const ROOM_DOT_COLORS = {
-  bedroom:"#8a4db5", living:"#2e8b57", kitchen:"#c97820",
-  bathroom:"#2080c0", dining:"#c04040", study:"#3070a0",
-  balcony:"#288070", foyer:"#a09020", utility:"#707070", other:"#6050a0"
+  bedroom: "#8a4db5", living: "#2e8b57", kitchen: "#c97820",
+  bathroom: "#2080c0", dining: "#c04040", study: "#3070a0",
+  balcony: "#288070", foyer: "#a09020", utility: "#707070",
+  office: "#4060c0", conference: "#c06040", workstation: "#60c040",
+  reception: "#c040c0", pantry: "#d0a020", store: "#808080", retail: "#d05070",
+  other: "#6050a0"
 };
+
+const FURN_COLORS = [
+  "#3a6a5a", "#b86d35", "#5a6a9a", "#9a5a6a",
+  "#6a9a5a", "#9a8a3a", "#5a8a9a", "#9a6a9a", "#6a5a8a", "#8a6a3a"
+];
 
 // ─── Phase state machine ───────────────────────────────────────────────────────
 
@@ -256,7 +264,7 @@ function advancePhase(n) {
   }
   // Connectors
   for (let i = 1; i <= 4; i++) {
-    const conn = el(`conn${i}${i+1}`);
+    const conn = el(`conn${i}${i + 1}`);
     if (conn) conn.style.background = i < n ? "var(--success)" : "var(--border)";
   }
   // Show/hide panels
@@ -284,8 +292,16 @@ function init() {
       ctrl.querySelectorAll(".seg-btn").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       const id = ctrl.id;
-      if (id === "propTypeCtrl") appState.context.propertyType = btn.dataset.val;
-      if (id === "bhkCtrl")      appState.context.bhk          = btn.dataset.val;
+      if (id === "propTypeCtrl") {
+        appState.context.propertyType = btn.dataset.val;
+        const isComm = btn.dataset.val === "Commercial";
+        el("configRowResidential").style.display = isComm ? "none" : "";
+        el("configRowCommercial").style.display = isComm ? "" : "none";
+        appState.context.bhk = isComm ? el("commCtrl").querySelector(".active").dataset.val : el("bhkCtrl").querySelector(".active").dataset.val;
+      }
+      if (id === "bhkCtrl" || id === "commCtrl") {
+        appState.context.bhk = btn.dataset.val;
+      }
     });
   });
   el("totalAreaInput")?.addEventListener("input", e => {
@@ -301,14 +317,14 @@ function init() {
 
   // Phase 3 bindings
   dom.tabSelect.addEventListener("click", () => setMode("select"));
-  dom.tabDraw.addEventListener("click",   () => setMode("draw"));
+  dom.tabDraw.addEventListener("click", () => setMode("draw"));
   dom.rotateBtn.addEventListener("click", () => planner?.rotateSelected());
   dom.deleteBtn.addEventListener("click", () => planner?.removeSelected());
   dom.confirmPlacementBtn.addEventListener("click", () => advancePhase(4));
 
   // Phase 4 bindings — pin tools
   dom.tabSelectP4.addEventListener("click", () => setMode("select", dom.tabSelectP4, dom.tabPin));
-  dom.tabPin.addEventListener("click",       () => setMode("pin",    dom.tabSelectP4, dom.tabPin));
+  dom.tabPin.addEventListener("click", () => setMode("pin", dom.tabSelectP4, dom.tabPin));
   dom.confirmPinsBtn.addEventListener("click", () => advancePhase(5));
 
   // Phase 5 bindings
@@ -329,8 +345,8 @@ function init() {
   dom.pinPopoverClose.addEventListener("click", () => { dom.pinPopover.hidden = true; activePinId = null; });
   dom.pinPhotoInput.addEventListener("change", onPinPhotoUpload);
   dom.pinRoomLabel.addEventListener("input", onPinFieldChange);
-  dom.pinFov.addEventListener("input",       onPinFieldChange);
-  dom.pinBrief.addEventListener("input",     onPinFieldChange);
+  dom.pinFov.addEventListener("input", onPinFieldChange);
+  dom.pinBrief.addEventListener("input", onPinFieldChange);
 
   // Output
   dom.closeOutput?.addEventListener("click", () => { dom.outputPanel.hidden = true; document.querySelector(".workspace")?.classList.remove("output-open"); });
@@ -388,7 +404,7 @@ async function onAnalyzePlan() {
     dom.analysisChip.textContent = "Analysing with AI…";
 
     // Run analysis
-    const analysis = await PA.analyzeFloorPlan(bgCanvas);
+    const analysis = await PA.analyzeFloorPlan(bgCanvas, appState.context);
     appState.detectedRooms = analysis.rooms || [];
 
     dom.analysisChip.textContent = `✓ ${analysis.rooms.length} room(s) · ${analysis.bhkType || ""} · ${analysis.totalAreaM2 || "?"}m²`;
@@ -396,7 +412,7 @@ async function onAnalyzePlan() {
     dom.analysisSummaryWrap.hidden = false;
 
     // Size overlay canvases to match bgCanvas
-    dom.roomEditorCanvas.width  = bgCanvas.width;
+    dom.roomEditorCanvas.width = bgCanvas.width;
     dom.roomEditorCanvas.height = bgCanvas.height;
 
     // Show canvas
@@ -443,12 +459,12 @@ function buildRoomChips(rooms) {
     const col = ROOM_DOT_COLORS[room.roomType] || "#888";
     const chip = document.createElement("div");
     chip.className = "room-chip";
-    chip.dataset.id = room.label;
+    chip.dataset.id = room.id || room.label;
     chip.innerHTML = `
       <span class="room-chip-dot" style="background:${col}"></span>
       <span class="room-chip-name">${escapeHtml(room.name || room.label)}</span>
-      <span class="room-chip-dims">${room.widthM ? room.widthM.toFixed(1)+"×"+room.lengthM.toFixed(1)+"m" : "?"}</span>
-      <button class="room-chip-del" data-id="${escapeHtml(room.label)}" title="Delete room">✕</button>`;
+      <span class="room-chip-dims">${room.widthM ? room.widthM.toFixed(1) + "×" + room.lengthM.toFixed(1) + "m" : "?"}</span>
+      <button class="room-chip-del" data-id="${escapeHtml(room.id || room.label)}" title="Delete room">✕</button>`;
     chip.querySelector(".room-chip-del").addEventListener("click", e => {
       e.stopPropagation();
       roomEditor?.deleteRoom(chip.dataset.id);
@@ -482,7 +498,7 @@ async function onConfirmRooms() {
     // Hide room editor, show planner canvas
     dom.roomEditorCanvas.hidden = true;
     dom.plannerCanvas.hidden = false;
-    dom.plannerCanvas.width  = dom.floorBgCanvas.width;
+    dom.plannerCanvas.width = dom.floorBgCanvas.width;
     dom.plannerCanvas.height = dom.floorBgCanvas.height;
 
     // Init PlannerCanvas
@@ -557,10 +573,7 @@ async function doAutoplace(rooms) {
   }
 }
 
-const FURN_COLORS = [
-  "#3a6a5a","#b86d35","#5a6a9a","#9a5a6a",
-  "#6a9a5a","#9a8a3a","#5a8a9a","#9a6a9a","#6a5a8a","#8a6a3a"
-];
+
 
 // ─── Phase 3: Furniture + Chat ─────────────────────────────────────────────────
 
@@ -573,9 +586,9 @@ function setMode(mode, tab1, tab2) {
     tab2.classList.toggle("active", mode !== "select");
   }
   dom.tabSelect?.classList.toggle("active", mode === "select");
-  dom.tabDraw?.classList.toggle("active",   mode === "draw");
+  dom.tabDraw?.classList.toggle("active", mode === "draw");
   dom.tabSelectP4?.classList.toggle("active", mode === "select");
-  dom.tabPin?.classList.toggle("active",     mode === "pin");
+  dom.tabPin?.classList.toggle("active", mode === "pin");
 }
 
 function buildPalette() {
@@ -609,7 +622,7 @@ function onSceneChange(state) {
     if (f) {
       dom.selectionPanel.hidden = false;
       dom.selectionLabel.textContent = f.label;
-      dom.selectionDims.textContent  = `${f.wM.toFixed(2)}m × ${f.dM.toFixed(2)}m`;
+      dom.selectionDims.textContent = `${f.wM.toFixed(2)}m × ${f.dM.toFixed(2)}m`;
     }
   } else {
     dom.selectionPanel.hidden = true;
@@ -669,7 +682,7 @@ async function onChatSend() {
         type: "cabinet", shelves: 0, partitions: 0, shutters: 0, drawers: 0
       };
       const room = (appState.confirmedRooms || []).find(r => r.label === action.roomLabel);
-      const roomOffX = room ? (room.bbox.xPct * dom.floorBgCanvas.width  / planner.scale) : 1;
+      const roomOffX = room ? (room.bbox.xPct * dom.floorBgCanvas.width / planner.scale) : 1;
       const roomOffY = room ? (room.bbox.yPct * dom.floorBgCanvas.height / planner.scale) : 1;
       planner.furniturePlacements.push({
         id: `chat_${Date.now()}`,
@@ -751,8 +764,8 @@ function openPinPopover(pin) {
   activePinId = pin.id;
   dom.pinPopoverTitle.textContent = `Pin — ${pin.roomLabel || "Untitled"}`;
   dom.pinRoomLabel.value = pin.roomLabel || "";
-  dom.pinFov.value       = pin.fovDeg || 60;
-  dom.pinBrief.value     = pin.brief  || "";
+  dom.pinFov.value = pin.fovDeg || 60;
+  dom.pinBrief.value = pin.brief || "";
   dom.pinPhotoPreview.hidden = !pin.photoDataUrl;
   if (pin.photoDataUrl) {
     dom.pinPhotoPreview.innerHTML = `<img src="${pin.photoDataUrl}" alt="Photo preview"/>`;
@@ -778,8 +791,8 @@ function onPinFieldChange() {
   if (!activePinId || !planner) return;
   planner.updatePin(activePinId, {
     roomLabel: dom.pinRoomLabel.value,
-    fovDeg:    parseFloat(dom.pinFov.value) || 60,
-    brief:     dom.pinBrief.value
+    fovDeg: parseFloat(dom.pinFov.value) || 60,
+    brief: dom.pinBrief.value
   });
   refreshPinsList();
 }
@@ -808,7 +821,7 @@ async function onGenerate() {
     for (const pin of pins) {
       const roomLabel = pin.roomLabel || "unknown";
       const detectedRoom = confirmedRooms.find(r => r.label === roomLabel);
-      let widthM  = parseFloat(detectedRoom?.widthM);
+      let widthM = parseFloat(detectedRoom?.widthM);
       let lengthM = parseFloat(detectedRoom?.lengthM);
       if (!widthM || !lengthM) {
         const entered = promptRoomDims(roomLabel);
@@ -896,9 +909,9 @@ async function generateRoom(src, inspirationDataUrls) {
 
   // 1. Extract style
   const styleRes = await postJson("/api/style/extract", {
-    roomLabel:    src.roomLabel,
-    roomType:     src.roomType,
-    brief:        src.brief,
+    roomLabel: src.roomLabel,
+    roomType: src.roomType,
+    brief: src.brief,
     inspirationImages: inspirationDataUrls,
     enableLaminateSelection: true
   });
@@ -927,15 +940,15 @@ async function generateRendersForRoom(src, placements, laminate, style, inspirat
   sources.push(...inspirationDataUrls.slice(0, 2));
 
   const res = await postJson("/api/render/openai", {
-    roomLabel:   src.roomLabel,
-    roomType:    src.roomType,
-    widthM:      src.widthM,
-    lengthM:     src.lengthM,
-    brief:       src.brief,
+    roomLabel: src.roomLabel,
+    roomType: src.roomType,
+    widthM: src.widthM,
+    lengthM: src.lengthM,
+    brief: src.brief,
     prompt,
     sourceImages: sources,
-    laminate:    { name: laminate.name, color: laminate.color },
-    model:       DEFAULT_OPENAI_IMAGE_MODEL
+    laminate: { name: laminate.name, color: laminate.color },
+    model: DEFAULT_OPENAI_IMAGE_MODEL
   });
   if (res.images && Array.isArray(res.images)) {
     res.images.forEach((img, i) => {
@@ -947,7 +960,7 @@ async function generateRendersForRoom(src, placements, laminate, style, inspirat
 
 function buildRenderPrompt(src, placements, laminate, style) {
   const items = placements.map(p =>
-    `- ${p.label}: ${(p.wM||0).toFixed(1)}m wide × ${(p.dM||0).toFixed(1)}m deep, placed at (${(p.xM||0).toFixed(1)}, ${(p.yM||0).toFixed(1)}) — wall: ${p.wall || "unspecified"}`
+    `- ${p.label}: ${(p.wM || 0).toFixed(1)}m wide × ${(p.dM || 0).toFixed(1)}m deep, placed at (${(p.xM || 0).toFixed(1)}, ${(p.yM || 0).toFixed(1)}) — wall: ${p.wall || "unspecified"}`
   ).join("\n");
 
   return [
@@ -973,7 +986,7 @@ function drawRoomResult(result) {
   wrap.innerHTML = `
     <div class="room-result-head">
       <span class="room-result-label">${escapeHtml(result.room.name || result.room.label)}</span>
-      <span class="room-result-dims">${w ? w.toFixed(1)+"×"+l.toFixed(1)+"m" : ""} · ${escapeHtml(result.laminate.name)}</span>
+      <span class="room-result-dims">${w ? w.toFixed(1) + "×" + l.toFixed(1) + "m" : ""} · ${escapeHtml(result.laminate.name)}</span>
     </div>`;
 
   for (const render of result.renders) {
@@ -993,7 +1006,7 @@ function drawRoomResult(result) {
     for (const p of result.placements) {
       const row = document.createElement("div");
       row.className = "room-item-row";
-      row.innerHTML = `<span class="room-item-name">${escapeHtml(p.label)}</span><span class="room-item-dims">${(p.wM||0).toFixed(1)}×${(p.dM||0).toFixed(1)}×${(p.hM||0).toFixed(1)}m</span>`;
+      row.innerHTML = `<span class="room-item-name">${escapeHtml(p.label)}</span><span class="room-item-dims">${(p.wM || 0).toFixed(1)}×${(p.dM || 0).toFixed(1)}×${(p.hM || 0).toFixed(1)}m</span>`;
       items.appendChild(row);
     }
     wrap.appendChild(items);
@@ -1034,7 +1047,7 @@ function drawBoq(roomResults) {
   // Placement summary
   const allPlacements = roomResults.flatMap(r => r.placements);
   dom.placementSummary.textContent = allPlacements.map(p =>
-    `${p.label}: ${(p.wM||0).toFixed(2)}W × ${(p.dM||0).toFixed(2)}D × ${(p.hM||0).toFixed(2)}H m  @ (${(p.xM||0).toFixed(2)}, ${(p.yM||0).toFixed(2)}) — ${p.roomLabel}`
+    `${p.label}: ${(p.wM || 0).toFixed(2)}W × ${(p.dM || 0).toFixed(2)}D × ${(p.hM || 0).toFixed(2)}H m  @ (${(p.xM || 0).toFixed(2)}, ${(p.yM || 0).toFixed(2)}) — ${p.roomLabel}`
   ).join("\n");
 }
 
@@ -1048,7 +1061,7 @@ function buildArtifacts(sceneState, roomResults) {
   }
   const csvHeader = "Room,Item,W×D×H,Qty,Unit,Rate INR,Amount INR\n";
   const csv = csvHeader + boqLines.map(l =>
-    `${l.room},${l.item},${l.dims||""},${l.qty.toFixed(2)},${l.unit},${l.rate},${l.amount}`
+    `${l.room},${l.item},${l.dims || ""},${l.qty.toFixed(2)},${l.unit},${l.rate},${l.amount}`
   ).join("\n");
 
   return { scene: sceneState, boq: { lines: boqLines, grandTotal, csv } };
@@ -1112,7 +1125,7 @@ function buildBoq(placements, laminate) {
   for (const p of placements) {
     lines.push({
       item: p.label,
-      dims: `${(p.wM||0).toFixed(2)}×${(p.dM||0).toFixed(2)}×${(p.hM||0).toFixed(2)}`,
+      dims: `${(p.wM || 0).toFixed(2)}×${(p.dM || 0).toFixed(2)}×${(p.hM || 0).toFixed(2)}`,
       qty: 1, unit: "unit",
       rate: 0, amount: 0
     });
@@ -1123,7 +1136,7 @@ function buildBoq(placements, laminate) {
 }
 
 function computeMaterialTotals(placements) {
-  const totals = { boardSqM:0, laminateSqM:0, edgeM:0, hinges:0, channels:0, handles:0, cuts:0, grooves:0 };
+  const totals = { boardSqM: 0, laminateSqM: 0, edgeM: 0, hinges: 0, channels: 0, handles: 0, cuts: 0, grooves: 0 };
   for (const p of placements) {
     const module = MODULE_LIBRARY.find(m => m.id === (p.moduleId || p.id)) || p;
     if (!module) continue;
@@ -1170,7 +1183,7 @@ async function renderImageToCanvas(file, canvas) {
   const img = await readImage(file);
   const maxW = 960;
   const scale = img.width > maxW ? maxW / img.width : 1;
-  canvas.width  = Math.max(2, Math.round(img.width  * scale));
+  canvas.width = Math.max(2, Math.round(img.width * scale));
   canvas.height = Math.max(2, Math.round(img.height * scale));
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1188,7 +1201,7 @@ async function renderPdfFirstPage(file, canvas) {
   const unscaled = page.getViewport({ scale: 1 });
   const scale = unscaled.width > maxW ? maxW / unscaled.width : 1.25;
   const viewport = page.getViewport({ scale });
-  canvas.width  = Math.max(2, Math.round(viewport.width));
+  canvas.width = Math.max(2, Math.round(viewport.width));
   canvas.height = Math.max(2, Math.round(viewport.height));
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, canvas.width, canvas.height);

@@ -16,6 +16,13 @@ const ROOM_COLORS = {
   balcony:  { fill: "rgba(100,200,180,0.22)", stroke: "#288070" },
   foyer:    { fill: "rgba(200,180,100,0.22)", stroke: "#a09020" },
   utility:  { fill: "rgba(160,160,160,0.22)", stroke: "#707070" },
+  office:   { fill: "rgba(100,140,220,0.22)", stroke: "#4060c0" },
+  conference: { fill: "rgba(220,140,100,0.22)", stroke: "#c06040" },
+  workstation: { fill: "rgba(140,220,100,0.22)", stroke: "#60c040" },
+  reception: { fill: "rgba(220,100,220,0.22)", stroke: "#c040c0" },
+  pantry:   { fill: "rgba(240,200,80,0.22)", stroke: "#d0a020" },
+  store:    { fill: "rgba(160,160,160,0.22)", stroke: "#808080" },
+  retail:   { fill: "rgba(255,120,150,0.22)", stroke: "#d05070" },
   other:    { fill: "rgba(160,140,200,0.22)", stroke: "#6050a0" }
 };
 
@@ -66,6 +73,7 @@ class RoomEditor {
     // Export back to fraction format (relative to bgCanvas)
     const W = this.bgCanvas.width, H = this.bgCanvas.height;
     return this.rooms.map(r => ({
+      id: r.id,
       label: r.label,
       name:  r.name,
       roomType: r.roomType,
@@ -87,9 +95,9 @@ class RoomEditor {
     this._closeRename();
   }
 
-  deleteRoom(id) {
-    this.rooms = this.rooms.filter(r => r.id !== id);
-    if (this.selected === id) this.selected = null;
+  deleteRoom(idOrLabel) {
+    this.rooms = this.rooms.filter(r => r.id !== idOrLabel && r.label !== idOrLabel);
+    if (this.selected === idOrLabel) this.selected = null;
     this.render();
     this._notify();
   }
@@ -221,7 +229,8 @@ class RoomEditor {
               type: `resize-${hname}`, id: sel.id,
               ox: x, oy: y,
               origX: sel.xPx, origY: sel.yPx,
-              origW: sel.wPx, origH: sel.hPx
+              origW: sel.wPx, origH: sel.hPx,
+              origWidthM: sel.widthM, origLengthM: sel.lengthM
             };
             return;
           }
@@ -295,8 +304,8 @@ class RoomEditor {
       // Recalculate meters proportionally to image
       const W = this.bgCanvas.width, H = this.bgCanvas.height;
       // If we have at least one valid meter reading, scale proportionally
-      if (room.widthM)  room.widthM  = parseFloat((room.widthM  * room.wPx / d.origW).toFixed(2));
-      if (room.lengthM) room.lengthM = parseFloat((room.lengthM * room.hPx / d.origH).toFixed(2));
+      if (d.origWidthM)  room.widthM  = parseFloat((d.origWidthM  * room.wPx / d.origW).toFixed(2));
+      if (d.origLengthM) room.lengthM = parseFloat((d.origLengthM * room.hPx / d.origH).toFixed(2));
     }
 
     this.render();
@@ -306,22 +315,24 @@ class RoomEditor {
     const { x, y } = this._pt(e);
 
     if (this._addMode && this._addStart) {
-      const rx = Math.min(x, this._addStart.x), ry = Math.min(y, this._addStart.y);
-      const rw = Math.abs(x - this._addStart.x), rh = Math.abs(y - this._addStart.y);
-      if (rw > MIN_DIM && rh > MIN_DIM) {
-        const id = uid();
-        const newRoom = {
-          id, label: `Room ${this.rooms.length + 1}`,
-          name: `Room ${this.rooms.length + 1}`,
-          roomType: "other",
-          xPx: Math.round(rx), yPx: Math.round(ry),
-          wPx: Math.round(rw), hPx: Math.round(rh),
-          widthM: null, lengthM: null, notes: ""
-        };
-        this.rooms.push(newRoom);
-        this.selected = id;
-        this._emitSelect(newRoom);
+      let rx = Math.min(x, this._addStart.x), ry = Math.min(y, this._addStart.y);
+      let rw = Math.abs(x - this._addStart.x), rh = Math.abs(y - this._addStart.y);
+      if (rw <= 10 || rh <= 10) {
+        rx = x - 50; ry = y - 50; rw = 100; rh = 100;
       }
+      const id = uid();
+      const newRoom = {
+        id, label: `Room ${this.rooms.length + 1}`,
+        name: `Room ${this.rooms.length + 1}`,
+        roomType: "other",
+        xPx: Math.round(rx), yPx: Math.round(ry),
+        wPx: Math.round(rw), hPx: Math.round(rh),
+        widthM: null, lengthM: null, notes: ""
+      };
+      this.rooms.push(newRoom);
+      this.selected = id;
+      this._emitSelect(newRoom);
+      
       this._addMode = false;
       this._addStart = null;
       this.canvas.style.cursor = "default";
@@ -388,7 +399,7 @@ class RoomEditor {
       <div style="color:#aaa;font-size:11px;margin-bottom:6px">Edit room</div>
       <input id="_re_name" value="${room.name}" style="width:100%;background:#111;border:1px solid #333;border-radius:4px;padding:5px 8px;color:#fff;font-size:13px;margin-bottom:8px" placeholder="Room name"/>
       <select id="_re_type" style="width:100%;background:#111;border:1px solid #333;border-radius:4px;padding:5px 8px;color:#fff;font-size:13px;margin-bottom:8px">
-        ${["bedroom","living","kitchen","bathroom","dining","study","balcony","foyer","utility","other"].map(t =>
+        ${["bedroom","living","kitchen","bathroom","dining","study","balcony","foyer","utility","office","conference","workstation","reception","pantry","store","retail","other"].map(t =>
           `<option value="${t}" ${room.roomType===t?"selected":""}>${t}</option>`).join("")}
       </select>
       <div style="display:flex;gap:6px">

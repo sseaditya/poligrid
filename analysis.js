@@ -22,12 +22,12 @@ const FURNITURE_COLORS = [
 
 // ─── Floor Plan Analysis ──────────────────────────────────────────────────────
 
-async function analyzeFloorPlan(canvas) {
+async function analyzeFloorPlan(canvas, context) {
   const imageBase64 = canvasToPngBase64(canvas);
   const response = await fetch("/api/analyze/floorplan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageBase64, mimeType: "image/png" })
+    body: JSON.stringify({ imageBase64, mimeType: "image/png", context })
   });
   const raw = await response.text();
   const parsed = raw ? JSON.parse(raw) : null;
