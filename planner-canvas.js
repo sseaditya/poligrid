@@ -330,10 +330,15 @@ class PlannerCanvas {
 
   _hitPin(mx, my) {
     const r = PIN_RADIUS / this.scale;
+    const alen = 28 / this.scale;
     for (let i = this.cameraPins.length - 1; i >= 0; i--) {
       const p = this.cameraPins[i];
       const dx = mx - p.xM, dy = my - p.yM;
       if (Math.sqrt(dx*dx + dy*dy) <= r * 1.8) return p;
+      
+      const tipX = p.xM + alen * Math.sin(p.angleDeg * Math.PI / 180);
+      const tipY = p.yM - alen * Math.cos(p.angleDeg * Math.PI / 180);
+      if (Math.abs(mx - tipX) < 0.3 && Math.abs(my - tipY) < 0.3) return p;
     }
     return null;
   }

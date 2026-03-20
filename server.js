@@ -88,29 +88,25 @@ server.listen(PORT, () => {
 
 async function renderWithOpenAi(body) {
   const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
-  const model = String(body.model || DEFAULT_OPENAI_IMAGE_MODEL).trim();
+  const model = "dall-e-3";
   const prompt = String(body.prompt || "").trim();
-  const imageBase64 = String(body.imageBase64 || "").trim();
-  const mimeType = String(body.mimeType || "image/png").trim();
-  const quality = "low";
 
-  if (!prompt || !imageBase64) {
-    throw httpError(400, "Missing prompt or imageBase64 for OpenAI render.");
+  if (!prompt) {
+    throw httpError(400, "Missing prompt for OpenAI render.");
   }
 
-  const imageBuffer = decodeBase64Image(imageBase64);
-  const form = new FormData();
-  form.append("model", model);
-  form.append("quality", quality);
-  form.append("prompt", prompt);
-  form.append("image", new Blob([imageBuffer], { type: mimeType }), "room_input.png");
+  const payload = {
+    model,
+    prompt: prompt.slice(0, 4000),
+    n: 1,
+    size: "1024x1024",
+    quality: "hd",
+  };
 
-  const response = await fetch("https://api.openai.com/v1/images/edits", {
+  const response = await fetch("https://api.openai.com/v1/images/generations", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: form
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
   });
 
   const raw = await response.text();
@@ -124,23 +120,11 @@ async function renderWithOpenAi(body) {
     throw httpError(502, "OpenAI response did not include image data.");
   }
 
-  if (firstImage.b64_json) {
-    return {
-      provider: "openai",
-      model,
-      dataUrl: `data:image/png;base64,${firstImage.b64_json}`
-    };
-  }
-
-  if (firstImage.url) {
-    return {
-      provider: "openai",
-      model,
-      dataUrl: firstImage.url
-    };
-  }
-
-  throw httpError(502, "OpenAI response did not include b64_json or url.");
+  return { 
+    provider: "openai", 
+    model, 
+    dataUrl: firstImage.url || `data:image/png;base64,${firstImage.b64_json}` 
+  };
 }
 
 async function analyzeFloorPlanWithOpenAi(body) {
@@ -372,6 +356,13 @@ async function autoPlaceFurnitureWithOpenAi(body) {
   const prompt = [
     "You are a professional Indian interior designer creating a furniture layout plan.",
     "Strictly follow interior design rules: maintain clearance paths, don't block doors/windows, respect room function.",
+    "",
+    "CRITICAL RULES:",
+    "1. NEVER place furniture causing overlaps.",
+    "2. Respect the walls! Always align large pieces like beds, wardrobes, and TV units flush against walls (north, south, east, west).",
+    "3. Keep the center walkways open. Do not randomly place items floating in the center of the room.",
+    "4. For Bedrooms: The bed goes on one wall, the wardrobe on an opposite or adjacent wall.",
+    "5. Make intelligent design choices based on the user's notes and property context.",
     "",
     "Property context:",
     context.bhk ? `- ${context.bhk}` : "",

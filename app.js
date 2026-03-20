@@ -770,6 +770,7 @@ function openPinPopover(pin) {
   if (pin.photoDataUrl) {
     dom.pinPhotoPreview.innerHTML = `<img src="${pin.photoDataUrl}" alt="Photo preview"/>`;
   }
+  dom.pinPhotoInput.value = ""; // Always reset so change event fires even if same file
   dom.pinPopover.hidden = false;
 }
 
