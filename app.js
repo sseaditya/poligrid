@@ -1130,9 +1130,10 @@ async function generateRendersForRoom(src, placements, laminate, style, inspirat
 }
 
 function buildRenderPrompt(src, placements, laminate, style) {
-  const camX = (src.xM || 0).toFixed(1);
-  const camY = (src.yM || 0).toFixed(1);
-  const orient = (src.angleDeg !== undefined) ? Math.round(src.angleDeg) : 0;
+  const camX = (src.xM || 0);
+  const camY = (src.yM || 0);
+  const orient = (src.angleDeg !== undefined) ? ((src.angleDeg % 360) + 360) % 360 : 0;
+  const fov = src.fovDeg || 60;
 
   const getFacing = (deg) => {
     const norm = ((deg % 360) + 360) % 360;
@@ -1142,19 +1143,54 @@ function buildRenderPrompt(src, placements, laminate, style) {
     return "East";
   };
 
-  const items = placements.map(p => {
-    const facing = getFacing(p.rotationY || p.rotationDeg || 0);
-    return `- ${p.label}: placed at (x=${(p.xM || 0).toFixed(1)}m, y=${(p.yM || 0).toFixed(1)}m), FRONT facing ${facing} (${p.wall || "center"} wall)`;
+  const getRelativePosition = (dx, dy, dir) => {
+    if (dir === "North") return dy > 0 ? "behind you" : "in front of you";
+    if (dir === "South") return dy < 0 ? "behind you" : "in front of you";
+    if (dir === "East")  return dx < 0 ? "behind you" : "in front of you";
+    if (dir === "West")  return dx > 0 ? "behind you" : "in front of you";
+    return "nearby";
+  };
+
+  // 1. Calculate relative visibility based on Azimuth (0=North, 90=East, 180=South, 270=West)
+  const visibleItems = [];
+  for (const p of placements) {
+    const dx = (p.xM || 0) - camX;
+    const dy = (p.yM || 0) - camY;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < 0.2) continue; // skip items we are standing directly inside of
+
+    let bearingRad = Math.atan2(dx, -dy); // -dy because y=0 is North in canvas
+    let bearingDeg = (bearingRad * 180 / Math.PI + 360) % 360;
+
+    let diff = Math.abs(bearingDeg - orient);
+    if (diff > 180) diff = 360 - diff;
+
+    // FOV pad by 20 deg to catch edges of large furniture
+    if (diff <= (fov / 2) + 20) {
+      const facing = getFacing(p.rotationY || p.rotationDeg || 0);
+      const posStr = `Depth: ${dist.toFixed(1)}m away.`;
+      visibleItems.push({ ...p, dist, posStr, facing });
+    }
+  }
+
+  // Sort by distance (closest first)
+  visibleItems.sort((a, b) => a.dist - b.dist);
+
+  const items = visibleItems.map(p => {
+    return `- ${p.label}: ${p.posStr} FRONT facing ${p.facing}.`;
   }).join("\n");
+
+  const cameraDir = getFacing(orient);
 
   return [
     `Generate a photorealistic furnished interior render for: ${src.roomLabel} (${src.roomType}).`,
     `Room dims: ${src.widthM.toFixed(1)}m × ${src.lengthM.toFixed(1)}m.`,
-    `CAMERA VANTAGE: Standing at x=${camX}m, y=${camY}m. Facing ${orient}°. Orient the perspective accurately!`,
+    `CAMERA VANTAGE: You are standing inside the room facing strictly ${cameraDir}.`,
     style.style_summary ? `Design style: ${style.style_summary}.` : "",
     `Laminate finish: ${laminate.name}.`,
-    items ? `Furniture placed on the floor plan:\n${items}` : "",
-    src.photoDataUrl ? "Reference photo is provided — strictly augment this view with the furniture described above while maintaining spatial accuracy." : "",
+    items ? `Furniture strictly visible in front of you:\n${items}` : "No furniture visible from this angle.",
+    `CRITICAL: ONLY render the furniture listed above! Do NOT render anything behind the camera. Maintain exact spatial continuity!`,
+    src.photoDataUrl ? "Reference photo provided — strictly augment this exact angle with the furniture described." : "",
     "Respect actual proportions. Use warm natural lighting. Photorealistic quality.",
     "Do NOT add text, labels, or watermarks."
   ].filter(Boolean).join("\n");
@@ -1184,17 +1220,7 @@ function drawRoomResult(result) {
     wrap.appendChild(imgWrap);
   }
 
-  if (result.placements.length) {
-    const items = document.createElement("div");
-    items.className = "room-result-items";
-    for (const p of result.placements) {
-      const row = document.createElement("div");
-      row.className = "room-item-row";
-      row.innerHTML = `<span class="room-item-name">${escapeHtml(p.label)}</span><span class="room-item-dims">${(p.wM || 0).toFixed(1)}×${(p.dM || 0).toFixed(1)}×${(p.hM || 0).toFixed(1)}m</span>`;
-      items.appendChild(row);
-    }
-    wrap.appendChild(items);
-  }
+  // Removed redundant piece-listing to save screen space so BOQ isn't pushed out of view
 
   dom.roomResults.appendChild(wrap);
 }
