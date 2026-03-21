@@ -951,7 +951,9 @@ async function generateRendersForRoom(src, placements, laminate, style, inspirat
     laminate: { name: laminate.name, color: laminate.color },
     model: DEFAULT_OPENAI_IMAGE_MODEL
   });
-  if (res.images && Array.isArray(res.images)) {
+  if (res.dataUrl) {
+    renders.push({ name: "View 1", dataUrl: res.dataUrl, source: "openai" });
+  } else if (res.images && Array.isArray(res.images)) {
     res.images.forEach((img, i) => {
       renders.push({ name: `View ${i + 1}`, dataUrl: img.dataUrl || img, source: "openai" });
     });
