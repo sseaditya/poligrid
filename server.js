@@ -88,25 +88,32 @@ server.listen(PORT, () => {
 
 async function renderWithOpenAi(body) {
   const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
-  const model = "dall-e-3";
+  const model = String(body.model || "gpt-image-1.5").trim();
   const prompt = String(body.prompt || "").trim();
 
-  if (!prompt) {
-    throw httpError(400, "Missing prompt for OpenAI render.");
+  let imageBase64 = String(body.imageBase64 || "").trim();
+  if (!imageBase64 && Array.isArray(body.sourceImages) && body.sourceImages.length > 0) {
+    const src = body.sourceImages[0];
+    imageBase64 = src.includes("base64,") ? src.split("base64,")[1] : src;
+  }
+  const mimeType = String(body.mimeType || "image/png").trim();
+  const quality = "low";
+
+  if (!prompt || !imageBase64) {
+    throw httpError(400, "Missing prompt or imageBase64 for OpenAI render.");
   }
 
-  const payload = {
-    model,
-    prompt: prompt.slice(0, 4000),
-    n: 1,
-    size: "1024x1024",
-    quality: "hd",
-  };
+  const imageBuffer = decodeBase64Image(imageBase64);
+  const form = new FormData();
+  form.append("model", model);
+  form.append("quality", quality);
+  form.append("prompt", prompt.slice(0, 1000));
+  form.append("image", new Blob([imageBuffer], { type: mimeType }), "room_input.png");
 
-  const response = await fetch("https://api.openai.com/v1/images/generations", {
+  const response = await fetch("https://api.openai.com/v1/images/edits", {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form
   });
 
   const raw = await response.text();
@@ -120,11 +127,13 @@ async function renderWithOpenAi(body) {
     throw httpError(502, "OpenAI response did not include image data.");
   }
 
-  return { 
-    provider: "openai", 
-    model, 
-    dataUrl: firstImage.url || `data:image/png;base64,${firstImage.b64_json}` 
-  };
+  if (firstImage.b64_json) {
+    return { provider: "openai", model, dataUrl: `data:image/png;base64,${firstImage.b64_json}` };
+  }
+  if (firstImage.url) {
+    return { provider: "openai", model, dataUrl: firstImage.url };
+  }
+  throw httpError(502, "OpenAI response did not include b64_json or url.");
 }
 
 async function analyzeFloorPlanWithOpenAi(body) {
@@ -365,7 +374,13 @@ async function autoPlaceFurnitureWithOpenAi(body) {
     "5. MODULAR WOODWORK PRIORITY: You are designing for a company that manufactures modular cabinets and woodwork. Your PRIMARY FOCUS must be specifying extensive modular storage: wardrobes, kitchen cabinets, TV units, display units, bookshelf walls, office credenzas, and custom study desks. Maximize the use of 'cabinet' and 'study' types.",
     "6. MAKE IT ABUNDANT: Provide a fully furnished, highly detailed room layout. After ensuring rooms have appropriate modular storage, fill the remaining space with seating, tables, and decor.",
     "7. OPEN-ENDED PLACEMENT: You are NOT strictly limited to the 'Available furniture modules'. If a room needs a custom modular unit (e.g., 'Wall-to-wall library', 'L-shaped corner wardrobe'), invent a new `moduleId` and `label`, provide custom dimensions (`wM`, `dM`, `hM`), and classify it with `type` ('cabinet', 'study', 'table', 'seating', 'decor', 'bed').",
-    "8. Make intelligent design choices based on the user's notes and property context.",
+    "8. COORDINATE MATH TO TOUCH WALLS: Coordinates (xM, yM) define the TOP-LEFT corner of the furniture. Room origin (0,0) is North-West.",
+    "   - Flush against North wall: set yM = 0.",
+    "   - Flush against West wall: set xM = 0.",
+    "   - Flush against South wall: set yM = (Room Depth - furniture dM).",
+    "   - Flush against East wall: set xM = (Room Width - furniture wM).",
+    "   Do the math precisely so items physically touch the walls instead of floating in the middle!",
+    "9. Make intelligent design choices based on the user's notes and property context.",
     "",
     "Property context:",
     context.bhk ? `- ${context.bhk}` : "",
@@ -410,7 +425,7 @@ async function autoPlaceFurnitureWithOpenAi(body) {
     model,
     reasoning: { effort: "low" },
     input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
-    max_output_tokens: 4000
+    max_output_tokens: 4096
   };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -420,6 +435,7 @@ async function autoPlaceFurnitureWithOpenAi(body) {
   });
 
   const raw = await response.text();
+  console.error("RAW UPSTREAM:", raw.slice(0, 500));
   if (!response.ok) throw httpError(response.status, extractApiError(raw));
 
   const parsed = safeJson(raw);
@@ -427,7 +443,7 @@ async function autoPlaceFurnitureWithOpenAi(body) {
   const json = extractJsonFromText(text);
   if (!json || !Array.isArray(json.placements)) {
     console.error("Autoplace failed to parse. Raw text:", text.slice(0, 500));
-    throw httpError(502, "Autoplace returned unexpected output.");
+    throw httpError(502, "Autoplace returned unexpected output. RAW START: " + text.slice(0, 500) + " ... RAW END: " + text.slice(-500));
   }
   return { model, placements: json.placements };
 }
@@ -694,7 +710,11 @@ function safeJson(raw) {
   try {
     return JSON.parse(raw);
   } catch {
-    return null;
+    try {
+      return JSON.parse(raw.replace(/,\s*([}\]])/g, '$1'));
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -703,16 +723,33 @@ function extractJsonFromText(text) {
   if (parsed) return parsed;
   
   const match = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (match) {
-    parsed = safeJson(match[1].trim());
-    if (parsed) return parsed;
-  }
+  let content = match ? match[1].trim() : text;
   
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start >= 0 && end > start) {
-    parsed = safeJson(text.slice(start, end + 1));
+  const start = content.indexOf('{');
+  let end = content.lastIndexOf('}');
+  if (start >= 0) {
+    if (end < start) end = content.length; // if '}' is missing entirely
+    
+    let slice = content.slice(start, end + 1);
+    parsed = safeJson(slice);
     if (parsed) return parsed;
+    
+    // Auto-repair truncated JSON arrays
+    parsed = safeJson(slice + "]}");
+    if (parsed) return parsed;
+    parsed = safeJson(slice + "]}]}");
+    if (parsed) return parsed;
+    
+    // Try stripping the last hanging item entirely and closing
+    parsed = safeJson(slice.replace(/,[^,]*$/, '') + "]}");
+    if (parsed) return parsed;
+    
+    // One more extreme fallback: just strip anything after the last complete object in the placements array
+    const lastObjectClose = slice.lastIndexOf('}');
+    if (lastObjectClose > 0) {
+      parsed = safeJson(slice.slice(0, lastObjectClose + 1) + "]}");
+      if (parsed) return parsed;
+    }
   }
   return null;
 }
