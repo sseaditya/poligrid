@@ -1026,16 +1026,22 @@ async function onGenerate() {
       appState.inspirationFiles.map(f => readDataUrl(f))
     );
 
-    const roomResults = [];
+    const roomGroups = {};
     for (const src of renderSources) {
-      dom.generateStatus.textContent = `Generating: ${src.roomLabel}…`;
+      if (!roomGroups[src.roomLabel]) roomGroups[src.roomLabel] = [];
+      roomGroups[src.roomLabel].push(src);
+    }
+
+    const roomResults = [];
+    for (const [roomLabel, srcs] of Object.entries(roomGroups)) {
+      dom.generateStatus.textContent = `Preparing: ${roomLabel}…`;
       try {
-        const result = await generateRoom(src, inspirationDataUrls);
+        const result = await generateRoom(srcs, inspirationDataUrls);
         roomResults.push(result);
         drawRoomResult(result);
       } catch (err) {
-        console.error(`Failed ${src.roomLabel}:`, err);
-        dom.statusBox.textContent += `⚠ ${src.roomLabel}: ${err.message}\n`;
+        console.error(`Failed ${roomLabel}:`, err);
+        dom.statusBox.textContent += `⚠ ${roomLabel}: ${err.message}\n`;
       }
     }
 
@@ -1055,14 +1061,15 @@ async function onGenerate() {
   }
 }
 
-async function generateRoom(src, inspirationDataUrls) {
+async function generateRoom(srcs, inspirationDataUrls) {
+  const mainSrc = srcs[0];
   const PA = window.PoligridAnalysis;
 
-  // 1. Extract style
+  // 1. Extract style ONCE for the whole room
   const styleRes = await postJson("/api/style/extract", {
-    roomLabel: src.roomLabel,
-    roomType: src.roomType,
-    brief: src.brief,
+    roomLabel: mainSrc.roomLabel,
+    roomType: mainSrc.roomType,
+    brief: mainSrc.brief,
     inspirationImages: inspirationDataUrls,
     enableLaminateSelection: true
   });
@@ -1070,14 +1077,25 @@ async function generateRoom(src, inspirationDataUrls) {
   const laminate = pickLaminate(LAMINATE_LIBRARY, style.tags || []);
 
   // 2. Pick modules + build placement map
-  const placements = src.placements.length > 0 ? src.placements :
-    pickModulesFromBrief(MODULE_LIBRARY, src.brief, src.widthM, src.lengthM);
+  const placements = mainSrc.placements.length > 0 ? mainSrc.placements :
+    pickModulesFromBrief(MODULE_LIBRARY, mainSrc.brief, mainSrc.widthM, mainSrc.lengthM);
 
-  // 3. Render
-  const renders = await generateRendersForRoom(src, placements, laminate, style, inspirationDataUrls);
+  // 3. Render all view pins sequentially using the exact same style
+  const renders = [];
+  for (let i = 0; i < srcs.length; i++) {
+    const src = srcs[i];
+    dom.generateStatus.textContent = `Generating: ${src.roomLabel} (View ${i + 1}/${srcs.length})…`;
+    const viewRenders = await generateRendersForRoom(src, placements, laminate, style, inspirationDataUrls);
+    
+    // rename views sequentially
+    viewRenders.forEach((r, idx) => {
+      r.name = `View ${renders.length + 1}`;
+    });
+    renders.push(...viewRenders);
+  }
 
   return {
-    room: { label: src.roomLabel, name: src.roomLabel, roomType: src.roomType, widthM: src.widthM, lengthM: src.lengthM },
+    room: { label: mainSrc.roomLabel, name: mainSrc.roomLabel, roomType: mainSrc.roomType, widthM: mainSrc.widthM, lengthM: mainSrc.lengthM },
     laminate, style, placements, renders
   };
 }

@@ -573,7 +573,7 @@ async function extractStyleWithOpenAi(body) {
     model,
     reasoning: { effort: "low" },
     input: [{ role: "user", content }],
-    max_output_tokens: 700
+    max_output_tokens: 1500
   };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -592,9 +592,9 @@ async function extractStyleWithOpenAi(body) {
 
   const parsed = safeJson(raw);
   const text = extractResponsesText(parsed);
-  const json = safeJson(text);
+  const json = extractJsonFromText(text);
   if (!json) {
-    throw httpError(502, "Style extraction returned non-JSON output.");
+    throw httpError(502, "Style extraction returned non-JSON output: " + text.slice(0, 100));
   }
 
   return {
