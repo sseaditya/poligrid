@@ -482,7 +482,7 @@ async function chatPlacementWithOpenAi(body) {
     "",
     `User request: "${message}"`,
     "",
-    "Understand the user's intent and return ONE structured action. Actions:",
+    "Understand the user's intent and return an ARRAY of structured actions. You can return multiple actions if the user requests moving/removing/adding several items. Actions:",
     "- add: add a new piece  { action:'add', moduleId, label, roomLabel, xM, yM, wM, dM, rotationDeg, rationale }" ,
     "- move: move existing  { action:'move', id, xM, yM, rationale }",
     "- remove: delete        { action:'remove', id, rationale }",
@@ -492,7 +492,7 @@ async function chatPlacementWithOpenAi(body) {
     "Also include a 'reply' string: a short natural language response to the user (1–2 sentences).",
     "",
     "Return STRICT JSON only:",
-    `{ "reply": string, "action": { ...as above } }`
+    `{ "reply": string, "actions": [ { ...as above } ] }`
   ].filter(Boolean).join("\n");
 
   const payload = {
@@ -514,11 +514,11 @@ async function chatPlacementWithOpenAi(body) {
   const parsed = safeJson(raw);
   const text = extractResponsesText(parsed);
   const json = extractJsonFromText(text);
-  if (!json || !json.action) {
+  if (!json || (!json.action && !json.actions)) {
     console.error("Chat placement failed to parse. Raw text:", text.slice(0, 500));
     throw httpError(502, "Chat placement returned unexpected output.");
   }
-  return { model, reply: json.reply || "", action: json.action };
+  return { model, reply: json.reply || "", actions: json.actions || [json.action].filter(Boolean) };
 }
 
 async function extractStyleWithOpenAi(body) {

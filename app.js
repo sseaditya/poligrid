@@ -819,56 +819,65 @@ async function onChatSend() {
     thinking.textContent = res.reply || "";
     thinking.classList.remove("thinking");
 
-    // Apply action
-    const action = res.action;
-    if (!action) return;
-    const tag = document.createElement("span");
-    tag.className = "chat-action-tag";
+    // Apply actions
+    const actions = res.actions || [];
+    if (!actions.length && res.action) actions.push(res.action);
+    if (!actions.length) return;
 
-    if (action.action === "add") {
-      const mod = MODULE_LIBRARY.find(m => m.id === action.moduleId) || {
-        id: action.moduleId || "custom", label: action.label || "Item",
-        w: action.wM || 1.2, d: action.dM || 0.6, h: 0.9,
-        type: "cabinet", shelves: 0, partitions: 0, shutters: 0, drawers: 0
-      };
-      const room = (appState.confirmedRooms || []).find(r => r.label === action.roomLabel);
-      const roomOffX = room ? (room.bbox.xPct * dom.floorBgCanvas.width / planner.scale) : 1;
-      const roomOffY = room ? (room.bbox.yPct * dom.floorBgCanvas.height / planner.scale) : 1;
-      planner.furniturePlacements.push({
-        id: `chat_${Date.now()}`,
-        moduleId: mod.id,
-        label: mod.label,
-        xM: roomOffX + (action.xM || 1),
-        yM: roomOffY + (action.yM || 1),
-        wM: action.wM || mod.w,
-        dM: action.dM || mod.d,
-        hM: mod.h,
-        rotationY: action.rotationDeg || 0,
-        color: FURN_COLORS[planner.furniturePlacements.length % FURN_COLORS.length],
-        roomLabel: action.roomLabel || "",
-        roomType: room?.roomType || "other",
-        wall: action.wall || "center"
-      });
-      planner.render();
-      tag.textContent = `+ Added ${mod.label}`;
+    for (const action of actions) {
+      const tag = document.createElement("span");
+      tag.className = "chat-action-tag";
 
-    } else if (action.action === "move") {
-      const f = planner.furniturePlacements.find(x => x.id === action.id);
-      if (f) { f.xM = action.xM || f.xM; f.yM = action.yM || f.yM; planner.render(); }
-      tag.textContent = `↹ Moved`;
+      if (action.action === "add") {
+        const mod = MODULE_LIBRARY.find(m => m.id === action.moduleId) || {
+          id: action.moduleId || "custom", label: action.label || "Item",
+          w: action.wM || 1.2, d: action.dM || 0.6, h: 0.9,
+          type: "cabinet", shelves: 0, partitions: 0, shutters: 0, drawers: 0
+        };
+        const room = (appState.confirmedRooms || []).find(r => r.label === action.roomLabel);
+        const roomOffX = room ? (room.bbox.xPct * dom.floorBgCanvas.width / planner.scale) : 1;
+        const roomOffY = room ? (room.bbox.yPct * dom.floorBgCanvas.height / planner.scale) : 1;
+        planner.furniturePlacements.push({
+          id: `chat_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          moduleId: mod.id,
+          label: mod.label,
+          xM: roomOffX + (action.xM || 1),
+          yM: roomOffY + (action.yM || 1),
+          wM: action.wM || mod.w,
+          dM: action.dM || mod.d,
+          hM: mod.h,
+          rotationY: action.rotationDeg || 0,
+          color: FURN_COLORS[planner.furniturePlacements.length % FURN_COLORS.length],
+          roomLabel: action.roomLabel || "",
+          roomType: room?.roomType || "other",
+          wall: action.wall || "center"
+        });
+        planner.render();
+        tag.textContent = `+ Added ${mod.label}`;
 
-    } else if (action.action === "remove") {
-      planner.furniturePlacements = planner.furniturePlacements.filter(x => x.id !== action.id);
-      planner.render();
-      tag.textContent = `✕ Removed`;
+      } else if (action.action === "move") {
+        const f = planner.furniturePlacements.find(x => x.id === action.id);
+        if (f) { f.xM = action.xM || f.xM; f.yM = action.yM || f.yM; planner.render(); }
+        tag.textContent = `↹ Moved ${f ? f.label : action.id}`;
 
-    } else if (action.action === "resize") {
-      const f = planner.furniturePlacements.find(x => x.id === action.id);
-      if (f) { if (action.wM) f.wM = action.wM; if (action.dM) f.dM = action.dM; planner.render(); }
-      tag.textContent = `⇔ Resized`;
+      } else if (action.action === "remove") {
+        const f = planner.furniturePlacements.find(x => x.id === action.id);
+        planner.furniturePlacements = planner.furniturePlacements.filter(x => x.id !== action.id);
+        planner.render();
+        tag.textContent = `✕ Removed ${f ? f.label : action.id}`;
+
+      } else if (action.action === "resize") {
+        const f = planner.furniturePlacements.find(x => x.id === action.id);
+        if (f) { if (action.wM) f.wM = action.wM; if (action.dM) f.dM = action.dM; planner.render(); }
+        tag.textContent = `⇔ Resized ${f ? f.label : action.id}`;
+      }
+
+      if (tag.textContent) {
+        thinking.appendChild(tag);
+        // Add a line break after each tag to ensure vertical readability
+        thinking.appendChild(document.createElement("br")); 
+      }
     }
-
-    if (tag.textContent) thinking.appendChild(tag);
     refreshPlacedList();
 
   } catch (err) {
