@@ -1112,18 +1112,31 @@ async function generateRendersForRoom(src, placements, laminate, style, inspirat
 }
 
 function buildRenderPrompt(src, placements, laminate, style) {
-  const items = placements.map(p =>
-    `- ${p.label}: ${(p.wM || 0).toFixed(1)}m wide × ${(p.dM || 0).toFixed(1)}m deep, placed at (${(p.xM || 0).toFixed(1)}, ${(p.yM || 0).toFixed(1)}) — wall: ${p.wall || "unspecified"}`
-  ).join("\n");
+  const camX = (src.xM || 0).toFixed(1);
+  const camY = (src.yM || 0).toFixed(1);
+  const orient = (src.angleDeg !== undefined) ? Math.round(src.angleDeg) : 0;
+
+  const getFacing = (deg) => {
+    const norm = ((deg % 360) + 360) % 360;
+    if (norm < 45 || norm >= 315) return "South";
+    if (norm < 135) return "West";
+    if (norm < 225) return "North";
+    return "East";
+  };
+
+  const items = placements.map(p => {
+    const facing = getFacing(p.rotationY || p.rotationDeg || 0);
+    return `- ${p.label}: placed at (x=${(p.xM || 0).toFixed(1)}m, y=${(p.yM || 0).toFixed(1)}m), FRONT facing ${facing} (${p.wall || "center"} wall)`;
+  }).join("\n");
 
   return [
     `Generate a photorealistic furnished interior render for: ${src.roomLabel} (${src.roomType}).`,
-    `Room dimensions: ${src.widthM.toFixed(1)}m × ${src.lengthM.toFixed(1)}m.`,
+    `Room dims: ${src.widthM.toFixed(1)}m × ${src.lengthM.toFixed(1)}m.`,
+    `CAMERA VANTAGE: Standing at x=${camX}m, y=${camY}m. Facing ${orient}°. Orient the perspective accurately!`,
     style.style_summary ? `Design style: ${style.style_summary}.` : "",
-    src.brief ? `Brief: ${src.brief}.` : "",
     `Laminate finish: ${laminate.name}.`,
     items ? `Furniture placed on the floor plan:\n${items}` : "",
-    src.photoDataUrl ? "Reference photo is provided — augment this view with the furniture layout above." : "",
+    src.photoDataUrl ? "Reference photo is provided — strictly augment this view with the furniture described above while maintaining spatial accuracy." : "",
     "Respect actual proportions. Use warm natural lighting. Photorealistic quality.",
     "Do NOT add text, labels, or watermarks."
   ].filter(Boolean).join("\n");
