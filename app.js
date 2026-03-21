@@ -1124,7 +1124,8 @@ async function generateRendersForRoom(src, placements, laminate, style, inspirat
     lengthM: src.lengthM,
     brief: src.brief,
     prompt,
-    sourceImages: sources,
+    imageBase64: src.photoDataUrl || null,
+    inspirationImages: inspirationDataUrls.slice(0, 2),
     laminate: { name: laminate.name, color: laminate.color },
     model: DEFAULT_OPENAI_IMAGE_MODEL
   });

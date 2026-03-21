@@ -92,28 +92,45 @@ async function renderWithOpenAi(body) {
   const prompt = String(body.prompt || "").trim();
 
   let imageBase64 = String(body.imageBase64 || "").trim();
-  if (!imageBase64 && Array.isArray(body.sourceImages) && body.sourceImages.length > 0) {
-    const src = body.sourceImages[0];
-    imageBase64 = src.includes("base64,") ? src.split("base64,")[1] : src;
+  if (imageBase64 && imageBase64.includes("base64,")) {
+    imageBase64 = imageBase64.split("base64,")[1];
   }
+
   const mimeType = String(body.mimeType || "image/png").trim();
-  const quality = "low";
-
-  if (!prompt || !imageBase64) {
-    throw httpError(400, "Missing prompt or imageBase64 for OpenAI render.");
+  
+  if (!prompt) {
+    throw httpError(400, "Missing prompt for OpenAI render.");
   }
 
-  const imageBuffer = decodeBase64Image(imageBase64);
-  const form = new FormData();
-  form.append("model", model);
-  form.append("quality", quality);
-  form.append("prompt", prompt.slice(0, 1000));
-  form.append("image", new Blob([imageBuffer], { type: mimeType }), "room_input.png");
+  let endpoint, headers, payload;
 
-  const response = await fetch("https://api.openai.com/v1/images/edits", {
+  if (imageBase64) {
+    // IMAGE-TO-IMAGE EDIT MODE
+    endpoint = "https://api.openai.com/v1/images/edits";
+    const imageBuffer = decodeBase64Image(imageBase64);
+    const form = new FormData();
+    form.append("model", model);
+    form.append("prompt", prompt.slice(0, 1000));
+    form.append("image", new Blob([imageBuffer], { type: mimeType }), "room_input.png");
+    
+    headers = { Authorization: `Bearer ${apiKey}` };
+    payload = form;
+  } else {
+    // TEXT-TO-IMAGE GENERATION MODE
+    endpoint = "https://api.openai.com/v1/images/generations";
+    headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
+    payload = JSON.stringify({
+      model: model,
+      prompt: prompt.slice(0, 1000),
+      n: 1,
+      size: "1024x1024"
+    });
+  }
+
+  const response = await fetch(endpoint, {
     method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: form
+    headers,
+    body: payload
   });
 
   const raw = await response.text();
