@@ -116,6 +116,152 @@ const MODULE_LIBRARY = [
     h: 0.48,
     type: "bed",
     priority: 7
+  },
+  {
+    id: "sofa_3",
+    label: "3-Seater Sofa",
+    keywords: ["sofa", "living", "seating", "couch"],
+    w: 2.1,
+    d: 0.85,
+    h: 0.8,
+    type: "seating",
+    priority: 8
+  },
+  {
+    id: "armchair",
+    label: "Accent Armchair",
+    keywords: ["chair", "living", "seating", "accent"],
+    w: 0.8,
+    d: 0.8,
+    h: 0.9,
+    type: "seating",
+    priority: 5
+  },
+  {
+    id: "coffee_table",
+    label: "Coffee Table",
+    keywords: ["coffee table", "living", "center table"],
+    w: 0.9,
+    d: 0.6,
+    h: 0.4,
+    type: "table",
+    priority: 6
+  },
+  {
+    id: "dining_6",
+    label: "6-Seater Dining Table",
+    keywords: ["dining", "table", "eating"],
+    w: 1.8,
+    d: 0.9,
+    h: 0.75,
+    type: "table",
+    priority: 7
+  },
+  {
+    id: "rug_large",
+    label: "Large Area Rug",
+    keywords: ["rug", "carpet", "living", "floor"],
+    w: 2.0,
+    d: 3.0,
+    h: 0.02,
+    type: "decor",
+    priority: 4
+  },
+  {
+    id: "side_table",
+    label: "Side Table",
+    keywords: ["side table", "bedside", "living", "bedroom"],
+    w: 0.45,
+    d: 0.45,
+    h: 0.5,
+    type: "table",
+    priority: 3
+  },
+  {
+    id: "floor_lamp",
+    label: "Floor Lamp",
+    keywords: ["lamp", "lighting", "living", "corner"],
+    w: 0.4,
+    d: 0.4,
+    h: 1.6,
+    type: "decor",
+    priority: 3
+  },
+  {
+    id: "potted_plant",
+    label: "Large Potted Plant",
+    keywords: ["plant", "greens", "decor", "corner"],
+    w: 0.5,
+    d: 0.5,
+    h: 1.2,
+    type: "decor",
+    priority: 3
+  },
+  {
+    id: "office_desk",
+    label: "Employee Desk",
+    keywords: ["desk", "employee", "workstation", "office"],
+    w: 1.2,
+    d: 0.6,
+    h: 0.75,
+    type: "study",
+    shelves: 1,
+    partitions: 1,
+    shutters: 1,
+    drawers: 2,
+    priority: 8
+  },
+  {
+    id: "office_workstation_4",
+    label: "4-Seater Linear Workstation",
+    keywords: ["workstation", "linear", "office", "desk", "pod", "seating row"],
+    w: 2.4,
+    d: 1.2,
+    h: 1.2,
+    type: "study",
+    shelves: 4,
+    partitions: 4,
+    shutters: 4,
+    drawers: 8,
+    priority: 9
+  },
+  {
+    id: "conference_table",
+    label: "Meeting / Conference Table",
+    keywords: ["meeting", "conference", "boardroom", "table"],
+    w: 3.0,
+    d: 1.2,
+    h: 0.75,
+    type: "table",
+    priority: 8
+  },
+  {
+    id: "office_credenza",
+    label: "Office Credenza / Storage",
+    keywords: ["credenza", "storage", "office", "filing", "cabinet"],
+    w: 1.6,
+    d: 0.45,
+    h: 0.75,
+    type: "cabinet",
+    shelves: 2,
+    partitions: 1,
+    shutters: 3,
+    drawers: 0,
+    priority: 7
+  },
+  {
+    id: "reception_desk",
+    label: "Reception Desk",
+    keywords: ["reception", "desk", "lobby", "welcome"],
+    w: 2.0,
+    d: 0.6,
+    h: 1.05,
+    type: "cabinet",
+    shelves: 2,
+    partitions: 2,
+    shutters: 2,
+    drawers: 2,
+    priority: 9
   }
 ];
 
@@ -541,9 +687,13 @@ async function doAutoplace(rooms) {
     planner.furniturePlacements = [];
     for (const p of res.placements) {
       const mod = MODULE_LIBRARY.find(m => m.id === p.moduleId) || {
-        id: p.moduleId, label: p.label || p.moduleId,
-        w: p.wM || 1.2, d: p.dM || 0.6, h: 0.9,
-        type: "cabinet", shelves: 0, partitions: 0, shutters: 0, drawers: 0
+        id: p.moduleId || `custom_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        label: p.label || p.moduleId || "Custom Item",
+        w: p.wM || 1.2, 
+        d: p.dM || 0.6, 
+        h: p.hM || 0.9,
+        type: p.type || "cabinet",
+        shelves: 0, partitions: 0, shutters: 0, drawers: 0
       };
       const room = rooms.find(r => r.label === p.roomLabel);
       // p.xM, p.yM are relative to room origin; convert to global canvas meters
@@ -557,7 +707,7 @@ async function doAutoplace(rooms) {
         yM: roomOffsetY + (p.yM || 1),
         wM: p.wM || mod.w,
         dM: p.dM || mod.d,
-        hM: mod.h,
+        hM: p.hM || mod.h,
         rotationY: p.rotationDeg || 0,
         color: FURN_COLORS[planner.furniturePlacements.length % FURN_COLORS.length],
         roomLabel: p.roomLabel || "",
@@ -1126,6 +1276,10 @@ function buildBoq(placements, laminate) {
 
   // Per-item lines for placed furniture
   for (const p of placements) {
+    const module = MODULE_LIBRARY.find(m => m.id === (p.moduleId || p.id)) || p;
+    // Skip soft seating and decor from the pricing table
+    if (module.type === "seating" || module.type === "decor") continue;
+
     lines.push({
       item: p.label,
       dims: `${(p.wM || 0).toFixed(2)}×${(p.dM || 0).toFixed(2)}×${(p.hM || 0).toFixed(2)}`,
