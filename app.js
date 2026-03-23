@@ -655,8 +655,49 @@ async function onConfirmRooms() {
     planner.setFloorPlanImage(dom.floorBgCanvas);
     planner.setDetectedRooms(rooms);
 
-    // AI auto-place
-    await doAutoplace(rooms);
+    // No AI auto-place call here anymore. We use the furniture extracted during analysis.
+    planner.furniturePlacements = [];
+    const imgW = planner.bgImage ? planner.bgImage.width : 600;
+    const imgH = planner.bgImage ? planner.bgImage.height : 600;
+
+    for (const room of rooms) {
+      if (!room.placements || !Array.isArray(room.placements)) continue;
+
+      const rwM = room.bbox.wPct * imgW / planner.scale;
+      const rhM = room.bbox.hPct * imgH / planner.scale;
+      const rxM = room.bbox.xPct * imgW / planner.scale;
+      const ryM = room.bbox.yPct * imgH / planner.scale;
+
+      for (const p of room.placements) {
+        // Map extracted types to sensible module geometry defaults if missing
+        let hwM = (p.wPct || 0.2) * rwM;
+        let hdM = (p.dPct || 0.2) * rhM;
+        let hM = 0.9;
+        let defaultModId = "custom";
+
+        if (p.type === "seating") { hM = 0.8; defaultModId = "sofa-3"; }
+        else if (p.type === "table") { hM = 0.75; defaultModId = "table-meet-s"; }
+        else if (p.type === "cabinet") { hM = 2.1; defaultModId = "storage-tall"; }
+        else if (p.type === "bed") { hM = 0.6; defaultModId = "custom"; } // add logic
+
+        planner.furniturePlacements.push({
+          id: `ext_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          moduleId: p.moduleId || defaultModId,
+          label: p.label || p.type || "Item",
+          xM: rxM + (p.xPct || 0.5) * rwM,
+          yM: ryM + (p.yPct || 0.5) * rhM,
+          wM: hwM,
+          dM: hdM,
+          hM: p.hM || hM,
+          rotationY: p.rotationDeg ?? 0,
+          color: FURN_COLORS[planner.furniturePlacements.length % FURN_COLORS.length],
+          roomLabel: room.label,
+          roomType: room.roomType || "other",
+          wall: "center"
+        });
+      }
+    }
+    planner.render();
 
     refreshPlacedList();
     advancePhase(3);
@@ -665,51 +706,11 @@ async function onConfirmRooms() {
     dom.chatPanel.hidden = false;
 
   } catch (err) {
-    alert("Auto-place failed: " + err.message);
+    alert("Canvas population failed: " + err.message);
     console.error(err);
   } finally {
     dom.confirmRoomsBtn.disabled = false;
     dom.confirmRoomsBtn.textContent = "Confirm Rooms →";
-  }
-}
-
-async function doAutoplace(rooms) {
-  const brief = dom.globalBrief?.value.trim() || "";
-  const res = await postJson("/api/furniture/autoplace", {
-    rooms,
-    brief,
-    context: appState.context,
-    moduleLibrary: MODULE_LIBRARY
-  });
-
-  if (res.placements && Array.isArray(res.placements)) {
-    // Packer returns room-relative CENTER coordinates. Convert to global canvas meters.
-    planner.furniturePlacements = [];
-    for (const p of res.placements) {
-      const room = rooms.find(r => r.label === p.roomLabel);
-      // Room top-left in canvas meters
-      const roomOffsetX = room ? (room.bbox.xPct * dom.floorBgCanvas.width  / planner.scale) : 0;
-      const roomOffsetY = room ? (room.bbox.yPct * dom.floorBgCanvas.height / planner.scale) : 0;
-      planner.furniturePlacements.push({
-        id: `ai_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-        moduleId: p.moduleId || "custom",
-        label: p.label || p.moduleId || "Item",
-        xM: roomOffsetX + (p.xM || 1),  // packer already outputs center x
-        yM: roomOffsetY + (p.yM || 1),  // packer already outputs center y
-        wM: p.wM || 1.2,
-        dM: p.dM || 0.6,
-        hM: p.hM || 0.9,
-        rotationY: p.rotationY ?? 0,
-        color: FURN_COLORS[planner.furniturePlacements.length % FURN_COLORS.length],
-        roomLabel: p.roomLabel || "",
-        roomType: room?.roomType || "other",
-        wall: p.wall || "center",
-        rationale: p.rationale || ""
-      });
-    }
-    planner.render();
-  } else {
-    planner.autoPlaceAll(MODULE_LIBRARY);
   }
 }
 
@@ -1341,71 +1342,73 @@ function pickModulesFromBrief(library, brief, widthM, lengthM) {
 }
 
 function buildBoq(placements, laminate) {
-  const totals = computeMaterialTotals(placements);
-  const laminateRate = laminate ? laminate.ratePerSqFt : 94;
-  const laminateSqFt = totals.laminateSqM * 10.764;
+  const lines = [];
+  const lamRate = laminate ? laminate.ratePerSqFt : 94; // approx interior laminate rate
+  
+  // Base rates per SqFt (Material + Labor + Basic Hardware)
+  const RATES = {
+    cabinet: 1200 + lamRate,   // Tall storage, wardrobes
+    study: 1100 + lamRate,     // Desks with storage
+    table: 900 + lamRate,      // Meeting tables, desks
+    bed: 1500 + lamRate,       // Beds (priced on WxD footprint)
+    seating: 0,                // Usually bought loose, omit from custom woodwork cost
+    decor: 0,                  // Loose items
+    custom: 1000 + lamRate     // Generic woodwork
+  };
 
-  const lines = [
-    { item: "18mm Plywood (BWR)", dims: "", qty: totals.boardSqM, unit: "sqm", rate: COST_RATES.plywood18, amount: Math.round(totals.boardSqM * COST_RATES.plywood18) },
-    { item: `Laminate — ${laminate?.name || ""}`, dims: "", qty: laminateSqFt, unit: "sqft", rate: laminateRate, amount: Math.round(laminateSqFt * laminateRate) },
-    { item: "PVC Edge Band", dims: "", qty: totals.edgeM, unit: "m", rate: COST_RATES.edgeBandPerM, amount: Math.round(totals.edgeM * COST_RATES.edgeBandPerM) },
-    { item: "Soft-close Hinges", dims: "", qty: totals.hinges, unit: "pcs", rate: COST_RATES.hinge, amount: Math.round(totals.hinges * COST_RATES.hinge) },
-    { item: "Drawer Channels", dims: "", qty: totals.channels, unit: "pairs", rate: COST_RATES.channelPair, amount: Math.round(totals.channels * COST_RATES.channelPair) },
-    { item: "Handles", dims: "", qty: totals.handles, unit: "pcs", rate: COST_RATES.handle, amount: Math.round(totals.handles * COST_RATES.handle) },
-    { item: "CNC Cutting", dims: "", qty: totals.cuts, unit: "cuts", rate: COST_RATES.cuttingPerCut, amount: Math.round(totals.cuts * COST_RATES.cuttingPerCut) },
-    { item: "Back Panel Grooves", dims: "", qty: totals.grooves, unit: "m", rate: COST_RATES.groovePerM, amount: Math.round(totals.grooves * COST_RATES.groovePerM) },
-    { item: "Transport + Installation", dims: "", qty: 1, unit: "lump sum", rate: COST_RATES.transportInstall, amount: COST_RATES.transportInstall }
-  ];
-
-  // Per-item lines for placed furniture
   for (const p of placements) {
     const module = MODULE_LIBRARY.find(m => m.id === (p.moduleId || p.id)) || p;
-    // Skip soft seating and decor from the pricing table
-    if (module.type === "seating" || module.type === "decor") continue;
+    const type = module.type || "custom";
+    
+    // Skip soft seating and decor as they are generally loose procurement, not custom woodwork
+    if (type === "seating" || type === "decor") continue;
+
+    const w = p.wM || module.w || 1;
+    const d = p.dM || module.d || 0.6;
+    const h = p.hM || module.h || 2;
+
+    let areaSqM = 0;
+    let unit = "sqft";
+    
+    // Vertical items (cabinets, study) are priced on front elevation WxH
+    if (type === "cabinet" || type === "study" || type === "custom") {
+      areaSqM = w * h;
+    } 
+    // Horizontal items (beds, tables) are priced on plan area WxD
+    else {
+      areaSqM = w * d;
+    }
+
+    const areaSqFt = areaSqM * 10.764; // 1 SqM = 10.764 SqFt
+    const rate = RATES[type] || RATES["custom"];
+    const amount = areaSqFt * rate;
 
     lines.push({
-      item: p.label,
-      dims: `${(p.wM || 0).toFixed(2)}×${(p.dM || 0).toFixed(2)}×${(p.hM || 0).toFixed(2)}`,
-      qty: 1, unit: "unit",
-      rate: 0, amount: 0
+      item: p.label || module.label || "Custom Unit",
+      dims: `${w.toFixed(2)}W × ${d.toFixed(2)}D × ${h.toFixed(2)}H m`,
+      qty: areaSqFt,
+      unit: unit,
+      rate: rate,
+      amount: Math.round(amount)
+    });
+  }
+
+  // Add a line for Transport & Installation (5% of total)
+  const subtotal = lines.reduce((s, l) => s + l.amount, 0);
+  if (subtotal > 0) {
+    const transportInstall = Math.round(subtotal * 0.05);
+    lines.push({
+      item: "Transport, Handling & Installation (5%)",
+      dims: "Overall",
+      qty: 1,
+      unit: "lump sum",
+      rate: transportInstall,
+      amount: transportInstall
     });
   }
 
   const totalINR = lines.reduce((s, l) => s + l.amount, 0);
   return { lines, totalINR };
-}
-
-function computeMaterialTotals(placements) {
-  const totals = { boardSqM: 0, laminateSqM: 0, edgeM: 0, hinges: 0, channels: 0, handles: 0, cuts: 0, grooves: 0 };
-  for (const p of placements) {
-    const module = MODULE_LIBRARY.find(m => m.id === (p.moduleId || p.id)) || p;
-    if (!module) continue;
-    const w = p.wM || module.w || 1, h = p.hM || module.h || 2, d = p.dM || module.d || 0.6;
-    const shelves = module.shelves || 0, partitions = module.partitions || 0;
-    const shutters = module.shutters || 0, drawers = module.drawers || 0;
-
-    if (module.type === "cabinet" || module.type === "study") {
-      const side = 2 * h * d;
-      const topBottom = 2 * w * d;
-      const shelf = shelves * w * d;
-      const partition = partitions * h * d;
-      const back = w * h * 0.09;
-      const shutterArea = shutters > 0 ? w * h * 0.92 : 0;
-      totals.boardSqM += side + topBottom + shelf + partition + back;
-      totals.laminateSqM += (side + topBottom + shelf + partition + shutterArea) * 1.05;
-      totals.edgeM += shutters * (2 * (w / Math.max(1, shutters)) + 2 * h) + shelves * w * 0.35;
-      totals.hinges += Math.max(2, shutters * 2);
-      totals.channels += drawers;
-      totals.handles += Math.max(shutters, drawers);
-      totals.cuts += Math.round(8 + shelves + partitions + shutters * 2);
-      totals.grooves += w * 1.8;
-    } else if (module.type === "bed") {
-      totals.boardSqM += 7.2; totals.laminateSqM += 8.4; totals.edgeM += 14;
-      totals.hinges += 4; totals.handles += 4; totals.cuts += 24; totals.grooves += 3.5;
-    }
-  }
-  totals.boardSqM *= 1.12; totals.laminateSqM *= 1.1; totals.edgeM *= 1.08;
-  return totals;
 }
 
 // ─── Floor plan rendering ───────────────────────────────────────────────────────
