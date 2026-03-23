@@ -78,6 +78,7 @@ const server = http.createServer(async (req, res) => {
   } catch (error) {
     const message = error && error.message ? error.message : "Server error";
     const status = Number(error && error.statusCode) || 500;
+    console.error("[Server error]", status, message, error?.stack || "");
     return sendJson(res, status, { error: message });
   }
 });
@@ -229,6 +230,7 @@ async function analyzeFloorPlanWithOpenAi(body) {
   const payload = {
     model,
     reasoning: { effort: "high" },
+    max_output_tokens: 8000,
     input: [
       {
         role: "user",
