@@ -675,48 +675,31 @@ async function onConfirmRooms() {
 
 async function doAutoplace(rooms) {
   const brief = dom.globalBrief?.value.trim() || "";
-  // Convert the floor plan canvas to base64 so the server can use vision model
-  const PA = window.PoligridAnalysis;
-  let floorplanBase64 = "";
-  try {
-    if (PA && dom.floorBgCanvas) floorplanBase64 = PA.canvasToPngBase64(dom.floorBgCanvas);
-  } catch (_) {}
   const res = await postJson("/api/furniture/autoplace", {
     rooms,
     brief,
     context: appState.context,
-    moduleLibrary: MODULE_LIBRARY,
-    floorplanBase64,
-    floorplanMime: "image/png"
+    moduleLibrary: MODULE_LIBRARY
   });
 
   if (res.placements && Array.isArray(res.placements)) {
-    // Convert AI placements to PlannerCanvas format
+    // Packer returns room-relative CENTER coordinates. Convert to global canvas meters.
     planner.furniturePlacements = [];
     for (const p of res.placements) {
-      const mod = MODULE_LIBRARY.find(m => m.id === p.moduleId) || {
-        id: p.moduleId || `custom_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-        label: p.label || p.moduleId || "Custom Item",
-        w: p.wM || 1.2, 
-        d: p.dM || 0.6, 
-        h: p.hM || 0.9,
-        type: p.type || "cabinet",
-        shelves: 0, partitions: 0, shutters: 0, drawers: 0
-      };
       const room = rooms.find(r => r.label === p.roomLabel);
-      // p.xM, p.yM are relative to room origin; convert to global canvas meters
-      const roomOffsetX = room ? (room.bbox.xPct * dom.floorBgCanvas.width / planner.scale) : 0;
+      // Room top-left in canvas meters
+      const roomOffsetX = room ? (room.bbox.xPct * dom.floorBgCanvas.width  / planner.scale) : 0;
       const roomOffsetY = room ? (room.bbox.yPct * dom.floorBgCanvas.height / planner.scale) : 0;
       planner.furniturePlacements.push({
         id: `ai_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-        moduleId: mod.id,
-        label: mod.label,
-        xM: roomOffsetX + (p.xM || 1),
-        yM: roomOffsetY + (p.yM || 1),
-        wM: p.wM || mod.w,
-        dM: p.dM || mod.d,
-        hM: p.hM || mod.h,
-        rotationY: p.rotationDeg || 0,
+        moduleId: p.moduleId || "custom",
+        label: p.label || p.moduleId || "Item",
+        xM: roomOffsetX + (p.xM || 1),  // packer already outputs center x
+        yM: roomOffsetY + (p.yM || 1),  // packer already outputs center y
+        wM: p.wM || 1.2,
+        dM: p.dM || 0.6,
+        hM: p.hM || 0.9,
+        rotationY: p.rotationY ?? 0,
         color: FURN_COLORS[planner.furniturePlacements.length % FURN_COLORS.length],
         roomLabel: p.roomLabel || "",
         roomType: room?.roomType || "other",
@@ -726,7 +709,6 @@ async function doAutoplace(rooms) {
     }
     planner.render();
   } else {
-    // Fallback: local placement
     planner.autoPlaceAll(MODULE_LIBRARY);
   }
 }
@@ -1099,16 +1081,24 @@ async function generateRoom(srcs, inspirationDataUrls) {
   const placements = mainSrc.placements.length > 0 ? mainSrc.placements :
     pickModulesFromBrief(MODULE_LIBRARY, mainSrc.brief, mainSrc.widthM, mainSrc.lengthM);
 
-  // 3. Render all view pins sequentially using the exact same style
+  // 3. Render all view pins sequentially — view 1 becomes the base image for view 2+
   const renders = [];
   const totalViews = srcs.length;
+  let firstRenderBase64 = null; // image-chain seed: populated after view 1
+
   for (let i = 0; i < srcs.length; i++) {
     const src = srcs[i];
     dom.generateStatus.textContent = `Generating: ${src.roomLabel} (View ${i + 1}/${srcs.length})…`;
-    const viewRenders = await generateRendersForRoom(src, placements, laminate, style, inspirationDataUrls, i + 1, totalViews);
-    viewRenders.forEach((r) => {
-      r.name = `View ${renders.length + 1}`;
-    });
+    const baseImageBase64 = i > 0 ? firstRenderBase64 : null;
+    const viewRenders = await generateRendersForRoom(src, placements, laminate, style, i + 1, totalViews, baseImageBase64);
+
+    // Capture first render's pixel data to anchor subsequent views to the same visual style
+    if (i === 0 && viewRenders[0]?.dataUrl) {
+      const du = viewRenders[0].dataUrl;
+      firstRenderBase64 = du.includes(",") ? du.split(",")[1] : du;
+    }
+
+    viewRenders.forEach(r => { r.name = `View ${renders.length + 1}`; });
     renders.push(...viewRenders);
   }
 
@@ -1118,24 +1108,22 @@ async function generateRoom(srcs, inspirationDataUrls) {
   };
 }
 
-async function generateRendersForRoom(src, placements, laminate, style, inspirationDataUrls, viewIndex, totalViews) {
+async function generateRendersForRoom(src, placements, laminate, style, viewIndex, totalViews, baseImageBase64) {
   const renders = [];
   const prompt = buildRenderPrompt(src, placements, laminate, style, viewIndex || 1, totalViews || 1);
 
-  // Only use pin photo as the base image (edit mode). Never use inspiration images as base.
-  const pinPhotoBase64 = src.photoDataUrl
+  // Image source priority:
+  // - View 2+ with a previous render available → use as edit base (image chain for consistency)
+  // - View 1 with a pin photo → use pin photo as edit base
+  // - Otherwise → text-to-image generation
+  const editBase64 = baseImageBase64 || (src.photoDataUrl
     ? (src.photoDataUrl.includes(",") ? src.photoDataUrl.split(",")[1] : src.photoDataUrl)
-    : null;
+    : null);
 
   const res = await postJson("/api/render/openai", {
-    roomLabel: src.roomLabel,
-    roomType: src.roomType,
-    widthM: src.widthM,
-    lengthM: src.lengthM,
-    brief: src.brief,
     prompt,
-    imageBase64: pinPhotoBase64,
-    mimeType: src.photoDataUrl ? "image/jpeg" : undefined,
+    imageBase64: editBase64,
+    mimeType: "image/png",
     laminate: { name: laminate.name, color: laminate.color },
     model: DEFAULT_OPENAI_IMAGE_MODEL
   });
@@ -1191,9 +1179,16 @@ function buildRenderPrompt(src, placements, laminate, style, viewIndex, totalVie
   }
   visibleItems.sort((a, b) => a.dist - b.dist);
 
-  const itemLines = visibleItems.map(p =>
-    `- ${p.label} (${(p.wM||0).toFixed(1)}m wide × ${(p.dM||0).toFixed(1)}m deep × ${(p.hM||0).toFixed(1)}m tall): ${p.dist.toFixed(1)}m away, front facing ${p.facing}.`
-  ).join("\n");
+  const itemLines = visibleItems.map(p => {
+    // Look up furniture-type visual descriptor from style extraction
+    const visualDescs = style.furniture_visual_descriptions || {};
+    // Try exact label match, then type match, then generic
+    const visualDesc = visualDescs[p.label] || visualDescs[p.type] ||
+      Object.entries(visualDescs).find(([k]) => p.label?.toLowerCase().includes(k.toLowerCase()))?.[1] || null;
+    const dimStr = `${(p.wM||0).toFixed(1)}m wide \u00d7 ${(p.dM||0).toFixed(1)}m deep \u00d7 ${(p.hM||0).toFixed(1)}m tall`;
+    const descStr = visualDesc ? ` [${visualDesc}]` : "";
+    return `- ${p.label}${descStr}: ${dimStr}, ${p.dist.toFixed(1)}m away, front facing ${p.facing}.`;
+  }).join("\n");
 
   const cameraDir = getFacing(orient);
   const isMultiView = totalViews > 1;

@@ -97,7 +97,7 @@ async function renderWithOpenAi(body) {
   }
 
   const mimeType = String(body.mimeType || "image/png").trim();
-  
+
   if (!prompt) {
     throw httpError(400, "Missing prompt for OpenAI render.");
   }
@@ -111,8 +111,9 @@ async function renderWithOpenAi(body) {
     const form = new FormData();
     form.append("model", model);
     form.append("prompt", prompt.slice(0, 4000));
+    form.append("quality", "low");
     form.append("image", new Blob([imageBuffer], { type: mimeType }), "room_input.png");
-    
+
     headers = { Authorization: `Bearer ${apiKey}` };
     payload = form;
   } else {
@@ -122,6 +123,7 @@ async function renderWithOpenAi(body) {
     payload = JSON.stringify({
       model: model,
       prompt: prompt.slice(0, 4000),
+      quality: "low",
       n: 1,
       size: "1024x1024"
     });
@@ -305,7 +307,7 @@ async function matchRoomImageWithOpenAi(body) {
     model,
     reasoning: { effort: "low" },
     input: [{ role: "user", content: contentItems }],
-    max_output_tokens: 4000
+    max_output_tokens: 2000
   };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -389,15 +391,10 @@ async function suggestFurnitureWithOpenAi(body) {
 
 async function autoPlaceFurnitureWithOpenAi(body) {
   const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
+  const model = String(body.model || DEFAULT_OPENAI_TEXT_MODEL).trim();
   const rooms = body.rooms || [];
   const brief = String(body.brief || "").trim();
   const context = body.context || {};
-  const floorplanBase64 = String(body.floorplanBase64 || "").trim();
-  const floorplanMime = String(body.floorplanMime || "image/png").trim();
-
-  // Use vision model when a floor plan image is provided for spatial reasoning
-  const hasFloorplan = !!floorplanBase64;
-  const model = String(body.model || (hasFloorplan ? DEFAULT_OPENAI_VISION_MODEL : DEFAULT_OPENAI_TEXT_MODEL)).trim();
 
   if (!rooms.length) throw httpError(400, "Missing rooms for autoplace.");
 
@@ -410,89 +407,72 @@ async function autoPlaceFurnitureWithOpenAi(body) {
     // Format structured wall data so the model knows exactly where doors/windows are
     const wallLines = Array.isArray(r.walls) && r.walls.length
       ? "\n  Walls:\n" + r.walls.map(w => {
-          const tag = w.isExterior ? "exterior" : (w.adjacentRoomLabel ? `shared with ${w.adjacentRoomLabel}` : "internal");
-          const openings = (w.openings || []).map(o =>
-            `${o.type} (${(o.widthM || 0).toFixed(1)}m wide, ${(o.offsetFromWestOrNorthM || 0).toFixed(1)}m from ${w.side === "north" || w.side === "south" ? "west" : "north"} end)`
-          ).join(", ");
-          return `    ${w.side}: ${tag}${openings ? " — " + openings : " — no openings"}`;
-        }).join("\n")
+        const tag = w.isExterior ? "exterior" : (w.adjacentRoomLabel ? `shared with ${w.adjacentRoomLabel}` : "internal");
+        const openings = (w.openings || []).map(o =>
+          `${o.type} (${(o.widthM || 0).toFixed(1)}m wide, ${(o.offsetFromWestOrNorthM || 0).toFixed(1)}m from ${w.side === "north" || w.side === "south" ? "west" : "north"} end)`
+        ).join(", ");
+        return `    ${w.side}: ${tag}${openings ? " — " + openings : " — no openings"}`;
+      }).join("\n")
       : "";
 
     return `- ${r.label} (${r.name || r.roomType}): ${r.widthM || "?"}m × ${r.lengthM || "?"}m${bboxStr}${notesStr}${wallLines}`;
   }).join("\n");
 
   const moduleList = (body.moduleLibrary || []).map(m =>
-    `${m.id}: "${m.label}" w=${m.w}m d=${m.d}m h=${m.h}m [${(m.keywords||[]).join(", ")}]`
+    `${m.id}: "${m.label}" w=${m.w}m d=${m.d}m h=${m.h}m [${(m.keywords || []).join(", ")}]`
   ).join("\n");
 
   const prompt = [
-    "You are a professional interior designer creating a furniture layout plan.",
-    hasFloorplan ? "A floor plan image is attached. Use it to understand exact room shapes, wall positions, door/window locations, and spatial relationships between rooms before placing furniture." : "",
-    "Strictly follow interior design rules: maintain clearance paths, don't block doors/windows, respect room function.",
+    "You are a professional interior designer. Your job: decide WHAT furniture each room needs and WHICH WALL it should sit against.",
+    "All spatial context (room sizes, wall types, door/window positions) is provided as structured text below.",
+    "A layout engine will compute exact coordinates — you do NOT output x/y numbers.",
     "",
-    "CRITICAL SPATIAL RULES:",
-    "1. NO COLLISION OR OVERLAPPED ITEMS! Every piece of furniture MUST have its own dedicated floor space. Verify bounding boxes (x to x+wM, y to y+dM) never intersect.",
-    "2. SPATIAL CLEARANCE: Leave at least 0.8m walkway between objects. Do not overstuff the room.",
-    "3. RESPECT THE WALLS: Align large pieces (beds, wardrobes, TV units) flush against walls.",
-    "4. LOGICAL ORIENTATION: Use `rotationDeg` to orient furniture correctly (0=South-facing, 90=West-facing, 180=North-facing, 270=East-facing).",
-    "5. MODULAR WOODWORK PRIORITY: Maximise 'cabinet' and 'study' type furniture (wardrobes, cabinets, TV units, credenzas, desks).",
-    "6. OPEN-ENDED PLACEMENT: If a room needs furniture not in the list, invent a new moduleId/label with custom dimensions.",
-    "7. COORDINATE MATH — coordinates (xM, yM) are TOP-LEFT corner of the furniture, room origin (0,0) is North-West corner:",
-    "   - North wall: yM = 0",
-    "   - West wall: xM = 0",
-    "   - South wall: yM = (roomLengthM - furnituredM)",
-    "   - East wall: xM = (roomWidthM - furniturewM)",
-    "8. If the floor plan shows doors or windows, do NOT place furniture blocking them.",
-    "9. Make intelligent choices based on the user's notes and property context.",
+    "YOUR TASK: For each room, choose the right furniture pieces from the list (or invent custom ones) and assign each to a wall.",
+    "Rules:",
+    "1. WALL ASSIGNMENT: Assign each item to: north | south | east | west | center",
+    "2. DO NOT BLOCK DOORS: If a wall has a door, mark it 'hasDoor:true' in your reasoning and prefer lighter items or skip that wall.",
+    "3. WINDOWS: Avoid placing tall storage units in front of windows (they block light). Prefer low items (coffee tables, sofas) in front of windows.",
+    "4. PRIORITIES: Large cabinets first, then beds, then seating, then tables. Do not overcrowd.",
+    "5. CUSTOM ITEMS: If a room needs an item not in the module list, add it with custom wM/dM/hM dimensions.",
+    "6. MAX ITEMS: Do not assign more items than can realistically fit. For a 5×4m room, 4-6 items max.",
     "",
     "Property context:",
     context.bhk ? `- Space type: ${context.bhk}` : "",
     context.propertyType ? `- Property type: ${context.propertyType}` : "",
-    context.totalAreaM2 ? `- Total area: ${context.totalAreaM2} m²` : "",
+    context.totalAreaM2 ? `- Total area: ${context.totalAreaM2} m\u00b2` : "",
     context.notes ? `- Notes: ${context.notes}` : "",
     "",
     `Design brief: ${brief || "Modern, minimal, functional"}`,
     "",
-    "Rooms (coordinates relative to each room's own top-left origin):",
+    "Rooms:",
     roomSummary,
     "",
-    "Available furniture modules:",
+    "Available furniture modules (you can also invent custom items):",
     moduleList,
-    "",
-    "For each room, pick furniture and return placement coordinates relative to that room's own top-left corner.",
-    "Respect clearances: min 0.9m walkway, at least 0.3m from walls unless flush.",
     "",
     "Return STRICT JSON only:",
     `{`,
-    `  "placements": [`,
+    `  "assignments": [`,
     `    {`,
     `      "moduleId": string,`,
     `      "label": string,`,
     `      "roomLabel": string,`,
-    `      "xM": number,`,
-    `      "yM": number,`,
-    `      "wM": number,`,
-    `      "dM": number,`,
-    `      "hM": number,`,
-    `      "rotationDeg": number,`,
     `      "wall": "north"|"south"|"east"|"west"|"center",`,
     `      "type": "cabinet"|"study"|"bed"|"table"|"seating"|"decor",`,
+    `      "wM": number|null,`,
+    `      "dM": number|null,`,
+    `      "hM": number|null,`,
     `      "rationale": string`,
     `    }`,
     `  ]`,
     `}`
   ].filter(Boolean).join("\n");
 
-  const contentItems = [{ type: "input_text", text: prompt }];
-  if (hasFloorplan) {
-    contentItems.push({ type: "input_image", image_url: `data:${floorplanMime};base64,${floorplanBase64}` });
-  }
-
   const payload = {
     model,
-    reasoning: { effort: hasFloorplan ? "medium" : "low" },
-    input: [{ role: "user", content: contentItems }],
-    max_output_tokens: 8192
+    reasoning: { effort: "low" },
+    input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
+    max_output_tokens: 3000
   };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -502,17 +482,185 @@ async function autoPlaceFurnitureWithOpenAi(body) {
   });
 
   const raw = await response.text();
-  console.error("RAW UPSTREAM:", raw.slice(0, 500));
   if (!response.ok) throw httpError(response.status, extractApiError(raw));
 
   const parsed = safeJson(raw);
   const text = extractResponsesText(parsed);
   const json = extractJsonFromText(text);
-  if (!json || !Array.isArray(json.placements)) {
-    console.error("Autoplace failed to parse. Raw text:", text.slice(0, 500));
-    throw httpError(502, "Autoplace returned unexpected output. RAW START: " + text.slice(0, 500) + " ... RAW END: " + text.slice(-500));
+  if (!json || !Array.isArray(json.assignments)) {
+    console.error("Autoplace assignment failed to parse. Raw text:", text.slice(0, 500));
+    throw httpError(502, "Autoplace returned unexpected output.");
   }
-  return { model, placements: json.placements };
+
+  // Hand assignments to the deterministic packer — it computes exact center coordinates
+  const placements = deterministicPack(json.assignments, rooms, body.moduleLibrary || []);
+  return { model, placements };
+}
+
+/**
+ * Deterministic furniture packer.
+ * Converts LLM wall assignments into precise (xM, yM) center coordinates.
+ * Arranges items sequentially along each wall, skipping door/archway exclusion zones.
+ * Outputs placement objects in the same shape as PlannerCanvas.furniturePlacements.
+ */
+function deterministicPack(assignments, rooms, moduleLibrary) {
+  // Priority order for packing (cabinets before seating before decor)
+  const TYPE_PRIORITY = { cabinet: 0, study: 0, bed: 1, table: 2, seating: 3, decor: 4 };
+
+  // Group assignments by room then by wall
+  const byRoom = {};
+  for (const a of assignments) {
+    const rl = a.roomLabel || "";
+    if (!byRoom[rl]) byRoom[rl] = { north: [], south: [], east: [], west: [], center: [] };
+    const wall = (a.wall && byRoom[rl][a.wall]) ? a.wall : "center";
+    byRoom[rl][wall].push(a);
+  }
+
+  const allPlacements = [];
+
+  for (const [roomLabel, walls] of Object.entries(byRoom)) {
+    const room = rooms.find(r => r.label === roomLabel);
+    const W = parseFloat(room?.widthM) || 4;
+    const L = parseFloat(room?.lengthM) || 4;
+    const roomWalls = Array.isArray(room?.walls) ? room.walls : [];
+
+    // Build door exclusion zones for a given wall side (local axis: x for NS, y for EW)
+    function getExclusions(side) {
+      const wd = roomWalls.find(w => w.side === side);
+      if (!wd) return [];
+      return (wd.openings || [])
+        .filter(o => o.type === "door" || o.type === "archway")
+        .map(o => ({
+          start: Math.max(0, (o.offsetFromWestOrNorthM || 0) - 0.35),
+          end: Math.min(
+            side === "north" || side === "south" ? W : L,
+            (o.offsetFromWestOrNorthM || 0) + (o.widthM || 0.9) + 0.35
+          )
+        }));
+    }
+
+    // Sort each wall group by type priority
+    for (const wallItems of Object.values(walls)) {
+      wallItems.sort((a, b) => {
+        const pa = TYPE_PRIORITY[a.type] ?? 5;
+        const pb = TYPE_PRIORITY[b.type] ?? 5;
+        return pa - pb;
+      });
+    }
+
+    // Pack items along north or south wall (arranged left-to-right, i.e. along x)
+    function packNS(wallItems, isNorth) {
+      const exclusions = getExclusions(isNorth ? "north" : "south");
+      let cursor = 0.3; // start 0.3m from west corner
+      const GAP = 0.1;
+      const result = [];
+
+      for (const a of wallItems) {
+        const mod = moduleLibrary.find(m => m.id === a.moduleId) || {};
+        const itemW = a.wM || mod.w || 1.2; // extent along the wall (x axis)
+        const itemD = a.dM || mod.d || 0.6; // depth into room (y axis)
+        const itemH = a.hM || mod.h || 0.9;
+
+        // Advance cursor past any door that overlaps this item
+        let tries = 0;
+        while (tries++ < 30) {
+          const overlap = exclusions.find(ex => cursor < ex.end && cursor + itemW > ex.start);
+          if (!overlap) break;
+          cursor = overlap.end + GAP;
+        }
+        if (cursor + itemW > W - 0.3) continue; // doesn't fit
+
+        const xM = cursor + itemW / 2; // center x
+        const yM = isNorth ? itemD / 2 : L - itemD / 2; // center y
+        result.push({
+          moduleId: a.moduleId, label: a.label || mod.label || a.moduleId,
+          roomLabel, xM, yM,
+          wM: itemW, dM: itemD, hM: itemH,
+          rotationY: isNorth ? 0 : 180,
+          wall: isNorth ? "north" : "south",
+          type: a.type || mod.type || "cabinet",
+          rationale: a.rationale || ""
+        });
+        cursor += itemW + GAP;
+      }
+      return result;
+    }
+
+    // Pack items along east or west wall (arranged top-to-bottom, i.e. along y)
+    // For EW walls: the module's w runs along y, d runs along x (into room)
+    function packEW(wallItems, isWest) {
+      const exclusions = getExclusions(isWest ? "west" : "east");
+      let cursor = 0.3;
+      const GAP = 0.1;
+      const result = [];
+
+      for (const a of wallItems) {
+        const mod = moduleLibrary.find(m => m.id === a.moduleId) || {};
+        // When placed on EW wall, the module rotates 90°:
+        // module.w now runs along y (wall axis), module.d runs along x (into room)
+        const itemW = a.wM || mod.w || 1.2; // now along y
+        const itemD = a.dM || mod.d || 0.6; // now along x (depth into room)
+        const itemH = a.hM || mod.h || 0.9;
+
+        let tries = 0;
+        while (tries++ < 30) {
+          const overlap = exclusions.find(ex => cursor < ex.end && cursor + itemW > ex.start);
+          if (!overlap) break;
+          cursor = overlap.end + GAP;
+        }
+        if (cursor + itemW > L - 0.3) continue;
+
+        const xM = isWest ? itemD / 2 : W - itemD / 2;
+        const yM = cursor + itemW / 2;
+        // wM/dM in canvas coords: wM = x-extent, dM = y-extent
+        result.push({
+          moduleId: a.moduleId, label: a.label || mod.label || a.moduleId,
+          roomLabel, xM, yM,
+          wM: itemD, dM: itemW, hM: itemH, // swapped: depth becomes canvas wM
+          rotationY: isWest ? 270 : 90,
+          wall: isWest ? "west" : "east",
+          type: a.type || mod.type || "cabinet",
+          rationale: a.rationale || ""
+        });
+        cursor += itemW + GAP;
+      }
+      return result;
+    }
+
+    // Center items: arrange in a simple row
+    function packCenter(centerItems) {
+      const result = [];
+      let row = 0;
+      for (const a of centerItems) {
+        const mod = moduleLibrary.find(m => m.id === a.moduleId) || {};
+        const itemW = a.wM || mod.w || 1.2;
+        const itemD = a.dM || mod.d || 0.6;
+        const itemH = a.hM || mod.h || 0.9;
+        result.push({
+          moduleId: a.moduleId, label: a.label || mod.label || a.moduleId,
+          roomLabel,
+          xM: W / 2,
+          yM: L / 2 + row * (itemD + 0.9),
+          wM: itemW, dM: itemD, hM: itemH,
+          rotationY: 0, wall: "center",
+          type: a.type || mod.type || "table",
+          rationale: a.rationale || ""
+        });
+        row++;
+      }
+      return result;
+    }
+
+    allPlacements.push(
+      ...packNS(walls.north, true),
+      ...packNS(walls.south, false),
+      ...packEW(walls.west, true),
+      ...packEW(walls.east, false),
+      ...packCenter(walls.center)
+    );
+  }
+
+  return allPlacements;
 }
 
 async function chatPlacementWithOpenAi(body) {
@@ -526,7 +674,7 @@ async function chatPlacementWithOpenAi(body) {
   if (!message) throw httpError(400, "Missing message.");
 
   const currentLayout = currentPlacements.map(p =>
-    `[id:${p.id}] ${p.label} in ${p.roomLabel} at (${(p.xM||0).toFixed(1)}, ${(p.yM||0).toFixed(1)}), ${(p.wM||0).toFixed(1)}×${(p.dM||0).toFixed(1)}m`
+    `[id:${p.id}] ${p.label} in ${p.roomLabel} at (${(p.xM || 0).toFixed(1)}, ${(p.yM || 0).toFixed(1)}), ${(p.wM || 0).toFixed(1)}×${(p.dM || 0).toFixed(1)}m`
   ).join("\n") || "(empty)";
 
   const moduleList = moduleLibrary.map(m =>
@@ -551,7 +699,7 @@ async function chatPlacementWithOpenAi(body) {
     `User request: "${message}"`,
     "",
     "Understand the user's intent and return an ARRAY of structured actions. You can return multiple actions if the user requests moving/removing/adding several items. Actions:",
-    "- add: add a new piece  { action:'add', moduleId, label, roomLabel, xM, yM, wM, dM, rotationDeg, rationale }" ,
+    "- add: add a new piece  { action:'add', moduleId, label, roomLabel, xM, yM, wM, dM, rotationDeg, rationale }",
     "- move: move existing  { action:'move', id, xM, yM, rationale }",
     "- remove: delete        { action:'remove', id, rationale }",
     "- resize: change dims   { action:'resize', id, wM, dM, rationale }",
@@ -604,8 +752,8 @@ async function extractStyleWithOpenAi(body) {
   content.push({
     type: "input_text",
     text: [
-      "You are an interior designer + production estimator for Indian modular / plywood + laminate interiors.",
-      "Goal: extract a standardized style direction and propose a laminate finish selection + furniture requirements for THIS room.",
+      "You are an interior designer + production estimator for modular / plywood + laminate interiors.",
+      "Goal: extract a standardized style direction, laminate finish, furniture requirements, and precise visual style descriptions for each furniture type.",
       "Return STRICT JSON only (no markdown).",
       "",
       `Room: ${roomLabel || "Unknown room"}`,
@@ -617,11 +765,14 @@ async function extractStyleWithOpenAi(body) {
       '  "finish_palette": { "primary": string, "secondary": string, "accent": string },',
       '  "laminate_recommendation": { "name": string, "tone": string, "finish": "matte"|"gloss"|"textured", "notes": string },',
       '  "furniture_requirements": [ { "module": string, "notes": string } ],',
+      '  "furniture_visual_descriptions": {',
+      '    "<furniture_type_or_label>": "<precise visual description — colour, material, legs, silhouette, e.g. dark charcoal low-profile 3-seater sofa with tapered light-oak legs and tight-back cushions>"',
+      '  },',
       '  "do_not_do": [ string ]',
       "}",
       "",
+      "furniture_visual_descriptions: provide one entry per distinct furniture type likely to appear in this room (sofa, desk, bed, wardrobe, dining table, etc.). Be specific — this text will be injected verbatim into photorealistic render prompts.",
       "Keep laminate recommendation generic (do NOT reference catalog codes).",
-      "Furniture requirements should be concise and feasible for a typical apartment.",
       "If inspiration images conflict with brief, prioritize brief but mention the conflict in do_not_do."
     ].join("\n")
   });
@@ -788,29 +939,29 @@ function safeJson(raw) {
 function extractJsonFromText(text) {
   let parsed = safeJson(text);
   if (parsed) return parsed;
-  
+
   const match = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   let content = match ? match[1].trim() : text;
-  
+
   const start = content.indexOf('{');
   let end = content.lastIndexOf('}');
   if (start >= 0) {
     if (end < start) end = content.length; // if '}' is missing entirely
-    
+
     let slice = content.slice(start, end + 1);
     parsed = safeJson(slice);
     if (parsed) return parsed;
-    
+
     // Auto-repair truncated JSON arrays
     parsed = safeJson(slice + "]}");
     if (parsed) return parsed;
     parsed = safeJson(slice + "]}]}");
     if (parsed) return parsed;
-    
+
     // Try stripping the last hanging item entirely and closing
     parsed = safeJson(slice.replace(/,[^,]*$/, '') + "]}");
     if (parsed) return parsed;
-    
+
     // One more extreme fallback: just strip anything after the last complete object in the placements array
     const lastObjectClose = slice.lastIndexOf('}');
     if (lastObjectClose > 0) {
