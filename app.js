@@ -986,7 +986,12 @@ async function onGenerate() {
         roomType: detectedRoom?.roomType || "other",
         placements: planner.getPlacementsForRoom(roomLabel),
         brief: [pin.brief, globalBrief].filter(Boolean).join(". "),
-        photoFile: pin.photoFile, photoDataUrl: pin.photoDataUrl
+        photoFile: pin.photoFile, photoDataUrl: pin.photoDataUrl,
+        // Camera pin spatial data — MUST flow through for correct FOV/furniture visibility
+        xM: pin.xM || 0,
+        yM: pin.yM || 0,
+        angleDeg: pin.angleDeg || 0,
+        fovDeg: pin.fovDeg || 60
       });
     }
   } else {
@@ -1081,23 +1086,16 @@ async function generateRoom(srcs, inspirationDataUrls) {
   const placements = mainSrc.placements.length > 0 ? mainSrc.placements :
     pickModulesFromBrief(MODULE_LIBRARY, mainSrc.brief, mainSrc.widthM, mainSrc.lengthM);
 
-  // 3. Render all view pins sequentially — view 1 becomes the base image for view 2+
+  // 3. Render all views independently — style fingerprint + VIEW CONTINUITY text ensures consistency
+  //    (image-chain edit mode is NOT used because it locks both views to the same pixels
+  //     regardless of camera angle change, resulting in identical output)
   const renders = [];
   const totalViews = srcs.length;
-  let firstRenderBase64 = null; // image-chain seed: populated after view 1
 
   for (let i = 0; i < srcs.length; i++) {
     const src = srcs[i];
     dom.generateStatus.textContent = `Generating: ${src.roomLabel} (View ${i + 1}/${srcs.length})…`;
-    const baseImageBase64 = i > 0 ? firstRenderBase64 : null;
-    const viewRenders = await generateRendersForRoom(src, placements, laminate, style, i + 1, totalViews, baseImageBase64);
-
-    // Capture first render's pixel data to anchor subsequent views to the same visual style
-    if (i === 0 && viewRenders[0]?.dataUrl) {
-      const du = viewRenders[0].dataUrl;
-      firstRenderBase64 = du.includes(",") ? du.split(",")[1] : du;
-    }
-
+    const viewRenders = await generateRendersForRoom(src, placements, laminate, style, i + 1, totalViews, null);
     viewRenders.forEach(r => { r.name = `View ${renders.length + 1}`; });
     renders.push(...viewRenders);
   }
@@ -1190,7 +1188,7 @@ function buildRenderPrompt(src, placements, laminate, style, viewIndex, totalVie
     return `- ${p.label}${descStr}: ${dimStr}, ${p.dist.toFixed(1)}m away, front facing ${p.facing}.`;
   }).join("\n");
 
-  const cameraDir = getFacing(orient);
+  const cameraDir = getFacing((orient + 180) % 360);
   const isMultiView = totalViews > 1;
 
   // Format wall geometry for the render model
