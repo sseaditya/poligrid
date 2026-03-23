@@ -1215,7 +1215,9 @@ function buildRenderPrompt(src, placements, laminate, style, viewIndex, totalVie
     itemLines
       ? `Furniture visible from this camera angle (render ONLY these, nothing behind the camera):\n${itemLines}`
       : `No furniture visible from this angle — render empty room walls/floor with the specified finishes.`,
-    src.photoDataUrl ? `Reference photo provided for this exact camera angle — preserve the room geometry and augment with the furniture listed above.` : "",
+    src.photoDataUrl 
+      ? `Reference photo provided for this exact camera angle — preserve the room geometry and augment with the furniture listed above.` 
+      : `NO reference photo provided — generate the room interior entirely from scratch using ONLY the provided room dimensions, wall geometry, and furniture placements. DO NOT invent extra architectural features not listed.`,
     `Render rules: correct scale and proportions, warm natural lighting, no text or watermarks, photorealistic quality.`
   ].filter(Boolean).join("\n");
 }

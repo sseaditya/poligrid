@@ -21,7 +21,7 @@
   --radius:      10px;
   --sidebar-w:   290px;
   --topbar-h:    52px;
-  --output-w:    400px;
+  --output-w:    440px;
   --font:        'Space Grotesk', system-ui, sans-serif;
   --font-serif:  'DM Serif Display', serif;
   --shadow:      0 4px 24px rgba(0,0,0,0.5);
@@ -352,7 +352,13 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .output-panel h2 { font-size: 16px; font-family: var(--font-serif); letter-spacing: -0.3px; }
 .boq-heading { margin-top: 8px; }
 .status-box { background: var(--bg3); border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--text-dim); }
-.room-results { display: flex; flex-direction: column; gap: 20px; }
+.room-results { 
+  display: flex; gap: 16px; 
+  overflow-x: auto; padding-bottom: 8px;
+  flex-shrink: 0; min-height: fit-content;
+}
+.room-results::-webkit-scrollbar { height: 4px; }
+.room-results::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
 
 /* BOQ */
 .boq-rooms { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
@@ -370,7 +376,11 @@ table#boqTable tfoot td { font-weight: 700; color: var(--accent); border-top: 2p
 #placementSummary { font-size: 11px; color: var(--text-dim); white-space: pre-wrap; background: var(--bg3); border-radius: 6px; padding: 10px; }
 
 /* ── Room result card ───────────────────────────────────────────────────────── */
-.room-result-card { background: var(--bg3); border-radius: var(--radius); overflow: hidden; }
+.room-result-card { 
+  background: var(--bg3); border-radius: var(--radius); flex-shrink: 0;
+  width: 320px; display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--border);
+}
 .room-result-head { display: flex; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); gap: 8px; }
 .room-result-label { font-size: 14px; font-weight: 600; flex: 1; }
 .room-result-dims  { font-size: 11px; color: var(--text-dim); }
