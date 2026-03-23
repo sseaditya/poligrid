@@ -675,11 +675,19 @@ async function onConfirmRooms() {
 
 async function doAutoplace(rooms) {
   const brief = dom.globalBrief?.value.trim() || "";
+  // Convert the floor plan canvas to base64 so the server can use vision model
+  const PA = window.PoligridAnalysis;
+  let floorplanBase64 = "";
+  try {
+    if (PA && dom.floorBgCanvas) floorplanBase64 = PA.canvasToPngBase64(dom.floorBgCanvas);
+  } catch (_) {}
   const res = await postJson("/api/furniture/autoplace", {
     rooms,
     brief,
     context: appState.context,
-    moduleLibrary: MODULE_LIBRARY
+    moduleLibrary: MODULE_LIBRARY,
+    floorplanBase64,
+    floorplanMime: "image/png"
   });
 
   if (res.placements && Array.isArray(res.placements)) {
@@ -992,6 +1000,7 @@ async function onGenerate() {
       renderSources.push({
         pinId: pin.id, roomLabel, widthM, lengthM,
         archNotes: detectedRoom?.notes || "",
+        walls: detectedRoom?.walls || [],
         roomType: detectedRoom?.roomType || "other",
         placements: planner.getPlacementsForRoom(roomLabel),
         brief: [pin.brief, globalBrief].filter(Boolean).join(". "),
@@ -1012,6 +1021,7 @@ async function onGenerate() {
       renderSources.push({
         pinId: null, roomLabel: room.label, widthM, lengthM,
         archNotes: room.notes || "", roomType: room.roomType,
+        walls: room.walls || [],
         placements: planner.getPlacementsForRoom(room.label),
         brief: globalBrief || room.name,
         photoFile: null, photoDataUrl: null
@@ -1091,13 +1101,12 @@ async function generateRoom(srcs, inspirationDataUrls) {
 
   // 3. Render all view pins sequentially using the exact same style
   const renders = [];
+  const totalViews = srcs.length;
   for (let i = 0; i < srcs.length; i++) {
     const src = srcs[i];
     dom.generateStatus.textContent = `Generating: ${src.roomLabel} (View ${i + 1}/${srcs.length})…`;
-    const viewRenders = await generateRendersForRoom(src, placements, laminate, style, inspirationDataUrls);
-    
-    // rename views sequentially
-    viewRenders.forEach((r, idx) => {
+    const viewRenders = await generateRendersForRoom(src, placements, laminate, style, inspirationDataUrls, i + 1, totalViews);
+    viewRenders.forEach((r) => {
       r.name = `View ${renders.length + 1}`;
     });
     renders.push(...viewRenders);
@@ -1109,13 +1118,14 @@ async function generateRoom(srcs, inspirationDataUrls) {
   };
 }
 
-async function generateRendersForRoom(src, placements, laminate, style, inspirationDataUrls) {
+async function generateRendersForRoom(src, placements, laminate, style, inspirationDataUrls, viewIndex, totalViews) {
   const renders = [];
-  const prompt = buildRenderPrompt(src, placements, laminate, style);
+  const prompt = buildRenderPrompt(src, placements, laminate, style, viewIndex || 1, totalViews || 1);
 
-  const sources = [];
-  if (src.photoDataUrl) sources.push(src.photoDataUrl);
-  sources.push(...inspirationDataUrls.slice(0, 2));
+  // Only use pin photo as the base image (edit mode). Never use inspiration images as base.
+  const pinPhotoBase64 = src.photoDataUrl
+    ? (src.photoDataUrl.includes(",") ? src.photoDataUrl.split(",")[1] : src.photoDataUrl)
+    : null;
 
   const res = await postJson("/api/render/openai", {
     roomLabel: src.roomLabel,
@@ -1124,8 +1134,8 @@ async function generateRendersForRoom(src, placements, laminate, style, inspirat
     lengthM: src.lengthM,
     brief: src.brief,
     prompt,
-    imageBase64: src.photoDataUrl || null,
-    inspirationImages: inspirationDataUrls.slice(0, 2),
+    imageBase64: pinPhotoBase64,
+    mimeType: src.photoDataUrl ? "image/jpeg" : undefined,
     laminate: { name: laminate.name, color: laminate.color },
     model: DEFAULT_OPENAI_IMAGE_MODEL
   });
@@ -1139,7 +1149,7 @@ async function generateRendersForRoom(src, placements, laminate, style, inspirat
   return renders;
 }
 
-function buildRenderPrompt(src, placements, laminate, style) {
+function buildRenderPrompt(src, placements, laminate, style, viewIndex, totalViews) {
   const camX = (src.xM || 0);
   const camY = (src.yM || 0);
   const orient = (src.angleDeg !== undefined) ? ((src.angleDeg % 360) + 360) % 360 : 0;
@@ -1153,56 +1163,67 @@ function buildRenderPrompt(src, placements, laminate, style) {
     return "East";
   };
 
-  const getRelativePosition = (dx, dy, dir) => {
-    if (dir === "North") return dy > 0 ? "behind you" : "in front of you";
-    if (dir === "South") return dy < 0 ? "behind you" : "in front of you";
-    if (dir === "East")  return dx < 0 ? "behind you" : "in front of you";
-    if (dir === "West")  return dx > 0 ? "behind you" : "in front of you";
-    return "nearby";
-  };
+  // Build style fingerprint for cross-view cohesion
+  const palette = style.finish_palette || {};
+  const styleFingerprint = [
+    laminate.name,
+    palette.primary,
+    palette.secondary,
+    palette.accent
+  ].filter(Boolean).join(" | ");
 
-  // 1. Calculate relative visibility based on Azimuth (0=North, 90=East, 180=South, 270=West)
+  // Visible furniture from this camera angle
   const visibleItems = [];
   for (const p of placements) {
     const dx = (p.xM || 0) - camX;
     const dy = (p.yM || 0) - camY;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if (dist < 0.2) continue; // skip items we are standing directly inside of
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 0.2) continue;
 
-    let bearingRad = Math.atan2(dx, -dy); // -dy because y=0 is North in canvas
-    let bearingDeg = (bearingRad * 180 / Math.PI + 360) % 360;
-
+    const bearingRad = Math.atan2(dx, -dy);
+    const bearingDeg = (bearingRad * 180 / Math.PI + 360) % 360;
     let diff = Math.abs(bearingDeg - orient);
     if (diff > 180) diff = 360 - diff;
-
-    // FOV pad by 20 deg to catch edges of large furniture
     if (diff <= (fov / 2) + 20) {
       const facing = getFacing(p.rotationY || p.rotationDeg || 0);
-      const posStr = `Depth: ${dist.toFixed(1)}m away.`;
-      visibleItems.push({ ...p, dist, posStr, facing });
+      visibleItems.push({ ...p, dist, facing });
     }
   }
-
-  // Sort by distance (closest first)
   visibleItems.sort((a, b) => a.dist - b.dist);
 
-  const items = visibleItems.map(p => {
-    return `- ${p.label}: ${p.posStr} FRONT facing ${p.facing}.`;
-  }).join("\n");
+  const itemLines = visibleItems.map(p =>
+    `- ${p.label} (${(p.wM||0).toFixed(1)}m wide × ${(p.dM||0).toFixed(1)}m deep × ${(p.hM||0).toFixed(1)}m tall): ${p.dist.toFixed(1)}m away, front facing ${p.facing}.`
+  ).join("\n");
 
   const cameraDir = getFacing(orient);
+  const isMultiView = totalViews > 1;
+
+  // Format wall geometry for the render model
+  const wallGeometry = Array.isArray(src.walls) && src.walls.length
+    ? src.walls.map(w => {
+        const tag = w.isExterior ? "exterior" : (w.adjacentRoomLabel ? `shared with ${w.adjacentRoomLabel}` : "internal");
+        const ops = (w.openings || []).map(o =>
+          `${o.type} ${(o.widthM||0).toFixed(1)}m wide at ${(o.offsetFromWestOrNorthM||0).toFixed(1)}m from ${w.side === "north" || w.side === "south" ? "west" : "north"} end`
+        );
+        return `  ${w.side.toUpperCase()} wall [${tag}]${ops.length ? ": " + ops.join(", ") : ": solid"}` ;
+      }).join("\n")
+    : null;
 
   return [
-    `Generate a photorealistic furnished interior render for: ${src.roomLabel} (${src.roomType}).`,
-    `Room dims: ${src.widthM.toFixed(1)}m × ${src.lengthM.toFixed(1)}m.`,
-    `CAMERA VANTAGE: You are standing inside the room facing strictly ${cameraDir}.`,
-    style.style_summary ? `Design style: ${style.style_summary}.` : "",
-    `Laminate finish: ${laminate.name}.`,
-    items ? `Furniture strictly visible in front of you:\n${items}` : "No furniture visible from this angle.",
-    `CRITICAL: ONLY render the furniture listed above! Do NOT render anything behind the camera. Maintain exact spatial continuity!`,
-    src.photoDataUrl ? "Reference photo provided — strictly augment this exact angle with the furniture described." : "",
-    "Respect actual proportions. Use warm natural lighting. Photorealistic quality.",
-    "Do NOT add text, labels, or watermarks."
+    `Generate a photorealistic furnished interior render.`,
+    `ROOM: ${src.roomLabel} (${src.roomType}), dimensions ${src.widthM.toFixed(1)}m wide × ${src.lengthM.toFixed(1)}m deep.`,
+    wallGeometry ? `WALL GEOMETRY (use this to place windows, doors, partitions accurately in the render):\n${wallGeometry}` : (src.archNotes ? `ARCHITECTURAL FEATURES: ${src.archNotes}` : ""),
+    `CAMERA: Standing inside the room, FOV ${fov}°, facing strictly ${cameraDir}.`,
+    isMultiView ? `VIEW CONTINUITY: This is view ${viewIndex} of ${totalViews} of the SAME room. The spatial layout, material palette, furniture pieces, lighting, and style MUST be IDENTICAL across all views — only the camera angle changes.` : "",
+    `STYLE SEED (lock this across all views): ${styleFingerprint}.`,
+    style.style_summary ? `Style summary: ${style.style_summary}.` : "",
+    style.do_not_do && style.do_not_do.length ? `Avoid: ${style.do_not_do.slice(0, 3).join("; ")}.` : "",
+    `Laminate finish on all woodwork: ${laminate.name}.`,
+    itemLines
+      ? `Furniture visible from this camera angle (render ONLY these, nothing behind the camera):\n${itemLines}`
+      : `No furniture visible from this angle — render empty room walls/floor with the specified finishes.`,
+    src.photoDataUrl ? `Reference photo provided for this exact camera angle — preserve the room geometry and augment with the furniture listed above.` : "",
+    `Render rules: correct scale and proportions, warm natural lighting, no text or watermarks, photorealistic quality.`
   ].filter(Boolean).join("\n");
 }
 

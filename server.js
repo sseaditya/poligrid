@@ -110,7 +110,7 @@ async function renderWithOpenAi(body) {
     const imageBuffer = decodeBase64Image(imageBase64);
     const form = new FormData();
     form.append("model", model);
-    form.append("prompt", prompt.slice(0, 1000));
+    form.append("prompt", prompt.slice(0, 4000));
     form.append("image", new Blob([imageBuffer], { type: mimeType }), "room_input.png");
     
     headers = { Authorization: `Bearer ${apiKey}` };
@@ -121,7 +121,7 @@ async function renderWithOpenAi(body) {
     headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
     payload = JSON.stringify({
       model: model,
-      prompt: prompt.slice(0, 1000),
+      prompt: prompt.slice(0, 4000),
       n: 1,
       size: "1024x1024"
     });
@@ -163,44 +163,70 @@ async function analyzeFloorPlanWithOpenAi(body) {
     throw httpError(400, "Missing imageBase64 for floor plan analysis.");
   }
 
+  const isCommercial = (body.context?.propertyType || "").toLowerCase().includes("commercial");
+
   const prompt = [
     "You are an expert architectural floor plan analyst.",
-    "Analyze the floor plan image provided and extract ALL rooms/spaces visible.",
+    "You are analyzing a technical drawing (CAD, architectural blueprint, or hand-drafted plan).",
+    "DIMENSION READING: Read ALL dimension annotations visible on the drawing (e.g. '7-5\"', '8-1\"', '14-2\" etc.) to derive actual room sizes in meters. Convert feet-inch notation to meters (1 foot = 0.3048 m). Prefer these annotated dimensions over visual estimation.",
+    "LABEL READING: Room/zone labels may appear as zone codes (ZONE-1, ZONE-2), numeric IDs (101, 102), abbreviations (LR, MBR, KIT), or plain text. Use whatever is printed inside or adjacent to each enclosed space as the label.",
+    "Extract ALL rooms/spaces visible in the drawing.",
     "For each room return:",
-    "  - label: the room number or code shown on the plan (e.g. '101', 'LR', 'MBR'). If none, generate a short code.",
-    "  - name: human readable name (e.g. 'Living Room', 'Master Bedroom', 'Kitchen')",
-    "  - roomType: one of: bedroom, living, kitchen, bathroom, dining, study, balcony, foyer, utility, other",
+    "  - label: the exact text label or code shown on the plan for that space. If none visible, generate a short code.",
+    "  - name: human readable name (e.g. 'Open Office', 'Conference Room', 'Reception', 'Living Room')",
+    isCommercial
+      ? "  - roomType: one of: office, conference, reception, pantry, store, workstation, bathroom, utility, foyer, other"
+      : "  - roomType: one of: bedroom, living, kitchen, bathroom, dining, study, balcony, foyer, utility, other",
     "  - bbox: bounding box as fractions of image dimensions: { xPct, yPct, wPct, hPct } (0.0–1.0)",
-    "  - widthM: estimated width in meters (floor plan scale; estimate if not shown)",
-    "  - lengthM: estimated length in meters",
-    "  - notes: any notable features (windows on north wall, L-shaped, open plan, etc.)",
+    "  - widthM: width in meters derived from dimension annotations on the plan; estimate only if annotations are absent",
+    "  - lengthM: length in meters derived from dimension annotations on the plan; estimate only if annotations are absent",
+    "  - notes: brief plain-text summary of the space (e.g. 'open plan with glazed east partition')",
+    "  - walls: array of exactly 4 wall objects, one per side. For each wall:",
+    "      { side: 'north'|'south'|'east'|'west',",
+    "        isExterior: boolean (true if it faces outside the building),",
+    "        adjacentRoomLabel: string|null (label of neighbouring room if shared wall, else null),",
+    "        openings: array of openings on this wall, each:",
+    "          { type: 'door'|'window'|'glazed-partition'|'archway'|'none',",
+    "            widthM: number,",
+    "            offsetFromWestOrNorthM: number (distance from the left/top end of that wall to the opening's near edge) }",
+    "      }",
+    "    If a wall has no openings, return openings: []",
     "",
     "Context provided by user:",
     `- Property Type: ${body.context?.propertyType || "unspecified"}`,
     `- Configuration/Space Type: ${body.context?.bhk || "unspecified"}`,
     `- Total Area: ${body.context?.totalAreaM2 ? body.context.totalAreaM2 + " sqm" : "unspecified"}`,
     `- Additional Notes/Brief: ${body.context?.notes || "none"}`,
-    `CRITICAL: Pay close attention to the Additional Notes/Brief as it contains literal descriptions of the rooms from the user.`,
+    "CRITICAL: Pay close attention to the Additional Notes/Brief as it contains literal descriptions of the rooms from the user.",
     "",
     "Also return top-level:",
-    "  - totalAreaM2: approximate total floor area in square meters",
-    "  - bhkType: e.g. '2BHK', '3BHK'",
+    "  - totalAreaM2: approximate total floor area in square meters (sum of individual room areas)",
+    "  - bhkType: e.g. '2BHK', '3BHK', 'Small Office', 'Open Plan Office'",
     "  - orientation: compass orientation if north arrow visible, else 'unknown'",
     "  - summary: 1-2 sentence description of the plan",
     "",
     "Return STRICT JSON only (no markdown, no explanation):",
     "{",
-    "  \"rooms\": [ { \"label\": string, \"name\": string, \"roomType\": string, \"bbox\": { \"xPct\": number, \"yPct\": number, \"wPct\": number, \"hPct\": number }, \"widthM\": number, \"lengthM\": number, \"notes\": string } ],",
+    "  \"rooms\": [",
+    "    { \"label\": string, \"name\": string, \"roomType\": string,",
+    "      \"bbox\": { \"xPct\": number, \"yPct\": number, \"wPct\": number, \"hPct\": number },",
+    "      \"widthM\": number, \"lengthM\": number, \"notes\": string,",
+    "      \"walls\": [",
+    "        { \"side\": string, \"isExterior\": boolean, \"adjacentRoomLabel\": string|null,",
+    "          \"openings\": [ { \"type\": string, \"widthM\": number, \"offsetFromWestOrNorthM\": number } ] }",
+    "      ]",
+    "    }",
+    "  ],",
     "  \"totalAreaM2\": number,",
     "  \"bhkType\": string,",
     "  \"orientation\": string,",
     "  \"summary\": string",
     "}"
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 
   const payload = {
     model,
-    reasoning: { effort: "medium" },
+    reasoning: { effort: "high" },
     input: [
       {
         role: "user",
@@ -209,8 +235,7 @@ async function analyzeFloorPlanWithOpenAi(body) {
           { type: "input_image", image_url: `data:${mimeType};base64,${imageBase64}` }
         ]
       }
-    ],
-    max_output_tokens: 10000
+    ]
   };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -364,57 +389,78 @@ async function suggestFurnitureWithOpenAi(body) {
 
 async function autoPlaceFurnitureWithOpenAi(body) {
   const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
-  const model = String(body.model || DEFAULT_OPENAI_TEXT_MODEL).trim();
   const rooms = body.rooms || [];
   const brief = String(body.brief || "").trim();
   const context = body.context || {};
+  const floorplanBase64 = String(body.floorplanBase64 || "").trim();
+  const floorplanMime = String(body.floorplanMime || "image/png").trim();
+
+  // Use vision model when a floor plan image is provided for spatial reasoning
+  const hasFloorplan = !!floorplanBase64;
+  const model = String(body.model || (hasFloorplan ? DEFAULT_OPENAI_VISION_MODEL : DEFAULT_OPENAI_TEXT_MODEL)).trim();
 
   if (!rooms.length) throw httpError(400, "Missing rooms for autoplace.");
 
-  const roomSummary = rooms.map(r =>
-    `- ${r.label} (${r.roomType}): ${r.widthM || "?"}m × ${r.lengthM || "?"}m`
-  ).join("\n");
+  const roomSummary = rooms.map(r => {
+    const bboxStr = r.bbox
+      ? ` [canvas position: top-left (${(r.bbox.xPct * 100).toFixed(1)}%, ${(r.bbox.yPct * 100).toFixed(1)}%), size (${(r.bbox.wPct * 100).toFixed(1)}% × ${(r.bbox.hPct * 100).toFixed(1)}%)]`
+      : "";
+    const notesStr = r.notes ? ` Notes: ${r.notes}` : "";
+
+    // Format structured wall data so the model knows exactly where doors/windows are
+    const wallLines = Array.isArray(r.walls) && r.walls.length
+      ? "\n  Walls:\n" + r.walls.map(w => {
+          const tag = w.isExterior ? "exterior" : (w.adjacentRoomLabel ? `shared with ${w.adjacentRoomLabel}` : "internal");
+          const openings = (w.openings || []).map(o =>
+            `${o.type} (${(o.widthM || 0).toFixed(1)}m wide, ${(o.offsetFromWestOrNorthM || 0).toFixed(1)}m from ${w.side === "north" || w.side === "south" ? "west" : "north"} end)`
+          ).join(", ");
+          return `    ${w.side}: ${tag}${openings ? " — " + openings : " — no openings"}`;
+        }).join("\n")
+      : "";
+
+    return `- ${r.label} (${r.name || r.roomType}): ${r.widthM || "?"}m × ${r.lengthM || "?"}m${bboxStr}${notesStr}${wallLines}`;
+  }).join("\n");
 
   const moduleList = (body.moduleLibrary || []).map(m =>
     `${m.id}: "${m.label}" w=${m.w}m d=${m.d}m h=${m.h}m [${(m.keywords||[]).join(", ")}]`
   ).join("\n");
 
   const prompt = [
-    "You are a professional Indian interior designer creating a furniture layout plan.",
+    "You are a professional interior designer creating a furniture layout plan.",
+    hasFloorplan ? "A floor plan image is attached. Use it to understand exact room shapes, wall positions, door/window locations, and spatial relationships between rooms before placing furniture." : "",
     "Strictly follow interior design rules: maintain clearance paths, don't block doors/windows, respect room function.",
     "",
     "CRITICAL SPATIAL RULES:",
-    "1. NO COLLISION OR OVERLAPPED ITEMS! Every piece of furniture MUST have its own dedicated floor space. Mentally calculate the bounding box (x to x+w, y to y+d) of every item and ensure they NEVER intersect.",
-    "2. SPATIAL CLEARANCE: Always leave at least 0.8m of empty floor space between distinct objects so people can walk. Do not overstuff the room if it doesn't fit.",
-    "3. RESPECT THE WALLS: Always align large pieces like beds, wardrobes, and TV units flush against walls.",
-    "4. LOGICAL ORIENTATION: Use `rotationDeg` to point the FRONT of the furniture correctly (0=South, 90=West, 180=North, 270=East). A TV Unit's front should physically face the sofa's front.",
-    "5. MODULAR WOODWORK PRIORITY: Your PRIMARY FOCUS is specifying excellent modular storage. Maximize 'cabinet' and 'study' usage (wardrobes, kitchen cabinets, TV units, office credenzas, custom standing desks).",
-    "6. OPEN-ENDED PLACEMENT: You are NOT strictly limited to the 'Available furniture'. If a room needs a custom unit (e.g. 'Wall-to-wall library', 'L-shaped corner wardrobe'), invent a new `moduleId` and `label`, provide custom dimensions (`wM`, `dM`, `hM`), and classify it.",
-    "7. COORDINATE MATH TO TOUCH WALLS: Coordinates (x, y) define the TOP-LEFT corner of the furniture. Room origin (0,0) is North-West.",
-    "   - Flush against North wall: set yM = 0.",
-    "   - Flush against West wall: set xM = 0.",
-    "   - Flush against South wall: set yM = (Room Depth - furniture dM).",
-    "   - Flush against East wall: set xM = (Room Width - furniture wM).",
-    "   Do the precise math so items physically touch the walls instead of floating in the middle!",
-    "9. Make intelligent design choices based on the user's notes and property context.",
+    "1. NO COLLISION OR OVERLAPPED ITEMS! Every piece of furniture MUST have its own dedicated floor space. Verify bounding boxes (x to x+wM, y to y+dM) never intersect.",
+    "2. SPATIAL CLEARANCE: Leave at least 0.8m walkway between objects. Do not overstuff the room.",
+    "3. RESPECT THE WALLS: Align large pieces (beds, wardrobes, TV units) flush against walls.",
+    "4. LOGICAL ORIENTATION: Use `rotationDeg` to orient furniture correctly (0=South-facing, 90=West-facing, 180=North-facing, 270=East-facing).",
+    "5. MODULAR WOODWORK PRIORITY: Maximise 'cabinet' and 'study' type furniture (wardrobes, cabinets, TV units, credenzas, desks).",
+    "6. OPEN-ENDED PLACEMENT: If a room needs furniture not in the list, invent a new moduleId/label with custom dimensions.",
+    "7. COORDINATE MATH — coordinates (xM, yM) are TOP-LEFT corner of the furniture, room origin (0,0) is North-West corner:",
+    "   - North wall: yM = 0",
+    "   - West wall: xM = 0",
+    "   - South wall: yM = (roomLengthM - furnituredM)",
+    "   - East wall: xM = (roomWidthM - furniturewM)",
+    "8. If the floor plan shows doors or windows, do NOT place furniture blocking them.",
+    "9. Make intelligent choices based on the user's notes and property context.",
     "",
     "Property context:",
-    context.bhk ? `- ${context.bhk}` : "",
-    context.propertyType ? `- Type: ${context.propertyType}` : "",
+    context.bhk ? `- Space type: ${context.bhk}` : "",
+    context.propertyType ? `- Property type: ${context.propertyType}` : "",
     context.totalAreaM2 ? `- Total area: ${context.totalAreaM2} m²` : "",
     context.notes ? `- Notes: ${context.notes}` : "",
     "",
-    `Design brief: ${brief || "Modern Indian, minimal, functional"}`,
+    `Design brief: ${brief || "Modern, minimal, functional"}`,
     "",
-    "Rooms:",
+    "Rooms (coordinates relative to each room's own top-left origin):",
     roomSummary,
     "",
     "Available furniture modules:",
     moduleList,
     "",
-    "For each room, pick the most appropriate furniture and return their placement coordinates.",
-    "Coordinates are from the room's top-left corner. x=width axis, y=depth axis, both in meters.",
-    "Respect clearances: min 0.9m walkway, 0.6m beside beds, at least 0.3m from walls.",
+    "For each room, pick furniture and return placement coordinates relative to that room's own top-left corner.",
+    "Respect clearances: min 0.9m walkway, at least 0.3m from walls unless flush.",
     "",
     "Return STRICT JSON only:",
     `{`,
@@ -437,11 +483,16 @@ async function autoPlaceFurnitureWithOpenAi(body) {
     `}`
   ].filter(Boolean).join("\n");
 
+  const contentItems = [{ type: "input_text", text: prompt }];
+  if (hasFloorplan) {
+    contentItems.push({ type: "input_image", image_url: `data:${floorplanMime};base64,${floorplanBase64}` });
+  }
+
   const payload = {
     model,
-    reasoning: { effort: "low" },
-    input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
-    max_output_tokens: 4096
+    reasoning: { effort: hasFloorplan ? "medium" : "low" },
+    input: [{ role: "user", content: contentItems }],
+    max_output_tokens: 8192
   };
 
   const response = await fetch("https://api.openai.com/v1/responses", {
