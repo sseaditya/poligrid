@@ -229,8 +229,8 @@ async function analyzeFloorPlanWithOpenAi(body) {
 
   const payload = {
     model,
-    reasoning: { effort: "high" },
-    max_output_tokens: 8000,
+    reasoning: { effort: "medium" },
+    max_output_tokens: 16000,
     input: [
       {
         role: "user",
