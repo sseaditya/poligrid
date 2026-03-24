@@ -170,15 +170,14 @@ async function furnishRoomWithOpenAi(body) {
   const mimeType = String(body.mimeType || "image/jpeg").trim();
   const inspirationImages = Array.isArray(body.inspirationBase64) ? body.inspirationBase64 : [];
 
-  if (!emptyRoomBase64) {
-    throw httpError(400, "Missing emptyRoomBase64 for direct furnishing.");
-  }
-
   // STEP 1: Vision Planning (Decide what furniture to place)
   const providedPlacements = Array.isArray(body.placements) ? body.placements : null;
   let placements = providedPlacements;
 
   if (!placements || placements.length === 0) {
+    if (!emptyRoomBase64) {
+      throw httpError(400, "Missing empty room photo for Vision Planning. Please provide a photo or floor plan placements.");
+    }
     const planningPrompt = [
       "You are an expert interior designer. You have been given a photo of an empty room.",
       body.brief ? `CRITICAL CONTEXT: The user requested the following Design Brief/Room Type: "${body.brief}". Prioritize furnishing it matching this exact purpose (e.g. if it says Office, place desks and chairs; if Living Room, place sofa).` : "",
@@ -268,8 +267,8 @@ async function furnishRoomWithOpenAi(body) {
   
   const renderPrompt = [
     "Photorealistic architectural interior render.",
-    `Furnish the empty room strictly with the following items:\n${furnitureStr}`,
-    "Maintain the architectural geometry, lighting, and camera angle of the original empty room.",
+    `Furnish the room strictly with the following items:\n${furnitureStr}`,
+    emptyRoomBase64 ? "Maintain the architectural geometry, lighting, and camera angle of the original empty room." : "",
     body.brief ? `Design Brief / Style Preference: ${body.brief}` : "Apply standard styling.",
     styleGuidance ? `CRITICAL Visual Inspiration Guidance: The entire scene MUST heavily reflect this specific style, materials, and color palette:\n${styleGuidance}` : ""
   ].filter(Boolean).join("\n");

@@ -1071,58 +1071,36 @@ async function generateRoom(srcs, inspirationDataUrls) {
     const src = srcs[i];
     dom.generateStatus.textContent = `Generating: ${src.roomLabel} (${i + 1}/${srcs.length})…`;
 
-    if (src.photoDataUrl) {
-      const res = await postJson("/api/furnish-room", {
-        emptyRoomBase64: src.photoDataUrl,
-        inspirationBase64: inspirationDataUrls,
-        mimeType: src.photoFile ? src.photoFile.type : "image/jpeg",
-        visionModel: "gpt-5.4",
-        renderModel: "gpt-image-1.5",
-        placements: src.placements,
-        brief: src.brief
-      });
+    // Both image-to-image (with photo) and text-to-image (without photo) use the same endpoint now!
+    const res = await postJson("/api/furnish-room", {
+      emptyRoomBase64: src.photoDataUrl || "", // Empty string triggers server side Text-to-Image fallback
+      inspirationBase64: inspirationDataUrls,
+      mimeType: src.photoFile ? src.photoFile.type : "image/png",
+      visionModel: "gpt-5.4",
+      renderModel: "gpt-image-1.5",
+      placements: src.placements || [],
+      brief: src.brief
+    });
 
-      let finalDataUrl = res.dataUrl;
+    let finalDataUrl = res.dataUrl;
+    // Only try to match aspect ratio if an original photo actually existed
+    if (src.photoDataUrl) {
       try {
         finalDataUrl = await resizeImageToMatch(src.photoDataUrl, res.dataUrl);
       } catch (e) {
         console.warn("Resize to original dimensions failed:", e);
       }
+    }
 
-      renders.push({ name: `Photo ${i + 1}`, dataUrl: finalDataUrl, source: "openai" });
-      
-      // Accumulate the generated placements for this specific photo into the global BOQ
-      if (res.furnitureList && Array.isArray(res.furnitureList)) {
-        res.furnitureList.forEach(p => placements.push({
-          ...p,
-          roomLabel: src.roomLabel
-        }));
-      }
-    } else {
-      // Pins without reference photo flow through text-to-image Generation
-      const renderPrompt = [
-        "Photorealistic architectural interior render.",
-        `Furnish this ${src.roomType || "room"}.`,
-        src.brief ? `Design Brief / Style: ${src.brief}` : "Apply standard modern interior styling.",
-        "Include the following specific items based on the floor plan arrangement:",
-        (src.placements || []).map(p => `- ${p.label}`).join("\n")
-      ].join("\n");
-
-      const res = await postJson("/api/render/openai", {
-        model: "gpt-image-1.5",
-        prompt: renderPrompt,
-        mimeType: "image/png"
-      });
-
-      renders.push({ name: `Generated ${i + 1}`, dataUrl: res.dataUrl, source: "openai" });
-      
-      // Also accumulate BOQ from the placements provided by the floor plan
-      if (src.placements && Array.isArray(src.placements)) {
-        src.placements.forEach(p => placements.push({
-          ...p,
-          roomLabel: src.roomLabel
-        }));
-      }
+    renders.push({ name: src.photoDataUrl ? `Photo ${i + 1}` : `Generated ${i + 1}`, dataUrl: finalDataUrl, source: "openai" });
+    
+    // Accumulate the generated or floor-plan placements into the global BOQ
+    const furnitureToAdd = (res.furnitureList && res.furnitureList.length) ? res.furnitureList : (src.placements || []);
+    if (Array.isArray(furnitureToAdd)) {
+      furnitureToAdd.forEach(p => placements.push({
+        ...p,
+        roomLabel: src.roomLabel
+      }));
     }
   }
 
