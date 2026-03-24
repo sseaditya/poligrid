@@ -408,6 +408,19 @@ function advancePhase(n) {
 
 // ─── Init ──────────────────────────────────────────────────────────────────────
 
+const Debugger = {
+  log(tag, prompt, response) {
+    const content = el("debugContent");
+    if (!content) return;
+    const entry = document.createElement("div");
+    entry.className = "debug-log-entry";
+    entry.innerHTML = `<span class="debug-tag">${escapeHtml(tag)}</span>
+  <span class="debug-prompt">Prompt Payload:<br/>${escapeHtml(typeof prompt === 'object' ? JSON.stringify(prompt, null, 2) : prompt)}</span>
+  <span class="debug-response">Response:<br/>${escapeHtml(typeof response === 'object' ? JSON.stringify(response, null, 2) : response)}</span>`;
+    content.prepend(entry);
+  }
+};
+
 init();
 
 function init() {
@@ -471,6 +484,39 @@ function init() {
   dom.downloadBoq.addEventListener("click", () => {
     if (latestArtifacts) downloadText("boq.csv", latestArtifacts.boq.csv, "text/csv");
   });
+
+  // Debug toggle
+  const debugPanel = el("debugPanel");
+  const debugToggleBtn = el("debugToggleBtn");
+  el("debugHeader")?.addEventListener("click", () => {
+    debugPanel.classList.toggle("collapsed");
+    debugToggleBtn.textContent = debugPanel.classList.contains("collapsed") ? "▲" : "▼";
+  });
+
+  // Clickable Checkpoint Pills
+  for (let i = 1; i <= 4; i++) {
+    const pill = el(`pill${i}`);
+    if (pill) {
+      pill.style.cursor = "pointer";
+      pill.addEventListener("click", () => {
+        if (!pill.disabled) {
+          advancePhase(i);
+          if (i === 1) {
+            dom.roomEditorCanvas.hidden = true;
+            dom.plannerCanvas.hidden = true;
+          } else if (i === 2) {
+            dom.roomEditorCanvas.hidden = false;
+            dom.plannerCanvas.hidden = true;
+            if (roomEditor) roomEditor.render();
+          } else if (i >= 3) {
+            dom.roomEditorCanvas.hidden = true;
+            dom.plannerCanvas.hidden = false;
+            if (planner) planner.render();
+          }
+        }
+      });
+    }
+  }
 
   buildPalette();
   advancePhase(1);
@@ -1334,6 +1380,12 @@ async function postJson(url, body) {
   let json;
   try { json = JSON.parse(text); } catch { throw new Error(text.slice(0, 200)); }
   if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+  
+  // Intercept backend debug logs and render them locally
+  if (json._debug && Array.isArray(json._debug)) {
+    json._debug.forEach(log => Debugger.log(log.step, log.payload, log.response));
+  }
+  
   return json;
 }
 

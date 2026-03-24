@@ -153,11 +153,14 @@ async function renderWithOpenAi(body) {
     throw httpError(502, "OpenAI response did not include image data.");
   }
 
+  const debugPayload = imageBase64 ? { model, prompt, quality: "low", image: "[Base64 Data Omitted]" } : JSON.parse(payload);
+  const _debug = [{ step: "DALL-E Render Generaton", payload: debugPayload, response: parsed }];
+
   if (firstImage.b64_json) {
-    return { provider: "openai", model, dataUrl: `data:image/png;base64,${firstImage.b64_json}` };
+    return { provider: "openai", model, dataUrl: `data:image/png;base64,${firstImage.b64_json}`, _debug };
   }
   if (firstImage.url) {
-    return { provider: "openai", model, dataUrl: firstImage.url };
+    return { provider: "openai", model, dataUrl: firstImage.url, _debug };
   }
   throw httpError(502, "OpenAI response did not include b64_json or url.");
 }
@@ -171,6 +174,7 @@ async function furnishRoomWithOpenAi(body) {
   const inspirationImages = Array.isArray(body.inspirationBase64) ? body.inspirationBase64 : [];
 
   // STEP 1: Vision Planning (Decide what furniture to place)
+  const _debug = [];
   const providedPlacements = Array.isArray(body.placements) ? body.placements : null;
   let placements = providedPlacements;
 
@@ -223,6 +227,7 @@ async function furnishRoomWithOpenAi(body) {
     if (!response.ok) throw httpError(response.status, extractApiError(raw));
     
     const parsed = safeJson(raw);
+    _debug.push({ step: "Vision Room Planning", payload: payload, response: parsed });
     const jsonOutput = extractJsonFromText(extractResponsesText(parsed));
     placements = jsonOutput?.placements || [];
   }
@@ -256,6 +261,7 @@ async function furnishRoomWithOpenAi(body) {
       });
       const raw = await res.text();
       const parsed = safeJson(raw);
+      _debug.push({ step: "Vision Style Extraction", payload: stylePayload, response: parsed });
       styleGuidance = extractResponsesText(parsed) || "";
     } catch (e) {
       console.warn("Style extraction failed:", e);
@@ -280,9 +286,12 @@ async function furnishRoomWithOpenAi(body) {
     mimeType: mimeType
   });
 
+  if (renderResult._debug) _debug.push(...renderResult._debug);
+
   return { 
     dataUrl: renderResult.dataUrl,
-    furnitureList: placements
+    furnitureList: placements,
+    _debug
   };
 }
 
@@ -418,7 +427,11 @@ async function analyzeFloorPlanWithOpenAi(body) {
     throw httpError(502, "Floor plan analysis returned unexpected output.");
   }
 
-  return { model, analysis: json };
+  return { 
+    model, 
+    analysis: json,
+    _debug: [{ step: "Floor Plan Analysis", payload, response: parsed }]
+  };
 }
 
 async function matchRoomImageWithOpenAi(body) {
@@ -890,7 +903,12 @@ async function chatPlacementWithOpenAi(body) {
     console.error("Chat placement failed to parse. Raw text:", text.slice(0, 500));
     throw httpError(502, "Chat placement returned unexpected output.");
   }
-  return { model, reply: json.reply || "", actions: json.actions || [json.action].filter(Boolean) };
+  return { 
+    model, 
+    reply: json.reply || "", 
+    actions: json.actions || [json.action].filter(Boolean),
+    _debug: [{ step: "Chat Placement Assistant", payload, response: parsed }]
+  };
 }
 
 async function extractStyleWithOpenAi(body) {
