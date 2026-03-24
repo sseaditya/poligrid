@@ -762,22 +762,24 @@ function onSceneChange(state) {
 function refreshPlacedList() {
   if (!planner) return;
   const items = planner.furniturePlacements;
-  dom.placedCount.textContent = items.length;
-  dom.placedList.innerHTML = "";
-  items.forEach((f, idx) => {
-    const row = document.createElement("div");
-    row.className = "placed-item";
-    row.innerHTML = `
-      <span class="placed-item-dot" style="background:${f.color}"></span>
-      <span style="flex:1">${escapeHtml(f.label)}</span>
-      <span style="font-size:9px;color:var(--text-dim)">${f.roomLabel || ""}</span>`;
-    row.addEventListener("click", () => {
-      if (!planner) return;
-      planner.selected = { type: "furniture", id: f.id };
-      planner.render();
+  if (dom.placedCount) dom.placedCount.textContent = items.length;
+  if (dom.placedList) {
+    dom.placedList.innerHTML = "";
+    items.forEach((f, idx) => {
+      const row = document.createElement("div");
+      row.className = "placed-item";
+      row.innerHTML = `
+        <span class="placed-item-dot" style="background:${f.color}"></span>
+        <span style="flex:1">${escapeHtml(f.label)}</span>
+        <span style="font-size:9px;color:var(--text-dim)">${f.roomLabel || ""}</span>`;
+      row.addEventListener("click", () => {
+        if (!planner) return;
+        planner.selected = { type: "furniture", id: f.id };
+        planner.render();
+      });
+      dom.placedList.appendChild(row);
     });
-    dom.placedList.appendChild(row);
-  });
+  }
 }
 
 // ─── Chat ──────────────────────────────────────────────────────────────────────
