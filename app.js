@@ -1082,7 +1082,14 @@ async function generateRoom(srcs, inspirationDataUrls) {
         brief: src.brief
       });
 
-      renders.push({ name: `Photo ${i + 1}`, dataUrl: res.dataUrl, source: "openai" });
+      let finalDataUrl = res.dataUrl;
+      try {
+        finalDataUrl = await resizeImageToMatch(src.photoDataUrl, res.dataUrl);
+      } catch (e) {
+        console.warn("Resize to original dimensions failed:", e);
+      }
+
+      renders.push({ name: `Photo ${i + 1}`, dataUrl: finalDataUrl, source: "openai" });
       
       // Accumulate the generated placements for this specific photo into the global BOQ
       if (res.furnitureList && Array.isArray(res.furnitureList)) {
@@ -1372,6 +1379,30 @@ function readImage(file) {
     };
     r.onerror = reject;
     r.readAsDataURL(file);
+  });
+}
+
+async function resizeImageToMatch(originalDataUrl, generatedDataUrl) {
+  return new Promise((resolve, reject) => {
+    const origImg = new Image();
+    origImg.crossOrigin = "anonymous";
+    origImg.onload = () => {
+      const genImg = new Image();
+      genImg.crossOrigin = "anonymous";
+      genImg.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = origImg.naturalWidth || origImg.width;
+        canvas.height = origImg.naturalHeight || origImg.height;
+        const ctx = canvas.getContext("2d");
+        // Draw the generated image stretched to match the original aspect ratio/size
+        ctx.drawImage(genImg, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.95));
+      };
+      genImg.onerror = reject;
+      genImg.src = generatedDataUrl;
+    };
+    origImg.onerror = reject;
+    origImg.src = originalDataUrl;
   });
 }
 

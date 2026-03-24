@@ -227,6 +227,40 @@ async function furnishRoomWithOpenAi(body) {
     placements = jsonOutput?.placements || [];
   }
 
+  // STEP 1.5: Extract Style from Inspiration Images
+  let styleGuidance = "";
+  if (inspirationImages.length > 0) {
+    const stylePrompt = [
+      "Describe the interior design style, color palette, materials, and overall mood shown in these inspiration images.",
+      "Keep it strictly under 3 sentences, focusing only on actionable visual details."
+    ].join("\n");
+    const styleContent = [{ type: "input_text", text: stylePrompt }];
+    for (const inspBase64 of inspirationImages) {
+      styleContent.push({
+        type: "input_image",
+        image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:${mimeType};base64,${inspBase64}`
+      });
+    }
+    try {
+      const stylePayload = {
+        model: visionModel,
+        reasoning: { effort: "low" },
+        max_output_tokens: 500,
+        input: [{ role: "user", content: styleContent }]
+      };
+      const res = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(stylePayload)
+      });
+      const raw = await res.text();
+      const parsed = safeJson(raw);
+      styleGuidance = extractResponsesText(parsed) || "";
+    } catch (e) {
+      console.warn("Style extraction failed:", e);
+    }
+  }
+
   // STEP 2: Render Generation (DALL-E)
   const furnitureStr = placements.map(p => `- ${p.label} (${p.wM}x${p.dM}m)`).join("\n");
   
@@ -234,8 +268,9 @@ async function furnishRoomWithOpenAi(body) {
     "Photorealistic architectural interior render.",
     `Furnish the empty room strictly with the following items:\n${furnitureStr}`,
     "Maintain the architectural geometry, lighting, and camera angle of the original empty room.",
-    body.brief ? `Design Brief / Style: ${body.brief}` : "Apply the requested style and materials perfectly."
-  ].join("\n");
+    body.brief ? `Design Brief / Style Preference: ${body.brief}` : "Apply standard styling.",
+    styleGuidance ? `Visual Inspiration Guidance: ${styleGuidance}` : ""
+  ].filter(Boolean).join("\n");
 
   const renderResult = await renderWithOpenAi({
     model: body.renderModel || "gpt-image-1.5",
