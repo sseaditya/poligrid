@@ -361,18 +361,27 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .room-results::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 2px; }
 
 /* BOQ */
-.boq-rooms { display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px; }
-.boq-room-section { background: var(--bg3); border-radius: 8px; padding: 10px 12px; }
-.boq-room-label { font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
-.table-wrap { overflow-x: auto; }
-table#boqTable { width: 100%; border-collapse: collapse; font-size: 11px; }
-table#boqTable th {
+/* Categorical BOQ Accordions */
+.boq-accordion-container { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.boq-accordion { background: var(--bg3); border-radius: 8px; border: 1px solid var(--border); overflow: hidden; }
+.boq-accordion-header { 
+  display: flex; justify-content: space-between; align-items: center; 
+  padding: 12px 14px; cursor: pointer; user-select: none;
+  font-weight: 600; font-size: 13px; color: var(--accent);
+}
+.boq-accordion-header:hover { background: var(--bg-hover); }
+.boq-cat-name { text-transform: uppercase; letter-spacing: 0.04em; }
+.boq-cat-total { font-weight: 700; color: var(--text-dim); }
+.boq-accordion[open] .boq-accordion-header { border-bottom: 1px solid var(--border); }
+.boq-accordion-content { padding: 0; background: var(--bg1); }
+.boq-accordion-content table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.boq-accordion-content th {
   background: var(--bg3); color: var(--text-dim); font-weight: 600;
-  padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border);
+  padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border);
   text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px;
 }
-table#boqTable td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
-table#boqTable tfoot td { font-weight: 700; color: var(--accent); border-top: 2px solid var(--border-hi); }
+.boq-accordion-content td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.boq-accordion-content tr:last-child td { border-bottom: none; }
 #placementSummary { font-size: 11px; color: var(--text-dim); white-space: pre-wrap; background: var(--bg3); border-radius: 6px; padding: 10px; }
 
 /* ── Room result card ───────────────────────────────────────────────────────── */

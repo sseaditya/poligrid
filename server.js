@@ -64,6 +64,12 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, result);
     }
 
+    if (req.method === "POST" && url.pathname === "/api/furnish-room") {
+      const body = await readJson(req);
+      const result = await furnishRoomWithOpenAi(body);
+      return sendJson(res, 200, result);
+    }
+
     if (req.method === "POST" && url.pathname === "/api/chat/placement") {
       const body = await readJson(req);
       const result = await chatPlacementWithOpenAi(body);
@@ -156,6 +162,89 @@ async function renderWithOpenAi(body) {
   throw httpError(502, "OpenAI response did not include b64_json or url.");
 }
 
+async function furnishRoomWithOpenAi(body) {
+  const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
+  const visionModel = String(body.visionModel || DEFAULT_OPENAI_VISION_MODEL).trim();
+  
+  const emptyRoomBase64 = String(body.emptyRoomBase64 || "").trim();
+  const mimeType = String(body.mimeType || "image/jpeg").trim();
+  const inspirationImages = Array.isArray(body.inspirationBase64) ? body.inspirationBase64 : [];
+
+  if (!emptyRoomBase64) {
+    throw httpError(400, "Missing emptyRoomBase64 for direct furnishing.");
+  }
+
+  // STEP 1: Vision Planning (Decide what furniture to place)
+  const planningPrompt = [
+    "You are an expert interior designer. You have been given a photo of an empty room.",
+    inspirationImages.length ? "You have also been given inspiration images showing the desired style." : "",
+    "Based on the room's geometry and the implied style, generate a complete list of furniture necessary to furnish this room.",
+    "Return strict JSON with a `placements` array, where each item has:",
+    "  - label: e.g., '3-Seater Sofa'",
+    "  - type: 'seating', 'table', 'cabinet', 'bed', 'decor', or 'custom'",
+    "  - wM: approx width in meters",
+    "  - dM: approx depth in meters",
+    "  - hM: approx height in meters",
+    "Return nothing but JSON."
+  ].filter(Boolean).join("\n");
+
+  const contentArray = [
+    { type: "input_text", text: planningPrompt },
+    { type: "input_image", image_url: emptyRoomBase64.startsWith("data:") ? emptyRoomBase64 : `data:${mimeType};base64,${emptyRoomBase64}` }
+  ];
+
+  for (const inspBase64 of inspirationImages) {
+    contentArray.push({
+      type: "input_image",
+      image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:${mimeType};base64,${inspBase64}`
+    });
+  }
+
+  const payload = {
+    model: visionModel,
+    reasoning: { effort: "medium" },
+    max_output_tokens: 4000,
+    input: [
+      { role: "user", content: contentArray }
+    ]
+  };
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const raw = await response.text();
+  if (!response.ok) throw httpError(response.status, extractApiError(raw));
+  
+  const parsed = safeJson(raw);
+  const jsonOutput = extractJsonFromText(extractResponsesText(parsed));
+  const placements = jsonOutput?.placements || [];
+
+  // STEP 2: Render Generation (DALL-E)
+  const furnitureStr = placements.map(p => `- ${p.label} (${p.wM}x${p.dM}m)`).join("\n");
+  
+  const renderPrompt = [
+    "Photorealistic architectural interior render.",
+    `Furnish the empty room strictly with the following items:\n${furnitureStr}`,
+    "Maintain the architectural geometry, lighting, and camera angle of the original empty room.",
+    "Apply the requested style and materials perfectly."
+  ].join("\n");
+
+  const renderResult = await renderWithOpenAi({
+    model: body.renderModel || "gpt-image-1.5",
+    prompt: renderPrompt,
+    imageBase64: emptyRoomBase64,
+    mimeType: mimeType
+  });
+
+  return { 
+    dataUrl: renderResult.dataUrl,
+    furnitureList: placements
+  };
+}
+
 async function analyzeFloorPlanWithOpenAi(body) {
   const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
   const model = String(body.model || DEFAULT_OPENAI_VISION_MODEL).trim();
@@ -216,6 +305,15 @@ async function analyzeFloorPlanWithOpenAi(body) {
     "  - bhkType: e.g. '2BHK', '3BHK', 'Small Office', 'Open Plan Office'",
     "  - orientation: compass orientation if north arrow visible, else 'unknown'",
     "  - summary: 1-2 sentence description of the plan",
+    "  - globalBoq: an array of all bill of quantity line items identified from the entire floor plan. You MUST exhaustively extract every piece of furniture, structure, and material need visible on the drawing.",
+    "    IMPORTANT: Every single item in `globalBoq` must be strictly categorized into ONE of the following exact strings: 'Civil work', 'Plumbing', 'Faux ceiling', 'Modular furniture', 'Loose furniture', 'Flooring', 'Doors and windows', 'Painting'.",
+    "    For each item in `globalBoq` return:",
+    "      - category: MUST be exactly one of the 8 strings above.",
+    "      - item: specific name e.g. 'Demolish partition wall', '3-Seater Sofa', 'Wooden flooring', 'Internal Door', 'Wardrobe'",
+    "      - qty: number (quantity or area size in appropriate units)",
+    "      - unit: e.g. 'sqm', 'pcs', 'rft', 'lump sum'",
+    "      - rate: realistic estimated rate in INR for this unit (e.g. 1500 for a door, 80 for sqm of painting, 50000 for a wardrobe)",
+    "      - amount: qty * rate",
     "",
     "Return STRICT JSON only (no markdown, no explanation):",
     "{",
@@ -231,6 +329,9 @@ async function analyzeFloorPlanWithOpenAi(body) {
     "        { \"label\": string, \"type\": string, \"xPct\": number, \"yPct\": number, \"wPct\": number, \"dPct\": number, \"rotationDeg\": number }",
     "      ]",
     "    }",
+    "  ],",
+    "  \"globalBoq\": [",
+    "    { \"category\": string, \"item\": string, \"qty\": number, \"unit\": string, \"rate\": number, \"amount\": number }",
     "  ],",
     "  \"totalAreaM2\": number,",
     "  \"bhkType\": string,",

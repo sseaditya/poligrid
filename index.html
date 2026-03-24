@@ -30,15 +30,11 @@
         </button>
         <div class="phase-connector" id="conn23"></div>
         <button class="phase-pill" data-phase="3" id="pill3" disabled>
-          <span class="pill-num">3</span><span class="pill-label">Furniture</span>
+          <span class="pill-num">3</span><span class="pill-label">Room Photos</span>
         </button>
         <div class="phase-connector" id="conn34"></div>
         <button class="phase-pill" data-phase="4" id="pill4" disabled>
-          <span class="pill-num">4</span><span class="pill-label">Viewpoints</span>
-        </button>
-        <div class="phase-connector" id="conn45"></div>
-        <button class="phase-pill" data-phase="5" id="pill5" disabled>
-          <span class="pill-num">5</span><span class="pill-label">Generate</span>
+          <span class="pill-num">4</span><span class="pill-label">Generate</span>
         </button>
       </nav>
       <div class="top-bar-actions">
@@ -142,47 +138,20 @@
           <button id="confirmRoomsBtn" class="primary-btn mt12">Confirm Rooms →</button>
         </div>
 
-        <!-- ── PHASE 3: Furniture + Chat ───────────────────────────────── -->
+        <!-- ── PHASE 3: Camera Viewpoints & Photos ─────────────────────── -->
         <div class="phase-panel" id="panel3" hidden>
           <div class="panel-head">
             <span class="step-num">3</span>
-            <span>Furniture Placement</span>
+            <span>Room Photos</span>
           </div>
-
-          <div class="tool-tabs">
-            <button class="tool-tab active" id="tabSelect" data-mode="select">✥ Select</button>
-            <button class="tool-tab" id="tabDraw" data-mode="draw">✏ Draw</button>
+          <p class="hint-text">Switch to 📷 Pin mode to click on the map, OR directly upload photos without a location.</p>
+          
+          <div class="room-action-row" style="margin-bottom: 12px;">
+            <label class="ghost-btn" for="directPhotoUpload" style="cursor:pointer; text-align:center; display:block;">
+              <span>＋</span> Add Room Photo (No Pin)
+              <input type="file" id="directPhotoUpload" accept="image/*" style="display:none;" />
+            </label>
           </div>
-
-          <div class="palette-hint">Drag a module onto the plan:</div>
-          <div id="furniturePalette" class="furniture-palette"></div>
-
-          <!-- Selection info -->
-          <div id="selectionPanel" class="selection-panel" hidden>
-            <div id="selectionLabel" class="sel-label"></div>
-            <div id="selectionDims" class="sel-dims"></div>
-            <div class="sel-actions">
-              <button id="rotateBtn" class="ghost-sm">↺ Rotate</button>
-              <button id="deleteBtn" class="ghost-sm danger-sm">✕ Remove</button>
-            </div>
-          </div>
-
-          <!-- Placed furniture list -->
-          <div class="placed-list-wrap">
-            <div class="placed-list-head">Placed (<span id="placedCount">0</span>)</div>
-            <div id="placedList" class="placed-list"></div>
-          </div>
-
-          <button id="confirmPlacementBtn" class="primary-btn mt8">Confirm Layout →</button>
-        </div>
-
-        <!-- ── PHASE 4: Camera Viewpoints ──────────────────────────────── -->
-        <div class="phase-panel" id="panel4" hidden>
-          <div class="panel-head">
-            <span class="step-num">4</span>
-            <span>Camera Viewpoints</span>
-          </div>
-          <p class="hint-text">Switch to 📷 Pin mode → click to place → drag arrow to set direction → double-click to attach reference photo + brief.</p>
 
           <div class="tool-tabs">
             <button class="tool-tab active" id="tabSelectP4" data-mode="select">✥ Select</button>
@@ -195,10 +164,10 @@
           <button id="confirmPinsBtn" class="primary-btn mt12">Set Up Generation →</button>
         </div>
 
-        <!-- ── PHASE 5: Brief + Generate ───────────────────────────────── -->
-        <div class="phase-panel" id="panel5" hidden>
+        <!-- ── PHASE 4: Brief + Generate ───────────────────────────────── -->
+        <div class="phase-panel" id="panel4" hidden>
           <div class="panel-head">
-            <span class="step-num">5</span>
+            <span class="step-num">4</span>
             <span>Brief &amp; Generate</span>
           </div>
           <label class="field-label">
@@ -232,42 +201,29 @@
           <canvas id="plannerCanvas" tabindex="0" aria-label="Furniture planner" hidden></canvas>
         </div>
 
-        <!-- ── Chat panel (Phase 3) ──────────────────────────────────────── -->
-        <div class="chat-panel" id="chatPanel" hidden>
-          <div class="chat-header">
-            <span class="chat-title">💬 Design Assistant</span>
-            <button class="chat-toggle" id="chatToggle">−</button>
-          </div>
-          <div class="chat-history" id="chatHistory"></div>
-          <div class="chat-input-row">
-            <input type="text" id="chatInput" placeholder='e.g. "Add a dining table for 6" or "Move the wardrobe to north wall"' />
-            <button id="chatSendBtn" class="chat-send">➤</button>
-          </div>
-        </div>
-
-        <!-- ── Camera pin editor popover ────────────────────────────────── -->
+        <!-- ── Photo Editor Popover ────────────────────────────────────── -->
         <div class="pin-popover" id="pinPopover" hidden>
           <div class="pin-popover-head">
-            <span id="pinPopoverTitle">Camera Pin</span>
+            <span id="pinPopoverTitle">Room Photo</span>
             <button class="ghost-sm" id="pinPopoverClose">✕</button>
           </div>
           <div class="pin-popover-body">
             <label class="field-label">
-              Reference photo (from this viewpoint)
+              Reference photo (Empty room)
               <input type="file" id="pinPhotoInput" accept="image/*" />
             </label>
             <div id="pinPhotoPreview" class="pin-photo-preview" hidden></div>
             <label class="field-label">
-              Room label
-              <input type="text" id="pinRoomLabel" placeholder="e.g. Living Room" />
+              Room label/Location
+              <input type="text" id="pinRoomLabel" placeholder="e.g. Living Room, Unknown Area" />
             </label>
-            <label class="field-label">
-              FOV °
+            <label class="field-label" id="fovLabelWrap">
+              FOV ° (Map Pins only)
               <input type="number" id="pinFov" value="60" min="20" max="120" step="5" />
             </label>
             <label class="field-label">
               Brief for this view
-              <textarea id="pinBrief" rows="2" placeholder="e.g. TV wall facing sofa, warm lighting"></textarea>
+              <textarea id="pinBrief" rows="2" placeholder="e.g. Include a modern leather sofa and a glass coffee table..."></textarea>
             </label>
           </div>
         </div>
@@ -284,17 +240,11 @@
         <div id="roomResults" class="room-results"></div>
 
         <h2 class="boq-heading">Bill of Quantities (INR)</h2>
-        <div id="boqRooms" class="boq-rooms"></div>
-        <div class="table-wrap">
-          <table id="boqTable">
-            <thead>
-              <tr><th>Item</th><th>W×D×H (m)</th><th>Qty</th><th>Material</th><th>Rate (₹)</th><th>Amount (₹)</th></tr>
-            </thead>
-            <tbody></tbody>
-            <tfoot>
-              <tr><td colspan="5">Grand Total</td><td id="grandTotal">—</td></tr>
-            </tfoot>
-          </table>
+        <div id="boqAccordionContainer" class="boq-accordion-container">
+          <!-- Accordions injected here by app.js -->
+        </div>
+        <div class="boq-grand-total" style="text-align: right; margin-top: 16px; font-weight: 600; font-size: 1.1em;">
+          Grand Total: <span id="grandTotal">—</span>
         </div>
         <h3>Placement Summary</h3>
         <pre id="placementSummary"></pre>

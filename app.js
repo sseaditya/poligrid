@@ -296,28 +296,16 @@ const dom = {
   analysisSummaryWrap: el("analysisSummaryWrap"),
   analysisSummaryText: el("analysisSummaryText"),
   confirmRoomsBtn: el("confirmRoomsBtn"),
-  // Phase 3
+  // Phase 3 (Room Photos)
   panel3: el("panel3"),
-  tabSelect: el("tabSelect"),
-  tabDraw: el("tabDraw"),
-  furniturePalette: el("furniturePalette"),
-  selectionPanel: el("selectionPanel"),
-  selectionLabel: el("selectionLabel"),
-  selectionDims: el("selectionDims"),
-  rotateBtn: el("rotateBtn"),
-  deleteBtn: el("deleteBtn"),
-  placedList: el("placedList"),
-  placedCount: el("placedCount"),
-  confirmPlacementBtn: el("confirmPlacementBtn"),
-  // Phase 4
-  panel4: el("panel4"),
   tabSelectP4: el("tabSelectP4"),
   tabPin: el("tabPin"),
   pinsList: el("pinsList"),
   noPinsHint: el("noPinsHint"),
   confirmPinsBtn: el("confirmPinsBtn"),
-  // Phase 5
-  panel5: el("panel5"),
+  directPhotoUpload: el("directPhotoUpload"),
+  // Phase 4 (Brief & Generate)
+  panel4: el("panel4"),
   globalBrief: el("globalBrief"),
   generateBtn: el("generateBtn"),
   generateStatus: el("generateStatus"),
@@ -347,8 +335,7 @@ const dom = {
   closeOutput: el("closeOutput"),
   roomResults: el("roomResults"),
   statusBox: el("statusBox"),
-  boqRooms: el("boqRooms"),
-  boqTableBody: document.querySelector("#boqTable tbody"),
+  boqAccordionContainer: el("boqAccordionContainer"),
   grandTotal: el("grandTotal"),
   placementSummary: el("placementSummary"),
   downloadScene: el("downloadScene"),
@@ -378,8 +365,7 @@ const appState = {
   // Phase 2
   detectedRooms: null,
   confirmedRooms: null,
-  // Phase 3
-  // (planner holds furniture state)
+  globalBoq: [], // Derived strictly from Floor Plan analysis
 };
 
 const ROOM_DOT_COLORS = {
@@ -401,7 +387,7 @@ const FURN_COLORS = [
 function advancePhase(n) {
   currentPhase = n;
   // Update pills
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= 4; i++) {
     const pill = el(`pill${i}`);
     if (!pill) continue;
     pill.classList.toggle("active", i === n);
@@ -409,12 +395,12 @@ function advancePhase(n) {
     pill.disabled = i > n;
   }
   // Connectors
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 3; i++) {
     const conn = el(`conn${i}${i + 1}`);
     if (conn) conn.style.background = i < n ? "var(--success)" : "var(--border)";
   }
   // Show/hide panels
-  for (let i = 1; i <= 5; i++) {
+  for (let i = 1; i <= 4; i++) {
     const p = el(`panel${i}`);
     if (p) p.hidden = i !== n;
   }
@@ -461,31 +447,14 @@ function init() {
   dom.addRoomBtn.addEventListener("click", () => roomEditor?.addRoom());
   dom.confirmRoomsBtn.addEventListener("click", onConfirmRooms);
 
-  // Phase 3 bindings
-  dom.tabSelect.addEventListener("click", () => setMode("select"));
-  dom.tabDraw.addEventListener("click", () => setMode("draw"));
-  dom.rotateBtn.addEventListener("click", () => planner?.rotateSelected());
-  dom.deleteBtn.addEventListener("click", () => planner?.removeSelected());
-  dom.confirmPlacementBtn.addEventListener("click", () => advancePhase(4));
-
-  // Phase 4 bindings — pin tools
+  // Phase 3 bindings (Room Photos)
   dom.tabSelectP4.addEventListener("click", () => setMode("select", dom.tabSelectP4, dom.tabPin));
   dom.tabPin.addEventListener("click", () => setMode("pin", dom.tabSelectP4, dom.tabPin));
-  dom.confirmPinsBtn.addEventListener("click", () => advancePhase(5));
+  dom.confirmPinsBtn.addEventListener("click", () => advancePhase(4));
+  dom.directPhotoUpload?.addEventListener("change", onDirectPhotoUpload);
 
-  // Phase 5 bindings
+  // Phase 4 bindings (Generate)
   dom.generateBtn.addEventListener("click", onGenerate);
-
-  // Chat panel
-  dom.chatSendBtn.addEventListener("click", onChatSend);
-  dom.chatInput.addEventListener("keydown", e => { if (e.key === "Enter") onChatSend(); });
-  dom.chatToggle.addEventListener("click", () => {
-    const h = dom.chatHistory;
-    const closed = h.style.display === "none";
-    h.style.display = closed ? "" : "none";
-    dom.chatInput.parentElement.style.display = closed ? "" : "none";
-    dom.chatToggle.textContent = closed ? "−" : "+";
-  });
 
   // Pin popover
   dom.pinPopoverClose.addEventListener("click", () => { dom.pinPopover.hidden = true; activePinId = null; });
@@ -552,6 +521,7 @@ async function onAnalyzePlan() {
     // Run analysis
     const analysis = await PA.analyzeFloorPlan(bgCanvas, appState.context);
     appState.detectedRooms = analysis.rooms || [];
+    appState.globalBoq = analysis.globalBoq || [];
 
     dom.analysisChip.textContent = `✓ ${analysis.rooms.length} room(s) · ${analysis.bhkType || ""} · ${analysis.totalAreaM2 || "?"}m²`;
     dom.analysisSummaryText.textContent = analysis.summary || "";
@@ -633,21 +603,19 @@ async function onConfirmRooms() {
   // Check for missing dims
   const missing = rooms.filter(r => !r.widthM || !r.lengthM);
   if (missing.length) {
-    const ok = confirm(`${missing.length} room(s) have no dimensions. Continue anyway? (You can set dims via double-click on the canvas)`);
+    const ok = confirm(`${missing.length} room(s) have no dimensions. Continue anyway?`);
     if (!ok) return;
   }
 
   dom.confirmRoomsBtn.disabled = true;
-  dom.confirmRoomsBtn.textContent = "Auto-placing furniture…";
 
   try {
-    // Hide room editor, show planner canvas
     dom.roomEditorCanvas.hidden = true;
     dom.plannerCanvas.hidden = false;
     dom.plannerCanvas.width = dom.floorBgCanvas.width;
     dom.plannerCanvas.height = dom.floorBgCanvas.height;
 
-    // Init PlannerCanvas
+    // Init PlannerCanvas (only used for pinning now, no furniture dragging)
     planner = new PlannerCanvas(dom.plannerCanvas, {
       onStateChange: onSceneChange,
       onPinSelect: openPinPopover
@@ -710,10 +678,31 @@ async function onConfirmRooms() {
     console.error(err);
   } finally {
     dom.confirmRoomsBtn.disabled = false;
-    dom.confirmRoomsBtn.textContent = "Confirm Rooms →";
   }
 }
 
+async function onDirectPhotoUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const b64 = await readFileAsBase64(file);
+  const id = "photo_" + Date.now();
+  if (planner) {
+    planner.cameraPins.push({
+      id,
+      xM: 0, 
+      yM: 0, 
+      fovDeg: 60,
+      roomLabel: "Direct Upload",
+      photoDataUrl: b64,
+      brief: "",
+      isDirectPhoto: true // marks this as not needing a map pin pointer
+    });
+    planner.render();
+  }
+  refreshPinsList();
+  e.target.value = "";
+}
 
 
 // ─── Phase 3: Furniture + Chat ─────────────────────────────────────────────────
@@ -1053,8 +1042,8 @@ async function onGenerate() {
     }
 
     // BOQ
-    drawBoq(roomResults);
-    latestArtifacts = buildArtifacts(planner.getSceneState(), roomResults);
+    drawBoq(appState.globalBoq);
+    latestArtifacts = buildArtifacts(planner.getSceneState(), appState.globalBoq);
     dom.downloadScene.disabled = false;
     dom.downloadBoq.disabled = false;
     dom.generateStatus.textContent = "✓ Done";
@@ -1070,157 +1059,44 @@ async function onGenerate() {
 
 async function generateRoom(srcs, inspirationDataUrls) {
   const mainSrc = srcs[0];
-  const PA = window.PoligridAnalysis;
 
-  // 1. Extract style ONCE for the whole room
-  const styleRes = await postJson("/api/style/extract", {
-    roomLabel: mainSrc.roomLabel,
-    roomType: mainSrc.roomType,
-    brief: mainSrc.brief,
-    inspirationImages: inspirationDataUrls,
-    enableLaminateSelection: true
-  });
-  const style = styleRes.style || {};
-  const laminate = pickLaminate(LAMINATE_LIBRARY, style.tags || []);
-
-  // 2. Pick modules + build placement map
-  const placements = mainSrc.placements.length > 0 ? mainSrc.placements :
-    pickModulesFromBrief(MODULE_LIBRARY, mainSrc.brief, mainSrc.widthM, mainSrc.lengthM);
-
-  // 3. Render all views independently — style fingerprint + VIEW CONTINUITY text ensures consistency
-  //    (image-chain edit mode is NOT used because it locks both views to the same pixels
-  //     regardless of camera angle change, resulting in identical output)
   const renders = [];
-  const totalViews = srcs.length;
+  const placements = []; // Accumulated across all views for BOQ
+
+  const laminate = { name: "Matte Walnut", color: "#5a4d41", ratePerSqFt: 94 }; // default mock for BOQ
 
   for (let i = 0; i < srcs.length; i++) {
     const src = srcs[i];
-    dom.generateStatus.textContent = `Generating: ${src.roomLabel} (View ${i + 1}/${srcs.length})…`;
-    const viewRenders = await generateRendersForRoom(src, placements, laminate, style, i + 1, totalViews, null);
-    viewRenders.forEach(r => { r.name = `View ${renders.length + 1}`; });
-    renders.push(...viewRenders);
+    dom.generateStatus.textContent = `Generating: ${src.roomLabel} (${i + 1}/${srcs.length})…`;
+
+    if (src.photoDataUrl) {
+      const res = await postJson("/api/furnish-room", {
+        emptyRoomBase64: src.photoDataUrl,
+        inspirationBase64: inspirationDataUrls,
+        mimeType: src.photoFile ? src.photoFile.type : "image/jpeg",
+        visionModel: "gpt-5.4",
+        renderModel: "gpt-image-1.5"
+      });
+
+      renders.push({ name: `Photo ${i + 1}`, dataUrl: res.dataUrl, source: "openai" });
+      
+      // Accumulate the generated placements for this specific photo into the global BOQ
+      if (res.furnitureList && Array.isArray(res.furnitureList)) {
+        res.furnitureList.forEach(p => placements.push({
+          ...p,
+          roomLabel: src.roomLabel
+        }));
+      }
+    } else {
+      // If we somehow get a room without a photo, skip (since this is an image-to-image workflow now)
+      console.warn("Skipping room without photo in direct-image workflow:", src.roomLabel);
+    }
   }
 
   return {
     room: { label: mainSrc.roomLabel, name: mainSrc.roomLabel, roomType: mainSrc.roomType, widthM: mainSrc.widthM, lengthM: mainSrc.lengthM },
-    laminate, style, placements, renders
+    laminate, style: {}, placements, renders
   };
-}
-
-async function generateRendersForRoom(src, placements, laminate, style, viewIndex, totalViews, baseImageBase64) {
-  const renders = [];
-  const prompt = buildRenderPrompt(src, placements, laminate, style, viewIndex || 1, totalViews || 1);
-
-  // Image source priority:
-  // - View 2+ with a previous render available → use as edit base (image chain for consistency)
-  // - View 1 with a pin photo → use pin photo as edit base
-  // - Otherwise → text-to-image generation
-  const editBase64 = baseImageBase64 || (src.photoDataUrl
-    ? (src.photoDataUrl.includes(",") ? src.photoDataUrl.split(",")[1] : src.photoDataUrl)
-    : null);
-
-  const res = await postJson("/api/render/openai", {
-    prompt,
-    imageBase64: editBase64,
-    mimeType: "image/png",
-    laminate: { name: laminate.name, color: laminate.color },
-    model: DEFAULT_OPENAI_IMAGE_MODEL
-  });
-  if (res.dataUrl) {
-    renders.push({ name: "View 1", dataUrl: res.dataUrl, source: "openai" });
-  } else if (res.images && Array.isArray(res.images)) {
-    res.images.forEach((img, i) => {
-      renders.push({ name: `View ${i + 1}`, dataUrl: img.dataUrl || img, source: "openai" });
-    });
-  }
-  return renders;
-}
-
-function buildRenderPrompt(src, placements, laminate, style, viewIndex, totalViews) {
-  const camX = (src.xM || 0);
-  const camY = (src.yM || 0);
-  const orient = (src.angleDeg !== undefined) ? ((src.angleDeg % 360) + 360) % 360 : 0;
-  const fov = src.fovDeg || 60;
-
-  const getFacing = (deg) => {
-    const norm = ((deg % 360) + 360) % 360;
-    if (norm < 45 || norm >= 315) return "South";
-    if (norm < 135) return "West";
-    if (norm < 225) return "North";
-    return "East";
-  };
-
-  // Build style fingerprint for cross-view cohesion
-  const palette = style.finish_palette || {};
-  const styleFingerprint = [
-    laminate.name,
-    palette.primary,
-    palette.secondary,
-    palette.accent
-  ].filter(Boolean).join(" | ");
-
-  // Visible furniture from this camera angle
-  const visibleItems = [];
-  for (const p of placements) {
-    const dx = (p.xM || 0) - camX;
-    const dy = (p.yM || 0) - camY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 0.2) continue;
-
-    const bearingRad = Math.atan2(dx, -dy);
-    const bearingDeg = (bearingRad * 180 / Math.PI + 360) % 360;
-    let diff = Math.abs(bearingDeg - orient);
-    if (diff > 180) diff = 360 - diff;
-    if (diff <= (fov / 2) + 20) {
-      const facing = getFacing(p.rotationY || p.rotationDeg || 0);
-      visibleItems.push({ ...p, dist, facing });
-    }
-  }
-  visibleItems.sort((a, b) => a.dist - b.dist);
-
-  const itemLines = visibleItems.map(p => {
-    // Look up furniture-type visual descriptor from style extraction
-    const visualDescs = style.furniture_visual_descriptions || {};
-    // Try exact label match, then type match, then generic
-    const visualDesc = visualDescs[p.label] || visualDescs[p.type] ||
-      Object.entries(visualDescs).find(([k]) => p.label?.toLowerCase().includes(k.toLowerCase()))?.[1] || null;
-    const dimStr = `${(p.wM||0).toFixed(1)}m wide \u00d7 ${(p.dM||0).toFixed(1)}m deep \u00d7 ${(p.hM||0).toFixed(1)}m tall`;
-    const descStr = visualDesc ? ` [${visualDesc}]` : "";
-    return `- ${p.label}${descStr}: ${dimStr}, ${p.dist.toFixed(1)}m away, front facing ${p.facing}.`;
-  }).join("\n");
-
-  const cameraDir = getFacing((orient + 180) % 360);
-  const isMultiView = totalViews > 1;
-
-  // Format wall geometry for the render model
-  const wallGeometry = Array.isArray(src.walls) && src.walls.length
-    ? src.walls.map(w => {
-        const tag = w.isExterior ? "exterior" : (w.adjacentRoomLabel ? `shared with ${w.adjacentRoomLabel}` : "internal");
-        const ops = (w.openings || []).map(o =>
-          `${o.type} ${(o.widthM||0).toFixed(1)}m wide at ${(o.offsetFromWestOrNorthM||0).toFixed(1)}m from ${w.side === "north" || w.side === "south" ? "west" : "north"} end`
-        );
-        return `  ${w.side.toUpperCase()} wall [${tag}]${ops.length ? ": " + ops.join(", ") : ": solid"}` ;
-      }).join("\n")
-    : null;
-
-  return [
-    `Generate a photorealistic furnished interior render.`,
-    `ROOM: ${src.roomLabel} (${src.roomType}), dimensions ${src.widthM.toFixed(1)}m wide × ${src.lengthM.toFixed(1)}m deep.`,
-    wallGeometry ? `WALL GEOMETRY (use this to place windows, doors, partitions accurately in the render):\n${wallGeometry}` : (src.archNotes ? `ARCHITECTURAL FEATURES: ${src.archNotes}` : ""),
-    `CAMERA: Standing inside the room, FOV ${fov}°, facing strictly ${cameraDir}.`,
-    isMultiView ? `VIEW CONTINUITY: This is view ${viewIndex} of ${totalViews} of the SAME room. The spatial layout, material palette, furniture pieces, lighting, and style MUST be IDENTICAL across all views — only the camera angle changes.` : "",
-    `STYLE SEED (lock this across all views): ${styleFingerprint}.`,
-    style.style_summary ? `Style summary: ${style.style_summary}.` : "",
-    style.do_not_do && style.do_not_do.length ? `Avoid: ${style.do_not_do.slice(0, 3).join("; ")}.` : "",
-    `Laminate finish on all woodwork: ${laminate.name}.`,
-    itemLines
-      ? `Furniture visible from this camera angle (render ONLY these, nothing behind the camera):\n${itemLines}`
-      : `No furniture visible from this angle — render empty room walls/floor with the specified finishes.`,
-    src.photoDataUrl 
-      ? `Reference photo provided for this exact camera angle — preserve the room geometry and augment with the furniture listed above.` 
-      : `NO reference photo provided — generate the room interior entirely from scratch using ONLY the provided room dimensions, wall geometry, and furniture placements. DO NOT invent extra architectural features not listed.`,
-    `Render rules: correct scale and proportions, warm natural lighting, no text or watermarks, photorealistic quality.`
-  ].filter(Boolean).join("\n");
 }
 
 // ─── Draw Output ───────────────────────────────────────────────────────────────
@@ -1252,56 +1128,109 @@ function drawRoomResult(result) {
   dom.roomResults.appendChild(wrap);
 }
 
-function drawBoq(roomResults) {
-  dom.boqRooms.innerHTML = "";
-  const tbody = dom.boqTableBody;
-  tbody.innerHTML = "";
+function drawBoq(globalBoq) {
+  dom.boqAccordionContainer.innerHTML = "";
   let grandTotal = 0;
 
-  for (const result of roomResults) {
-    const boq = buildBoq(result.placements, result.laminate);
-    grandTotal += boq.totalINR;
+  if (!globalBoq || !globalBoq.length) {
+    dom.boqAccordionContainer.innerHTML = "<p>No BOQ data found in floor plan analysis.</p>";
+    dom.grandTotal.textContent = "₹0";
+    dom.placementSummary.textContent = "No placements identified.";
+    return;
+  }
 
-    const section = document.createElement("div");
-    section.className = "boq-room-section";
-    section.innerHTML = `<div class="boq-room-label">${escapeHtml(result.room.name || result.room.label)}</div>`;
+  // Group by category
+  const categories = {};
+  for (const item of globalBoq) {
+    const cat = item.category || "Uncategorized";
+    if (!categories[cat]) categories[cat] = { total: 0, items: [] };
+    const amt = parseFloat(item.amount) || 0;
+    categories[cat].total += amt;
+    categories[cat].items.push(item);
+    grandTotal += amt;
+  }
 
-    for (const line of boq.lines) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${escapeHtml(line.item)}</td>
-        <td>${line.dims || "—"}</td>
-        <td>${line.qty.toFixed(2)}</td>
-        <td>${escapeHtml(line.unit)}</td>
-        <td>₹${line.rate.toLocaleString("en-IN")}</td>
-        <td>₹${line.amount.toLocaleString("en-IN")}</td>`;
-      tbody.appendChild(tr);
+  // Build Accordions
+  for (const [catName, catData] of Object.entries(categories)) {
+    const details = document.createElement("details");
+    details.className = "boq-accordion";
+    
+    const summary = document.createElement("summary");
+    summary.className = "boq-accordion-header";
+    summary.innerHTML = `
+      <span class="boq-cat-name">${escapeHtml(catName)}</span>
+      <span class="boq-cat-total">₹${catData.total.toLocaleString("en-IN")}</span>
+    `;
+    details.appendChild(summary);
+
+    const tableWrap = document.createElement("div");
+    tableWrap.className = "table-wrap boq-accordion-content";
+    
+    // Build sub-table
+    let rowsHtml = "";
+    for (const line of catData.items) {
+      const q = parseFloat(line.qty) || 0;
+      const r = parseFloat(line.rate) || 0;
+      const a = parseFloat(line.amount) || 0;
+      rowsHtml += `
+        <tr>
+          <td>${escapeHtml(line.item || "Unknown")}</td>
+          <td>${q.toFixed(2)}</td>
+          <td>${escapeHtml(line.unit || "")}</td>
+          <td>₹${r.toLocaleString("en-IN")}</td>
+          <td>₹${a.toLocaleString("en-IN")}</td>
+        </tr>`;
     }
+
+    tableWrap.innerHTML = `
+      <table>
+        <thead>
+          <tr><th>Item</th><th>Qty</th><th>Unit</th><th>Rate (₹)</th><th>Amount (₹)</th></tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    `;
+    
+    details.appendChild(tableWrap);
+    dom.boqAccordionContainer.appendChild(details);
   }
 
   dom.grandTotal.textContent = `₹${grandTotal.toLocaleString("en-IN")}`;
 
-  // Placement summary
-  const allPlacements = roomResults.flatMap(r => r.placements);
-  dom.placementSummary.textContent = allPlacements.map(p =>
-    `${p.label}: ${(p.wM || 0).toFixed(2)}W × ${(p.dM || 0).toFixed(2)}D × ${(p.hM || 0).toFixed(2)}H m  @ (${(p.xM || 0).toFixed(2)}, ${(p.yM || 0).toFixed(2)}) — ${p.roomLabel}`
+  // Placement summary updated to just list all items
+  dom.placementSummary.textContent = globalBoq.map(p =>
+    `[${p.category}] ${p.item}: ${p.qty} ${p.unit} @ ₹${p.rate}`
   ).join("\n");
 }
 
-function buildArtifacts(sceneState, roomResults) {
-  const boqLines = [];
+function buildArtifacts(sceneState, globalBoq) {
   let grandTotal = 0;
-  for (const r of roomResults) {
-    const boq = buildBoq(r.placements, r.laminate);
-    grandTotal += boq.totalINR;
-    boqLines.push(...boq.lines.map(l => ({ ...l, room: r.room.label })));
-  }
-  const csvHeader = "Room,Item,W×D×H,Qty,Unit,Rate INR,Amount INR\n";
-  const csv = csvHeader + boqLines.map(l =>
-    `${l.room},${l.item},${l.dims || ""},${l.qty.toFixed(2)},${l.unit},${l.rate},${l.amount}`
-  ).join("\n");
+  
+  const csvHeader = "Category,Item,Qty,Unit,Rate INR,Amount INR\n";
+  let csvLines = [];
 
-  return { scene: sceneState, boq: { lines: boqLines, grandTotal, csv } };
+  if (globalBoq && globalBoq.length) {
+    const categories = {};
+    for (const item of globalBoq) {
+      const cat = item.category || "Uncategorized";
+      if (!categories[cat]) categories[cat] = { total: 0, items: [] };
+      const amt = parseFloat(item.amount) || 0;
+      categories[cat].total += amt;
+      categories[cat].items.push(item);
+      grandTotal += amt;
+    }
+
+    for (const [catName, catData] of Object.entries(categories)) {
+      for (const line of catData.items) {
+        csvLines.push(`${escapeHtml(catName)},${escapeHtml(line.item)},${parseFloat(line.qty || 0).toFixed(2)},${escapeHtml(line.unit)},${parseFloat(line.rate || 0)},${parseFloat(line.amount || 0)}`);
+      }
+    }
+  }
+
+  const csv = csvHeader + csvLines.join("\n");
+  return { scene: sceneState, boq: { lines: globalBoq || [], grandTotal, csv } };
 }
 
 // ─── Business logic ────────────────────────────────────────────────────────────
@@ -1341,75 +1270,6 @@ function pickModulesFromBrief(library, brief, widthM, lengthM) {
   }));
 }
 
-function buildBoq(placements, laminate) {
-  const lines = [];
-  const lamRate = laminate ? laminate.ratePerSqFt : 94; // approx interior laminate rate
-  
-  // Base rates per SqFt (Material + Labor + Basic Hardware)
-  const RATES = {
-    cabinet: 1200 + lamRate,   // Tall storage, wardrobes
-    study: 1100 + lamRate,     // Desks with storage
-    table: 900 + lamRate,      // Meeting tables, desks
-    bed: 1500 + lamRate,       // Beds (priced on WxD footprint)
-    seating: 0,                // Usually bought loose, omit from custom woodwork cost
-    decor: 0,                  // Loose items
-    custom: 1000 + lamRate     // Generic woodwork
-  };
-
-  for (const p of placements) {
-    const module = MODULE_LIBRARY.find(m => m.id === (p.moduleId || p.id)) || p;
-    const type = module.type || "custom";
-    
-    // Skip soft seating and decor as they are generally loose procurement, not custom woodwork
-    if (type === "seating" || type === "decor") continue;
-
-    const w = p.wM || module.w || 1;
-    const d = p.dM || module.d || 0.6;
-    const h = p.hM || module.h || 2;
-
-    let areaSqM = 0;
-    let unit = "sqft";
-    
-    // Vertical items (cabinets, study) are priced on front elevation WxH
-    if (type === "cabinet" || type === "study" || type === "custom") {
-      areaSqM = w * h;
-    } 
-    // Horizontal items (beds, tables) are priced on plan area WxD
-    else {
-      areaSqM = w * d;
-    }
-
-    const areaSqFt = areaSqM * 10.764; // 1 SqM = 10.764 SqFt
-    const rate = RATES[type] || RATES["custom"];
-    const amount = areaSqFt * rate;
-
-    lines.push({
-      item: p.label || module.label || "Custom Unit",
-      dims: `${w.toFixed(2)}W × ${d.toFixed(2)}D × ${h.toFixed(2)}H m`,
-      qty: areaSqFt,
-      unit: unit,
-      rate: rate,
-      amount: Math.round(amount)
-    });
-  }
-
-  // Add a line for Transport & Installation (5% of total)
-  const subtotal = lines.reduce((s, l) => s + l.amount, 0);
-  if (subtotal > 0) {
-    const transportInstall = Math.round(subtotal * 0.05);
-    lines.push({
-      item: "Transport, Handling & Installation (5%)",
-      dims: "Overall",
-      qty: 1,
-      unit: "lump sum",
-      rate: transportInstall,
-      amount: transportInstall
-    });
-  }
-
-  const totalINR = lines.reduce((s, l) => s + l.amount, 0);
-  return { lines, totalINR };
-}
 
 // ─── Floor plan rendering ───────────────────────────────────────────────────────
 
