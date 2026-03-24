@@ -393,8 +393,8 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .room-result-head { display: flex; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); gap: 8px; }
 .room-result-label { font-size: 14px; font-weight: 600; flex: 1; }
 .room-result-dims  { font-size: 11px; color: var(--text-dim); }
-.room-result-img-wrap { position: relative; }
-.room-result-img   { width: 100%; display: block; }
+.room-result-img-wrap { position: relative; height: 240px; overflow: hidden; }
+.room-result-img   { width: 100%; height: 100%; display: block; object-fit: cover; }
 .room-result-items { padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; }
 .room-item-row     { display: flex; gap: 8px; font-size: 11px; }
 .room-item-name    { flex: 1; }

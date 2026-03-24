@@ -235,7 +235,8 @@ async function furnishRoomWithOpenAi(body) {
       "Keep it strictly under 3 sentences, focusing only on actionable visual details."
     ].join("\n");
     const styleContent = [{ type: "input_text", text: stylePrompt }];
-    for (const inspBase64 of inspirationImages) {
+    // Limit to 3 images to prevent payload size limits or proxy timeouts
+    for (const inspBase64 of inspirationImages.slice(0, 3)) {
       styleContent.push({
         type: "input_image",
         image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:${mimeType};base64,${inspBase64}`
@@ -244,7 +245,7 @@ async function furnishRoomWithOpenAi(body) {
     try {
       const stylePayload = {
         model: visionModel,
-        reasoning: { effort: "low" },
+        reasoning: { effort: "medium" }, // Increased effort for better extraction
         max_output_tokens: 500,
         input: [{ role: "user", content: styleContent }]
       };
@@ -269,7 +270,7 @@ async function furnishRoomWithOpenAi(body) {
     `Furnish the empty room strictly with the following items:\n${furnitureStr}`,
     "Maintain the architectural geometry, lighting, and camera angle of the original empty room.",
     body.brief ? `Design Brief / Style Preference: ${body.brief}` : "Apply standard styling.",
-    styleGuidance ? `Visual Inspiration Guidance: ${styleGuidance}` : ""
+    styleGuidance ? `CRITICAL Visual Inspiration Guidance: The entire scene MUST heavily reflect this specific style, materials, and color palette:\n${styleGuidance}` : ""
   ].filter(Boolean).join("\n");
 
   const renderResult = await renderWithOpenAi({
