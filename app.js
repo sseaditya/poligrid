@@ -409,14 +409,37 @@ function advancePhase(n) {
 // ─── Init ──────────────────────────────────────────────────────────────────────
 
 const Debugger = {
+  truncateBase64(obj) {
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(Debugger.truncateBase64);
+    const result = {};
+    for (const key in obj) {
+      let val = obj[key];
+      if (typeof val === 'string' && val.length > 200) {
+        if (val.startsWith('data:image') || val.length > 500) {
+          val = val.substring(0, 100) + `... [TRUNCATED ${val.length - 100} chars]`;
+        }
+      } else if (typeof val === 'object') {
+        val = Debugger.truncateBase64(val);
+      }
+      result[key] = val;
+    }
+    return result;
+  },
+  
   log(tag, prompt, response) {
     const content = el("debugContent");
     if (!content) return;
+    
+    // Safely truncate large payload files before DOM injection to prevent browser freezing
+    const safePrompt = typeof prompt === 'object' ? Debugger.truncateBase64(prompt) : prompt;
+    const safeResponse = typeof response === 'object' ? Debugger.truncateBase64(response) : response;
+
     const entry = document.createElement("div");
     entry.className = "debug-log-entry";
     entry.innerHTML = `<span class="debug-tag">${escapeHtml(tag)}</span>
-  <span class="debug-prompt">Prompt Payload:<br/>${escapeHtml(typeof prompt === 'object' ? JSON.stringify(prompt, null, 2) : prompt)}</span>
-  <span class="debug-response">Response:<br/>${escapeHtml(typeof response === 'object' ? JSON.stringify(response, null, 2) : response)}</span>`;
+  <span class="debug-prompt">Prompt Payload:<br/>${escapeHtml(typeof safePrompt === 'object' ? JSON.stringify(safePrompt, null, 2) : safePrompt)}</span>
+  <span class="debug-response">Response:<br/>${escapeHtml(typeof safeResponse === 'object' ? JSON.stringify(safeResponse, null, 2) : safeResponse)}</span>`;
     content.prepend(entry);
   }
 };
