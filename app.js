@@ -1394,8 +1394,29 @@ async function resizeImageToMatch(originalDataUrl, generatedDataUrl) {
         canvas.width = origImg.naturalWidth || origImg.width;
         canvas.height = origImg.naturalHeight || origImg.height;
         const ctx = canvas.getContext("2d");
-        // Draw the generated image stretched to match the original aspect ratio/size
-        ctx.drawImage(genImg, 0, 0, canvas.width, canvas.height);
+        
+        const ow = canvas.width;
+        const oh = canvas.height;
+        const gw = genImg.naturalWidth || genImg.width;
+        const gh = genImg.naturalHeight || genImg.height;
+
+        const canvasRatio = ow / oh;
+        const genRatio = gw / gh;
+        
+        let drawWidth = gw;
+        let drawHeight = gh;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        if (genRatio > canvasRatio) {
+           drawWidth = gh * canvasRatio;
+           offsetX = (gw - drawWidth) / 2;
+        } else {
+           drawHeight = gw / canvasRatio;
+           offsetY = (gh - drawHeight) / 2;
+        }
+
+        ctx.drawImage(genImg, offsetX, offsetY, drawWidth, drawHeight, 0, 0, ow, oh);
         resolve(canvas.toDataURL("image/jpeg", 0.95));
       };
       genImg.onerror = reject;

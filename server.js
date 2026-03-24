@@ -181,8 +181,9 @@ async function furnishRoomWithOpenAi(body) {
   if (!placements || placements.length === 0) {
     const planningPrompt = [
       "You are an expert interior designer. You have been given a photo of an empty room.",
+      body.brief ? `CRITICAL CONTEXT: The user requested the following Design Brief/Room Type: "${body.brief}". Prioritize furnishing it matching this exact purpose (e.g. if it says Office, place desks and chairs; if Living Room, place sofa).` : "",
       inspirationImages.length ? "You have also been given inspiration images showing the desired style." : "",
-      "Based on the room's geometry and the implied style, generate a complete list of furniture necessary to furnish this room.",
+      "Based on the room's geometry, requested brief, and the implied style, generate a complete list of furniture necessary to furnish this room.",
       "Return strict JSON with a `placements` array, where each item has:",
       "  - label: e.g., '3-Seater Sofa'",
       "  - type: 'seating', 'table', 'cabinet', 'bed', 'decor', or 'custom'",
