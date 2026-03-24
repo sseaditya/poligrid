@@ -671,7 +671,7 @@ async function onConfirmRooms() {
     advancePhase(3);
 
     // Show chat panel
-    dom.chatPanel.hidden = false;
+    if (dom.chatPanel) dom.chatPanel.hidden = false;
 
   } catch (err) {
     alert("Canvas population failed: " + err.message);
@@ -685,7 +685,7 @@ async function onDirectPhotoUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
 
-  const b64 = await readFileAsBase64(file);
+  const b64 = await readDataUrl(file);
   const id = "photo_" + Date.now();
   if (planner) {
     planner.cameraPins.push({
