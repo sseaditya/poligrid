@@ -175,52 +175,57 @@ async function furnishRoomWithOpenAi(body) {
   }
 
   // STEP 1: Vision Planning (Decide what furniture to place)
-  const planningPrompt = [
-    "You are an expert interior designer. You have been given a photo of an empty room.",
-    inspirationImages.length ? "You have also been given inspiration images showing the desired style." : "",
-    "Based on the room's geometry and the implied style, generate a complete list of furniture necessary to furnish this room.",
-    "Return strict JSON with a `placements` array, where each item has:",
-    "  - label: e.g., '3-Seater Sofa'",
-    "  - type: 'seating', 'table', 'cabinet', 'bed', 'decor', or 'custom'",
-    "  - wM: approx width in meters",
-    "  - dM: approx depth in meters",
-    "  - hM: approx height in meters",
-    "Return nothing but JSON."
-  ].filter(Boolean).join("\n");
+  const providedPlacements = Array.isArray(body.placements) ? body.placements : null;
+  let placements = providedPlacements;
 
-  const contentArray = [
-    { type: "input_text", text: planningPrompt },
-    { type: "input_image", image_url: emptyRoomBase64.startsWith("data:") ? emptyRoomBase64 : `data:${mimeType};base64,${emptyRoomBase64}` }
-  ];
+  if (!placements || placements.length === 0) {
+    const planningPrompt = [
+      "You are an expert interior designer. You have been given a photo of an empty room.",
+      inspirationImages.length ? "You have also been given inspiration images showing the desired style." : "",
+      "Based on the room's geometry and the implied style, generate a complete list of furniture necessary to furnish this room.",
+      "Return strict JSON with a `placements` array, where each item has:",
+      "  - label: e.g., '3-Seater Sofa'",
+      "  - type: 'seating', 'table', 'cabinet', 'bed', 'decor', or 'custom'",
+      "  - wM: approx width in meters",
+      "  - dM: approx depth in meters",
+      "  - hM: approx height in meters",
+      "Return nothing but JSON."
+    ].filter(Boolean).join("\n");
 
-  for (const inspBase64 of inspirationImages) {
-    contentArray.push({
-      type: "input_image",
-      image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:${mimeType};base64,${inspBase64}`
+    const contentArray = [
+      { type: "input_text", text: planningPrompt },
+      { type: "input_image", image_url: emptyRoomBase64.startsWith("data:") ? emptyRoomBase64 : `data:${mimeType};base64,${emptyRoomBase64}` }
+    ];
+
+    for (const inspBase64 of inspirationImages) {
+      contentArray.push({
+        type: "input_image",
+        image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:${mimeType};base64,${inspBase64}`
+      });
+    }
+
+    const payload = {
+      model: visionModel,
+      reasoning: { effort: "medium" },
+      max_output_tokens: 4000,
+      input: [
+        { role: "user", content: contentArray }
+      ]
+    };
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     });
+
+    const raw = await response.text();
+    if (!response.ok) throw httpError(response.status, extractApiError(raw));
+    
+    const parsed = safeJson(raw);
+    const jsonOutput = extractJsonFromText(extractResponsesText(parsed));
+    placements = jsonOutput?.placements || [];
   }
-
-  const payload = {
-    model: visionModel,
-    reasoning: { effort: "medium" },
-    max_output_tokens: 4000,
-    input: [
-      { role: "user", content: contentArray }
-    ]
-  };
-
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-
-  const raw = await response.text();
-  if (!response.ok) throw httpError(response.status, extractApiError(raw));
-  
-  const parsed = safeJson(raw);
-  const jsonOutput = extractJsonFromText(extractResponsesText(parsed));
-  const placements = jsonOutput?.placements || [];
 
   // STEP 2: Render Generation (DALL-E)
   const furnitureStr = placements.map(p => `- ${p.label} (${p.wM}x${p.dM}m)`).join("\n");
@@ -229,7 +234,7 @@ async function furnishRoomWithOpenAi(body) {
     "Photorealistic architectural interior render.",
     `Furnish the empty room strictly with the following items:\n${furnitureStr}`,
     "Maintain the architectural geometry, lighting, and camera angle of the original empty room.",
-    "Apply the requested style and materials perfectly."
+    body.brief ? `Design Brief / Style: ${body.brief}` : "Apply the requested style and materials perfectly."
   ].join("\n");
 
   const renderResult = await renderWithOpenAi({

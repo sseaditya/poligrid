@@ -1077,7 +1077,9 @@ async function generateRoom(srcs, inspirationDataUrls) {
         inspirationBase64: inspirationDataUrls,
         mimeType: src.photoFile ? src.photoFile.type : "image/jpeg",
         visionModel: "gpt-5.4",
-        renderModel: "gpt-image-1.5"
+        renderModel: "gpt-image-1.5",
+        placements: src.placements,
+        brief: src.brief
       });
 
       renders.push({ name: `Photo ${i + 1}`, dataUrl: res.dataUrl, source: "openai" });
@@ -1090,8 +1092,30 @@ async function generateRoom(srcs, inspirationDataUrls) {
         }));
       }
     } else {
-      // If we somehow get a room without a photo, skip (since this is an image-to-image workflow now)
-      console.warn("Skipping room without photo in direct-image workflow:", src.roomLabel);
+      // Pins without reference photo flow through text-to-image Generation
+      const renderPrompt = [
+        "Photorealistic architectural interior render.",
+        `Furnish this ${src.roomType || "room"}.`,
+        src.brief ? `Design Brief / Style: ${src.brief}` : "Apply standard modern interior styling.",
+        "Include the following specific items based on the floor plan arrangement:",
+        (src.placements || []).map(p => `- ${p.label}`).join("\n")
+      ].join("\n");
+
+      const res = await postJson("/api/render/openai", {
+        model: "gpt-image-1.5",
+        prompt: renderPrompt,
+        mimeType: "image/png"
+      });
+
+      renders.push({ name: `Generated ${i + 1}`, dataUrl: res.dataUrl, source: "openai" });
+      
+      // Also accumulate BOQ from the placements provided by the floor plan
+      if (src.placements && Array.isArray(src.placements)) {
+        src.placements.forEach(p => placements.push({
+          ...p,
+          roomLabel: src.roomLabel
+        }));
+      }
     }
   }
 
