@@ -303,7 +303,6 @@ const dom = {
   pinsList: el("pinsList"),
   noPinsHint: el("noPinsHint"),
   confirmPinsBtn: el("confirmPinsBtn"),
-  directPhotoUpload: el("directPhotoUpload"),
   // Phase 4 (Brief & Generate)
   panel4: el("panel4"),
   globalBrief: el("globalBrief"),
@@ -409,38 +408,164 @@ function advancePhase(n) {
 // ─── Init ──────────────────────────────────────────────────────────────────────
 
 const Debugger = {
-  truncateBase64(obj) {
-    if (obj === null || typeof obj !== 'object') return obj;
-    if (Array.isArray(obj)) return obj.map(Debugger.truncateBase64);
-    const result = {};
-    for (const key in obj) {
-      let val = obj[key];
-      if (typeof val === 'string' && val.length > 200) {
-        if (val.startsWith('data:image') || val.length > 500) {
-          val = val.substring(0, 100) + `... [TRUNCATED ${val.length - 100} chars]`;
-        }
-      } else if (typeof val === 'object') {
-        val = Debugger.truncateBase64(val);
-      }
-      result[key] = val;
-    }
-    return result;
-  },
-  
-  log(tag, prompt, response) {
-    const content = el("debugContent");
-    if (!content) return;
-    
-    // Safely truncate large payload files before DOM injection to prevent browser freezing
-    const safePrompt = typeof prompt === 'object' ? Debugger.truncateBase64(prompt) : prompt;
-    const safeResponse = typeof response === 'object' ? Debugger.truncateBase64(response) : response;
+  _seq: 0,
 
-    const entry = document.createElement("div");
-    entry.className = "debug-log-entry";
-    entry.innerHTML = `<span class="debug-tag">${escapeHtml(tag)}</span>
-  <span class="debug-prompt">Prompt Payload:<br/>${escapeHtml(typeof safePrompt === 'object' ? JSON.stringify(safePrompt, null, 2) : safePrompt)}</span>
-  <span class="debug-response">Response:<br/>${escapeHtml(typeof safeResponse === 'object' ? JSON.stringify(safeResponse, null, 2) : safeResponse)}</span>`;
+  // Replace base64 blobs with size labels so raw JSON is readable
+  sanitize(obj) {
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(v => Debugger.sanitize(v));
+    const out = {};
+    for (const k in obj) {
+      const v = obj[k];
+      if (typeof v === 'string' && v.length > 300 &&
+          (v.startsWith('data:image') || /^[A-Za-z0-9+/]{200}/.test(v))) {
+        out[k] = `[image ~${Math.round(v.length * 0.75 / 1024)}KB]`;
+      } else if (typeof v === 'object') {
+        out[k] = Debugger.sanitize(v);
+      } else {
+        out[k] = v;
+      }
+    }
+    return out;
+  },
+
+  // Pull the prompt text out of a responses-API or image-gen payload
+  _promptText(payload) {
+    const content = payload?.input?.[0]?.content;
+    if (Array.isArray(content)) {
+      const t = content.find(c => c.type === 'input_text');
+      if (t?.text) return t.text;
+    }
+    if (typeof payload?.prompt === 'string') return payload.prompt;
+    return '';
+  },
+
+  // Pull image data URLs that were sent (input_image items in responses-API)
+  _sentImages(payload) {
+    const content = payload?.input?.[0]?.content;
+    if (!Array.isArray(content)) return [];
+    return content
+      .filter(c => c.type === 'input_image' && typeof c.image_url === 'string' && c.image_url.startsWith('data:'))
+      .map(c => c.image_url);
+  },
+
+  // Pull the text output from a responses-API reply
+  _responseText(response) {
+    if (Array.isArray(response?.output)) {
+      for (const out of response.output) {
+        if (out.type === 'message') {
+          const t = (out.content || []).find(c => c.type === 'output_text');
+          if (t?.text) return t.text;
+        }
+      }
+    }
+    return '';
+  },
+
+  // Pull a generated image (b64_json) from an image-gen/edit response
+  _responseImage(response) {
+    const b64 = response?.data?.[0]?.b64_json;
+    return b64 ? `data:image/png;base64,${b64}` : null;
+  },
+
+  log(step, payload, response) {
+    const content = el('debugContent');
+    if (!content) return;
+
+    const seq         = ++Debugger._seq;
+    const time        = new Date().toLocaleTimeString();
+    const model       = payload?.model || '—';
+    const isError     = !!(response?.error);
+    const effort      = payload?.reasoning?.effort || null;
+    const maxTok      = payload?.max_output_tokens || null;
+
+    // Extract rich data BEFORE sanitising
+    const promptText  = Debugger._promptText(payload);
+    const sentImgs    = Debugger._sentImages(payload);
+    const respText    = Debugger._responseText(response);
+    const respImg     = Debugger._responseImage(response);
+    const usage       = response?.usage || null;
+
+    // Safe JSON for raw view
+    const safePayload  = Debugger.sanitize(payload  || {});
+    const safeResponse = Debugger.sanitize(response || {});
+
+    // ── helpers ────────────────────────────────────────────
+    const thumbs = (srcs) => srcs.map(s =>
+      `<img class="dbg-thumb" src="${s}" title="click to enlarge" onclick="this.classList.toggle('dbg-thumb-zoom')" />`
+    ).join('');
+
+    const metaTag = (label, val) =>
+      `<span class="dbg-meta-tag">${escapeHtml(label)}: <b>${escapeHtml(String(val))}</b></span>`;
+
+    const rawBlock = (label, obj) => `
+      <details class="dbg-raw">
+        <summary>${escapeHtml(label)}</summary>
+        <pre class="dbg-pre">${escapeHtml(JSON.stringify(obj, null, 2))}</pre>
+      </details>`;
+
+    // ── sent section ────────────────────────────────────────
+    const sentMeta = [
+      metaTag('model', model),
+      effort  ? metaTag('reasoning', effort) : '',
+      maxTok  ? metaTag('max_tokens', maxTok) : '',
+      sentImgs.length ? metaTag('images', sentImgs.length) : '',
+    ].filter(Boolean).join('');
+
+    const sentBody = `
+      <div class="dbg-meta-row">${sentMeta}</div>
+      ${promptText ? `<div class="dbg-label">Prompt</div><pre class="dbg-prompt-pre">${escapeHtml(promptText)}</pre>` : ''}
+      ${sentImgs.length ? `<div class="dbg-label">Images sent (${sentImgs.length})</div><div class="dbg-thumbs">${thumbs(sentImgs)}</div>` : ''}
+      ${rawBlock('Raw request JSON', safePayload)}`;
+
+    // ── received section ────────────────────────────────────
+    const usageHtml = usage
+      ? `<div class="dbg-usage">${usage.input_tokens ?? '?'} tokens in &nbsp;·&nbsp; ${usage.output_tokens ?? '?'} tokens out</div>`
+      : '';
+
+    const recvBody = `
+      ${respText  ? `<div class="dbg-label">Output text</div><pre class="dbg-resp-pre">${escapeHtml(respText)}</pre>` : ''}
+      ${respImg   ? `<div class="dbg-label">Generated image</div><div class="dbg-thumbs">${thumbs([respImg])}</div>` : ''}
+      ${usageHtml}
+      ${isError   ? `<div class="dbg-error">${escapeHtml(JSON.stringify(response?.error))}</div>` : ''}
+      ${rawBlock('Raw response JSON', safeResponse)}`;
+
+    // ── assemble entry ──────────────────────────────────────
+    const entry = document.createElement('details');
+    entry.className = 'dbg-entry';
+    entry.open = true;
+    entry.innerHTML = `
+      <summary class="dbg-summary">
+        <span class="dbg-seq">#${seq}</span>
+        <span class="dbg-step-name">${escapeHtml(step)}</span>
+        <span class="dbg-model-pill">${escapeHtml(model)}</span>
+        <span class="dbg-time">${time}</span>
+        <span class="dbg-status-dot ${isError ? 'err' : 'ok'}">${isError ? '✗' : '✓'}</span>
+      </summary>
+      <div class="dbg-body">
+        <details class="dbg-section" open>
+          <summary class="dbg-section-head sent">→ Sent to OpenAI</summary>
+          <div class="dbg-section-body">${sentBody}</div>
+        </details>
+        <details class="dbg-section" open>
+          <summary class="dbg-section-head recv">← Received from OpenAI</summary>
+          <div class="dbg-section-body">${recvBody}</div>
+        </details>
+      </div>`;
+
     content.prepend(entry);
+
+    // Update count badge in header
+    const badge = el('dbgCount');
+    if (badge) badge.textContent = seq;
+  },
+
+  clear() {
+    const content = el('debugContent');
+    if (content) content.innerHTML = '';
+    Debugger._seq = 0;
+    const badge = el('dbgCount');
+    if (badge) badge.textContent = '0';
   }
 };
 
@@ -487,7 +612,6 @@ function init() {
   dom.tabSelectP4.addEventListener("click", () => setMode("select", dom.tabSelectP4, dom.tabPin));
   dom.tabPin.addEventListener("click", () => setMode("pin", dom.tabSelectP4, dom.tabPin));
   dom.confirmPinsBtn.addEventListener("click", () => advancePhase(4));
-  dom.directPhotoUpload?.addEventListener("change", onDirectPhotoUpload);
 
   // Phase 4 bindings (Generate)
   dom.generateBtn.addEventListener("click", onGenerate);
@@ -508,12 +632,16 @@ function init() {
     if (latestArtifacts) downloadText("boq.csv", latestArtifacts.boq.csv, "text/csv");
   });
 
-  // Debug toggle
+  // Debug panel — toggle collapse + clear
   const debugPanel = el("debugPanel");
   const debugToggleBtn = el("debugToggleBtn");
   el("debugHeader")?.addEventListener("click", () => {
     debugPanel.classList.toggle("collapsed");
     debugToggleBtn.textContent = debugPanel.classList.contains("collapsed") ? "▲" : "▼";
+  });
+  el("dbgClearBtn")?.addEventListener("click", e => {
+    e.stopPropagation(); // don't toggle panel
+    Debugger.clear();
   });
 
   // Clickable Checkpoint Pills
@@ -750,28 +878,6 @@ async function onConfirmRooms() {
   }
 }
 
-async function onDirectPhotoUpload(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const b64 = await readDataUrl(file);
-  const id = "photo_" + Date.now();
-  if (planner) {
-    planner.cameraPins.push({
-      id,
-      xM: 0, 
-      yM: 0, 
-      fovDeg: 60,
-      roomLabel: "Direct Upload",
-      photoDataUrl: b64,
-      brief: "",
-      isDirectPhoto: true // marks this as not needing a map pin pointer
-    });
-    planner.render();
-  }
-  refreshPinsList();
-  e.target.value = "";
-}
 
 
 // ─── Phase 3: Furniture + Chat ─────────────────────────────────────────────────
@@ -1007,6 +1113,7 @@ function onPinFieldChange() {
     fovDeg: parseFloat(dom.pinFov.value) || 60,
     brief: dom.pinBrief.value
   });
+  planner.render();
   refreshPinsList();
 }
 
@@ -1115,22 +1222,8 @@ async function onGenerate() {
       }
     }
 
-    // Compile Final BOQ combining Floor Plan Analysis items + Directly Generated Room Furniture
+    // BOQ comes from floor plan analysis (globalBoq already includes all furniture, plumbing, etc.)
     const finalBoq = [...(appState.globalBoq || [])];
-    
-    for (const result of roomResults) {
-      if (!result.placements) continue;
-      for (const p of result.placements) {
-        finalBoq.push({
-          category: p.type === "cabinet" ? "Modular furniture" : "Loose furniture",
-          item: `${p.label} (${(Number(p.wM) || 1).toFixed(1)}x${(Number(p.dM) || 1).toFixed(1)}m) in ${p.roomLabel || result.room.name || "Room"}`,
-          qty: 1,
-          unit: "pcs",
-          rate: p.type === "cabinet" ? 25000 : 15000,
-          amount: p.type === "cabinet" ? 25000 : 15000
-        });
-      }
-    }
 
     drawBoq(finalBoq);
     latestArtifacts = buildArtifacts(planner?.getSceneState() || {}, finalBoq);

@@ -30,7 +30,7 @@
         </button>
         <div class="phase-connector" id="conn23"></div>
         <button class="phase-pill" data-phase="3" id="pill3" disabled>
-          <span class="pill-num">3</span><span class="pill-label">Room Photos</span>
+          <span class="pill-num">3</span><span class="pill-label">Camera Pins</span>
         </button>
         <div class="phase-connector" id="conn34"></div>
         <button class="phase-pill" data-phase="4" id="pill4" disabled>
@@ -142,16 +142,9 @@
         <div class="phase-panel" id="panel3" hidden>
           <div class="panel-head">
             <span class="step-num">3</span>
-            <span>Room Photos</span>
+            <span>Camera Pins</span>
           </div>
-          <p class="hint-text">Switch to 📷 Pin mode to click on the map, OR directly upload photos without a location.</p>
-          
-          <div class="room-action-row" style="margin-bottom: 12px;">
-            <label class="ghost-btn" for="directPhotoUpload" style="cursor:pointer; text-align:center; display:block;">
-              <span>＋</span> Add Room Photo (No Pin)
-              <input type="file" id="directPhotoUpload" accept="image/*" style="display:none;" />
-            </label>
-          </div>
+          <p class="hint-text">Switch to 📷 Pin mode, click on the floor plan to place a camera pin, then drag the arrow to set the direction. Click a pin to attach a photo and brief.</p>
 
           <div class="tool-tabs">
             <button class="tool-tab active" id="tabSelectP4" data-mode="select">✥ Select</button>
@@ -217,8 +210,8 @@
               Room label/Location
               <input type="text" id="pinRoomLabel" placeholder="e.g. Living Room, Unknown Area" />
             </label>
-            <label class="field-label" id="fovLabelWrap">
-              FOV ° (Map Pins only)
+            <label class="field-label">
+              FOV °
               <input type="number" id="pinFov" value="60" min="20" max="120" step="5" />
             </label>
             <label class="field-label">
@@ -254,7 +247,9 @@
     <!-- ── LLM Debug Panel ─────────────────────────────────────────────────── -->
     <div class="debug-panel collapsed" id="debugPanel">
       <div class="debug-header" id="debugHeader">
-        <span class="debug-title">LLM Debug Logger</span>
+        <span class="debug-title">API Inspector</span>
+        <span class="dbg-count-badge"><span id="dbgCount">0</span> calls</span>
+        <button class="dbg-clear-btn" id="dbgClearBtn" title="Clear all">Clear</button>
         <button class="ghost-sm" id="debugToggleBtn">▲</button>
       </div>
       <div class="debug-content" id="debugContent"></div>

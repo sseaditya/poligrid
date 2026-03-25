@@ -168,10 +168,12 @@ async function renderWithOpenAi(body) {
 async function furnishRoomWithOpenAi(body) {
   const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
   const visionModel = String(body.visionModel || DEFAULT_OPENAI_VISION_MODEL).trim();
-  
+
   const emptyRoomBase64 = String(body.emptyRoomBase64 || "").trim();
   const mimeType = String(body.mimeType || "image/jpeg").trim();
   const inspirationImages = Array.isArray(body.inspirationBase64) ? body.inspirationBase64 : [];
+
+  const _debug = [];
 
   // STEP 1: Extract Style from Inspiration Images
   let styleGuidance = "";
