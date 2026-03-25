@@ -393,7 +393,6 @@ function advancePhase(n) {
     if (!pill) continue;
     pill.classList.toggle("active", i === n);
     pill.classList.toggle("done", i < n);
-    pill.disabled = i > n;
   }
   // Connectors
   for (let i = 1; i <= 3; i++) {
@@ -909,21 +908,16 @@ function init() {
     if (pill) {
       pill.style.cursor = "pointer";
       pill.addEventListener("click", () => {
-        if (!pill.disabled) {
-          hideResultsView();
-          goBack(i);
-        }
+        hideResultsView();
+        goBack(i);
       });
     }
   }
   document.querySelectorAll(".panel-head").forEach((head, index) => {
     head.addEventListener("click", () => {
       const p = index + 1; // panels 1 to 4
-      const pill = el(`pill${p}`);
-      if (pill && !pill.disabled) {
-        hideResultsView();
-        goBack(p);
-      }
+      hideResultsView();
+      goBack(p);
     });
   });
 
