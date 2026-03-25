@@ -2156,6 +2156,7 @@ async function loadProject(id) {
 
     // Group existing renders and boq INDEPENDENT of camera pins
     if (data.renders && data.renders.length > 0) {
+      console.log("Loading existing renders from DB:", data.renders.length);
       // Build mock results view for history
       appState.existingRendersData = data.renders;
       const btn = el("viewExistingRendersBtn");
@@ -2176,6 +2177,7 @@ async function loadProject(id) {
       }
       
       for (const [rLabel, rList] of Object.entries(viewRendersByRoom)) {
+        console.log("Drawing room:", rLabel, "with renders:", rList.length);
         // Find matching room to get dims
         const roomObj = rooms.find(r => r.label === rLabel || r.name === rLabel) || { width_m: 0, length_m: 0 };
         const result = {
