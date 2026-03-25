@@ -329,8 +329,8 @@ const dom = {
   pinRoomLabel: el("pinRoomLabel"),
   pinFov: el("pinFov"),
   pinBrief: el("pinBrief"),
-  // Output
-  outputPanel: el("outputPanel"),
+  // Results view
+  outputPanel: el("resultsView"),
   closeOutput: el("closeOutput"),
   roomResults: el("roomResults"),
   statusBox: el("statusBox"),
@@ -350,6 +350,7 @@ let planner = null;
 let roomEditor = null;
 let activePinId = null;
 let latestArtifacts = null;
+let _inspirationDataUrls = [];
 
 const appState = {
   projectId: generateUUID(),  // unique ID for this session, persisted to Supabase
@@ -403,6 +404,70 @@ function advancePhase(n) {
   for (let i = 1; i <= 4; i++) {
     const p = el(`panel${i}`);
     if (p) p.hidden = i !== n;
+  }
+}
+
+// ─── Results view ─────────────────────────────────────────────────────────────
+
+function showResultsView() {
+  el("resultsView").hidden = false;
+  // Populate inspiration strip
+  const strip = el("resultsInspirationStrip");
+  const section = el("resultsInspiration");
+  if (strip && _inspirationDataUrls.length) {
+    strip.innerHTML = "";
+    _inspirationDataUrls.forEach(url => {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = "Inspiration";
+      img.addEventListener("click", () => openLightbox(url));
+      strip.appendChild(img);
+    });
+    if (section) section.hidden = false;
+  } else if (section) {
+    section.hidden = true;
+  }
+  // Pre-fill regen brief with current global brief
+  const regenInput = el("regenBriefInput");
+  if (regenInput) regenInput.value = dom.globalBrief?.value || "";
+  const regenSection = el("regenerateSection");
+  if (regenSection) regenSection.hidden = false;
+  // Scroll results to top
+  const scroll = el("resultsScroll");
+  if (scroll) scroll.scrollTop = 0;
+}
+
+function hideResultsView() {
+  el("resultsView").hidden = true;
+}
+
+// ─── Lightbox ─────────────────────────────────────────────────────────────────
+
+function openLightbox(src) {
+  const lb = document.createElement("div");
+  lb.className = "img-lightbox";
+  lb.innerHTML = `<img src="${src}" alt=""/><button class="img-lightbox-close">✕</button>`;
+  lb.addEventListener("click", e => {
+    if (e.target === lb || e.target.classList.contains("img-lightbox-close")) lb.remove();
+  });
+  document.body.appendChild(lb);
+}
+
+// ─── Phase back navigation ─────────────────────────────────────────────────────
+
+function goBack(targetPhase) {
+  advancePhase(targetPhase);
+  if (targetPhase === 1) {
+    dom.roomEditorCanvas.hidden = true;
+    dom.plannerCanvas.hidden = true;
+  } else if (targetPhase === 2) {
+    dom.roomEditorCanvas.hidden = false;
+    dom.plannerCanvas.hidden = true;
+    if (roomEditor) roomEditor.render();
+  } else if (targetPhase >= 3) {
+    dom.roomEditorCanvas.hidden = true;
+    dom.plannerCanvas.hidden = false;
+    if (planner) planner.render();
   }
 }
 
@@ -689,8 +754,28 @@ function init() {
   dom.pinFov.addEventListener("input", onPinFieldChange);
   dom.pinBrief.addEventListener("input", onPinFieldChange);
 
-  // Output
-  dom.closeOutput?.addEventListener("click", () => { dom.outputPanel.hidden = true; document.querySelector(".workspace")?.classList.remove("output-open"); });
+  // Back buttons per phase
+  el("backBtn2")?.addEventListener("click", () => goBack(1));
+  el("backBtn3")?.addEventListener("click", () => goBack(2));
+  el("backBtn4")?.addEventListener("click", () => goBack(3));
+
+  // Results view: close → go back to phase 4 (edit)
+  dom.closeOutput?.addEventListener("click", () => {
+    hideResultsView();
+  });
+
+  // Regenerate button
+  el("regenBtn")?.addEventListener("click", async () => {
+    const regenBtn = el("regenBtn");
+    const regenBrief = el("regenBriefInput")?.value?.trim();
+    if (regenBrief && dom.globalBrief) dom.globalBrief.value = regenBrief;
+    if (regenBtn) { regenBtn.disabled = true; regenBtn.textContent = "Regenerating…"; }
+    dom.roomResults.innerHTML = "";
+    dom.statusBox.textContent = "Preparing regeneration…";
+    el("resultsScroll")?.scrollTo({ top: 0, behavior: "smooth" });
+    await onGenerate();
+    if (regenBtn) { regenBtn.disabled = false; regenBtn.textContent = "↺ Regenerate All Renders"; }
+  });
   dom.downloadScene.addEventListener("click", () => {
     if (latestArtifacts) {
       downloadText("scene.json", JSON.stringify(latestArtifacts.scene, null, 2), "application/json");
@@ -728,19 +813,8 @@ function init() {
       pill.style.cursor = "pointer";
       pill.addEventListener("click", () => {
         if (!pill.disabled) {
-          advancePhase(i);
-          if (i === 1) {
-            dom.roomEditorCanvas.hidden = true;
-            dom.plannerCanvas.hidden = true;
-          } else if (i === 2) {
-            dom.roomEditorCanvas.hidden = false;
-            dom.plannerCanvas.hidden = true;
-            if (roomEditor) roomEditor.render();
-          } else if (i >= 3) {
-            dom.roomEditorCanvas.hidden = true;
-            dom.plannerCanvas.hidden = false;
-            if (planner) planner.render();
-          }
+          hideResultsView();
+          goBack(i);
         }
       });
     }
@@ -1197,13 +1271,19 @@ function refreshPinsList() {
     const item = document.createElement("div");
     item.className = "pin-item";
     const hasPhoto = !!pin.photoDataUrl;
+    const hasPhoto_badge = hasPhoto
+      ? `<span class="pin-badge photo">📷 Photo</span>`
+      : `<span class="pin-badge no-photo">No photo</span>`;
     item.innerHTML = `
       <div class="pin-item-head">
-        ${hasPhoto ? `<img class="pin-item-thumb" src="${pin.photoDataUrl}" alt=""/>` : ""}
-        <span class="pin-item-label">📷 ${escapeHtml(pin.roomLabel || "Untitled pin")}</span>
+        ${hasPhoto ? `<img class="pin-item-thumb" src="${pin.photoDataUrl}" alt=""/>` : `<div class="pin-item-thumb-empty">📍</div>`}
+        <div class="pin-item-info">
+          <span class="pin-item-label">${escapeHtml(pin.roomLabel || "Untitled pin")}</span>
+          <div class="pin-item-meta">${hasPhoto_badge} · FOV ${pin.fovDeg || 60}°</div>
+        </div>
         <button class="pin-item-edit ghost-sm" data-id="${pin.id}">Edit</button>
       </div>
-      <div class="pin-item-sub">FOV ${pin.fovDeg || 60}° · ${pin.brief ? pin.brief.slice(0, 40) : "No brief"}</div>`;
+      ${pin.brief ? `<div class="pin-item-brief">${escapeHtml(pin.brief.slice(0, 60))}${pin.brief.length > 60 ? "…" : ""}</div>` : ""}`;
     item.querySelector(".pin-item-edit").addEventListener("click", () => openPinPopover(pin));
     dom.pinsList.appendChild(item);
   }
@@ -1355,18 +1435,19 @@ async function onGenerate() {
   if (!renderSources.length) { alert("Nothing to generate."); return; }
 
   dom.outputPanel.hidden = false;
-  document.querySelector(".workspace")?.classList.add("output-open");
   dom.generateBtn.disabled = true;
   dom.generateBtn.textContent = "Generating…";
   dom.generateStatus.hidden = false;
   dom.generateStatus.textContent = "Extracting styles + preparing renders…";
-  dom.statusBox.textContent = "";
-  dom.roomResults.innerHTML = "";
+  dom.statusBox.textContent = "Loading inspiration images…";
 
   try {
     const inspirationDataUrls = await Promise.all(
       appState.inspirationFiles.map(f => readDataUrl(f))
     );
+    _inspirationDataUrls = inspirationDataUrls; // cache for results view
+    showResultsView(); // populates inspiration strip, scrolls to top
+    dom.roomResults.innerHTML = "";
     const floorPlanBase64 = dom.floorBgCanvas ? dom.floorBgCanvas.toDataURL("image/png") : "";
 
     const roomGroups = {};
@@ -1377,7 +1458,9 @@ async function onGenerate() {
 
     const roomResults = [];
     for (const [roomLabel, srcs] of Object.entries(roomGroups)) {
-      dom.generateStatus.textContent = `Preparing: ${roomLabel}…`;
+      const statusMsg = `Generating render: ${roomLabel}…`;
+      dom.generateStatus.textContent = statusMsg;
+      dom.statusBox.textContent = statusMsg;
       try {
         const result = await generateRoom(srcs, inspirationDataUrls, floorPlanBase64);
         roomResults.push(result);
@@ -1417,6 +1500,7 @@ async function onGenerate() {
     dom.downloadScene.disabled = false;
     dom.downloadBoq.disabled = false;
     dom.generateStatus.textContent = "✓ Done";
+    dom.statusBox.textContent = "";
 
     // Persist furniture BOQ items (generated) and all placements to Supabase
     const furnitureBoq = finalBoq.filter(b =>
@@ -1512,37 +1596,67 @@ async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64) {
 
   return {
     room: { label: mainSrc.roomLabel, name: mainSrc.roomLabel, roomType: mainSrc.roomType, widthM: mainSrc.widthM, lengthM: mainSrc.lengthM },
-    laminate, style: {}, placements, renders
+    laminate, style: {}, placements, renders,
+    sourcePhotos: srcs.map(s => s.photoDataUrl).filter(Boolean)
   };
 }
 
 // ─── Draw Output ───────────────────────────────────────────────────────────────
 
 function drawRoomResult(result) {
-  const wrap = document.createElement("section");
-  wrap.className = "room-result-card";
+  const card = document.createElement("div");
+  card.className = "render-room-card";
   const w = result.room.widthM, l = result.room.lengthM;
 
-  wrap.innerHTML = `
-    <div class="room-result-head">
-      <span class="room-result-label">${escapeHtml(result.room.name || result.room.label)}</span>
-      <span class="room-result-dims">${w ? w.toFixed(1) + "×" + l.toFixed(1) + "m" : ""} · ${escapeHtml(result.laminate.name)}</span>
-    </div>`;
+  // Header
+  const header = document.createElement("div");
+  header.className = "render-card-header";
+  header.innerHTML = `
+    <h2 class="render-card-title">${escapeHtml(result.room.name || result.room.label)}</h2>
+    <span class="render-card-meta">${w ? w.toFixed(1) + " × " + l.toFixed(1) + " m" : ""} · ${escapeHtml(result.laminate?.name || "")}</span>`;
+  card.appendChild(header);
 
-  for (const render of result.renders) {
-    const imgWrap = document.createElement("div");
-    imgWrap.className = "room-result-img-wrap";
-    const img = document.createElement("img");
-    img.src = render.dataUrl;
-    img.className = "room-result-img";
-    img.alt = `Render — ${result.room.label}`;
-    imgWrap.appendChild(img);
-    wrap.appendChild(imgWrap);
-  }
+  // Each render view (with optional before photo)
+  result.renders.forEach((render, i) => {
+    const sourcePhoto = result.sourcePhotos?.[i] || null;
 
-  // Removed redundant piece-listing to save screen space so BOQ isn't pushed out of view
+    const compareWrap = document.createElement("div");
+    compareWrap.className = sourcePhoto ? "render-compare-wrap" : "render-compare-wrap single";
 
-  dom.roomResults.appendChild(wrap);
+    if (sourcePhoto) {
+      // BEFORE cell
+      const beforeCell = document.createElement("div");
+      beforeCell.className = "render-compare-cell";
+      const beforeImg = document.createElement("img");
+      beforeImg.src = sourcePhoto;
+      beforeImg.alt = "Reference photo";
+      beforeImg.addEventListener("click", () => openLightbox(sourcePhoto));
+      beforeCell.appendChild(beforeImg);
+      const beforeLabel = document.createElement("span");
+      beforeLabel.className = "render-cell-label";
+      beforeLabel.textContent = "Reference";
+      beforeCell.appendChild(beforeLabel);
+      compareWrap.appendChild(beforeCell);
+    }
+
+    // AFTER cell
+    const afterCell = document.createElement("div");
+    afterCell.className = "render-compare-cell";
+    const afterImg = document.createElement("img");
+    afterImg.src = render.dataUrl;
+    afterImg.alt = `Furnished — ${result.room.label}`;
+    afterImg.addEventListener("click", () => openLightbox(render.dataUrl));
+    afterCell.appendChild(afterImg);
+    const afterLabel = document.createElement("span");
+    afterLabel.className = "render-cell-label";
+    afterLabel.textContent = sourcePhoto ? "Furnished" : "Furnished Render";
+    afterCell.appendChild(afterLabel);
+    compareWrap.appendChild(afterCell);
+
+    card.appendChild(compareWrap);
+  });
+
+  dom.roomResults.appendChild(card);
 }
 
 function drawBoq(globalBoq) {

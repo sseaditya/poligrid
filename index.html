@@ -56,10 +56,7 @@
           <span class="pill-num">4</span><span class="pill-label">Generate</span>
         </button>
       </nav>
-      <div class="top-bar-actions">
-        <button id="downloadScene" class="ghost-sm" disabled>↓ Scene JSON</button>
-        <button id="downloadBoq"   class="ghost-sm" disabled>↓ BOQ CSV</button>
-      </div>
+      <div class="top-bar-right"></div>
     </header>
 
     <div class="workspace">
@@ -141,7 +138,7 @@
             <span class="step-num">2</span>
             <span>Edit Rooms</span>
           </div>
-          <p class="hint-text">Drag corners to resize • Double-click to rename • Add or delete rooms</p>
+          <p class="hint-text">Drag corners to resize · Double-click to rename · Add or delete rooms</p>
 
           <div class="room-action-row">
             <button id="addRoomBtn" class="ghost-btn"><span>＋</span> Add Room</button>
@@ -154,7 +151,10 @@
             <p id="analysisSummaryText" class="summary-text"></p>
           </div>
 
-          <button id="confirmRoomsBtn" class="primary-btn mt12">Confirm Rooms →</button>
+          <div class="phase-footer">
+            <button class="back-btn" id="backBtn2">← Back</button>
+            <button id="confirmRoomsBtn" class="primary-btn flex-1">Confirm Rooms →</button>
+          </div>
         </div>
 
         <!-- ── PHASE 3: Camera Viewpoints & Photos ─────────────────────── -->
@@ -163,7 +163,7 @@
             <span class="step-num">3</span>
             <span>Camera Pins</span>
           </div>
-          <p class="hint-text">Switch to 📷 Pin mode, click on the floor plan to place a camera pin, then drag the arrow to set the direction. Click a pin to attach a photo and brief.</p>
+          <p class="hint-text">Switch to 📷 Pin mode · Click floor plan to place a pin · Drag arrow to set direction · Click pin to attach a photo &amp; brief</p>
 
           <div class="tool-tabs">
             <button class="tool-tab active" id="tabSelectP4" data-mode="select">✥ Select</button>
@@ -173,7 +173,10 @@
           <div id="pinsList" class="pins-list"></div>
           <p class="hint-text" id="noPinsHint">No pins yet. Add at least one to generate a render.</p>
 
-          <button id="confirmPinsBtn" class="primary-btn mt12">Set Up Generation →</button>
+          <div class="phase-footer">
+            <button class="back-btn" id="backBtn3">← Back</button>
+            <button id="confirmPinsBtn" class="primary-btn flex-1">Set Up Generation →</button>
+          </div>
         </div>
 
         <!-- ── PHASE 4: Brief + Generate ───────────────────────────────── -->
@@ -184,10 +187,14 @@
           </div>
           <label class="field-label">
             Global design brief
-            <textarea id="globalBrief" rows="3" placeholder="e.g. Warm modern Indian, matte walnut finish, minimal handles, warm lighting, concealed wiring…"></textarea>
+            <textarea id="globalBrief" rows="4" placeholder="e.g. Warm modern Indian, matte walnut finish, minimal handles, warm lighting, concealed wiring…"></textarea>
           </label>
-          <button id="generateBtn" class="primary-btn" disabled>✦ Generate Renders + BOQ</button>
+          <button id="generateBtn" class="primary-btn generate-btn" disabled>✦ Generate Renders + BOQ</button>
           <div id="generateStatus" class="status-chip" hidden></div>
+
+          <div class="phase-footer" style="margin-top:4px">
+            <button class="back-btn" id="backBtn4">← Back</button>
+          </div>
         </div>
 
       </aside>
@@ -205,15 +212,12 @@
 
         <!-- Canvas stack (floor plan bg + room editor overlay + planner overlay) -->
         <div class="canvas-wrap" id="canvasWrap" hidden>
-          <!-- The floor plan image rendered here -->
           <canvas id="floorBgCanvas" aria-hidden="true"></canvas>
-          <!-- Room editor layer (Phase 2) -->
           <canvas id="roomEditorCanvas" aria-label="Room editor"></canvas>
-          <!-- Furniture + pin planner layer (Phase 3+) -->
           <canvas id="plannerCanvas" tabindex="0" aria-label="Furniture planner" hidden></canvas>
         </div>
 
-        <!-- ── Photo Editor Popover ────────────────────────────────────── -->
+        <!-- ── Pin Popover ───────────────────────────────────────────── -->
         <div class="pin-popover" id="pinPopover" hidden>
           <div class="pin-popover-head">
             <span id="pinPopoverTitle">Room Photo</span>
@@ -221,12 +225,12 @@
           </div>
           <div class="pin-popover-body">
             <label class="field-label">
-              Reference photo (Empty room)
+              Reference photo (empty room)
               <input type="file" id="pinPhotoInput" accept="image/*" />
             </label>
             <div id="pinPhotoPreview" class="pin-photo-preview" hidden></div>
             <label class="field-label">
-              Room label/Location
+              Room label / Location
               <input type="text" id="pinRoomLabel" placeholder="e.g. Living Room, Unknown Area" />
             </label>
             <label class="field-label">
@@ -241,26 +245,66 @@
         </div>
 
       </main>
+    </div>
 
-      <!-- ── OUTPUT PANEL ─────────────────────────────────────────────────── -->
-      <section class="output-panel" id="outputPanel" hidden>
-        <div class="output-header">
-          <h2>Furnished Renders</h2>
-          <button class="ghost-sm" id="closeOutput">✕</button>
-        </div>
-        <div id="statusBox" class="status-box"></div>
-        <div id="roomResults" class="room-results"></div>
+    <!-- ── RESULTS VIEW (Full-screen overlay) ─────────────────────────────── -->
+    <div class="results-view" id="resultsView" hidden>
 
-        <h2 class="boq-heading">Bill of Quantities (INR)</h2>
-        <div id="boqAccordionContainer" class="boq-accordion-container">
-          <!-- Accordions injected here by app.js -->
+      <!-- Sticky header -->
+      <header class="results-header">
+        <button class="ghost-sm results-back-btn" id="closeOutput">← Back to Edit</button>
+        <h1 class="results-title">Renders &amp; BOQ</h1>
+        <div class="results-header-actions">
+          <button id="downloadScene" class="ghost-sm" disabled>↓ Scene JSON</button>
+          <button id="downloadBoq"   class="ghost-sm" disabled>↓ BOQ CSV</button>
         </div>
-        <div class="boq-grand-total" style="text-align: right; margin-top: 16px; font-weight: 600; font-size: 1.1em;">
-          Grand Total: <span id="grandTotal">—</span>
+      </header>
+
+      <!-- Scrollable content -->
+      <div class="results-scroll" id="resultsScroll">
+
+        <!-- Generation status bar -->
+        <div id="statusBox" class="results-status-box"></div>
+
+        <!-- Inspiration references -->
+        <div id="resultsInspiration" class="results-inspiration-section" hidden>
+          <p class="results-label">Inspiration References</p>
+          <div id="resultsInspirationStrip" class="inspiration-strip"></div>
         </div>
-        <h3>Placement Summary</h3>
-        <pre id="placementSummary"></pre>
-      </section>
+
+        <!-- Room render cards (populated by drawRoomResult) -->
+        <div id="roomResults" class="room-results-list"></div>
+
+        <!-- BOQ section -->
+        <div class="results-boq-section">
+          <h2 class="results-section-heading">Bill of Quantities</h2>
+          <div id="boqAccordionContainer" class="boq-accordion-container"></div>
+          <div class="boq-grand-total-row">
+            <span class="boq-total-label">Grand Total</span>
+            <span class="boq-total-amount" id="grandTotal">—</span>
+          </div>
+        </div>
+
+        <!-- Regenerate section -->
+        <div class="results-regen-section" id="regenerateSection" hidden>
+          <div class="regen-section-inner">
+            <h2 class="results-section-heading">Tweak &amp; Regenerate</h2>
+            <p class="hint-text">Adjust your brief or style preferences and regenerate all renders.</p>
+            <div class="regen-form">
+              <label class="field-label">
+                Modified design brief
+                <textarea id="regenBriefInput" rows="3" placeholder="e.g. Contemporary minimal, warm oak tones, natural light…"></textarea>
+              </label>
+              <button class="primary-btn regen-submit-btn" id="regenBtn">↺ Regenerate All Renders</button>
+            </div>
+            <div id="regenStatus" class="status-chip" hidden></div>
+          </div>
+        </div>
+
+        <!-- Hidden: placement summary for download -->
+        <pre id="placementSummary" hidden></pre>
+
+      </div>
     </div>
 
     <!-- ── LLM Debug Panel ─────────────────────────────────────────────────── -->
