@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/sseaditya/poligrid#readme",
   "dependencies": {
+    "@supabase/supabase-js": "^2.100.0",
     "pdfjs-dist": "^3.11.174"
   }
 }
