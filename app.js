@@ -407,109 +407,106 @@ function advancePhase(n) {
 
 // ─── Init ──────────────────────────────────────────────────────────────────────
 
+// ─── HYD furniture rates (Hyderabad premium market, INR) ──────────────────────
+const HYD_FURNITURE_RATES = {
+  cabinet: 48000,
+  study:   38000,
+  bed:     34000,
+  seating: 40000,
+  table:   22000,
+  decor:    9000,
+  custom:  26000
+};
+
+// ─── API Inspector (Debug Logger) ─────────────────────────────────────────────
 const Debugger = {
-  _seq: 0,
+  _seq:     0,
+  _pSeq:    0,
+  _pending: new Map(),   // pSeq → { el, label, startTime }
+  _logs:    [],          // full log archive for download
 
-  // Replace base64 blobs with size labels so raw JSON is readable
-  sanitize(obj) {
-    if (obj === null || typeof obj !== 'object') return obj;
-    if (Array.isArray(obj)) return obj.map(v => Debugger.sanitize(v));
-    const out = {};
-    for (const k in obj) {
-      const v = obj[k];
-      if (typeof v === 'string' && v.length > 300 &&
-          (v.startsWith('data:image') || /^[A-Za-z0-9+/]{200}/.test(v))) {
-        out[k] = `[image ~${Math.round(v.length * 0.75 / 1024)}KB]`;
-      } else if (typeof v === 'object') {
-        out[k] = Debugger.sanitize(v);
-      } else {
-        out[k] = v;
+  // ── Show a pending "waiting" entry immediately when a request starts ────────
+  pending(label) {
+    const id   = ++Debugger._pSeq;
+    const time = new Date().toLocaleTimeString();
+    const el_  = document.createElement('details');
+    el_.className = 'dbg-entry dbg-pending';
+    el_.open = false;
+    el_.innerHTML = `
+      <summary class="dbg-summary">
+        <span class="dbg-seq">…</span>
+        <span class="dbg-step-name">${escapeHtml(label)}</span>
+        <span class="dbg-spinner">⟳</span>
+        <span class="dbg-time">${time}</span>
+      </summary>
+      <div class="dbg-body"><div class="dbg-pending-msg">Waiting for OpenAI response…</div></div>`;
+    const content = el('debugContent');
+    if (content) content.prepend(el_);
+    Debugger._pending.set(id, { el: el_, label, startTime: Date.now() });
+    return id;
+  },
+
+  // ── Resolve a pending entry: remove spinner, log actual debug items ─────────
+  resolvePending(pendingId, debugItems, error) {
+    const p = Debugger._pending.get(pendingId);
+    if (p) {
+      p.el.remove();
+      Debugger._pending.delete(pendingId);
+    }
+    if (error) {
+      Debugger._addEntry(p?.label || 'API Call', {}, { error: { message: error.message } });
+    } else if (debugItems && debugItems.length) {
+      // Log each OpenAI sub-call (newest first order preserved by prepend in _addEntry)
+      for (let i = debugItems.length - 1; i >= 0; i--) {
+        const d = debugItems[i];
+        Debugger._addEntry(d.step, d.payload, d.response);
       }
     }
-    return out;
   },
 
-  // Pull the prompt text out of a responses-API or image-gen payload
-  _promptText(payload) {
-    const content = payload?.input?.[0]?.content;
-    if (Array.isArray(content)) {
-      const t = content.find(c => c.type === 'input_text');
-      if (t?.text) return t.text;
-    }
-    if (typeof payload?.prompt === 'string') return payload.prompt;
-    return '';
-  },
-
-  // Pull image data URLs that were sent (input_image items in responses-API)
-  _sentImages(payload) {
-    const content = payload?.input?.[0]?.content;
-    if (!Array.isArray(content)) return [];
-    return content
-      .filter(c => c.type === 'input_image' && typeof c.image_url === 'string' && c.image_url.startsWith('data:'))
-      .map(c => c.image_url);
-  },
-
-  // Pull the text output from a responses-API reply
-  _responseText(response) {
-    if (Array.isArray(response?.output)) {
-      for (const out of response.output) {
-        if (out.type === 'message') {
-          const t = (out.content || []).find(c => c.type === 'output_text');
-          if (t?.text) return t.text;
-        }
-      }
-    }
-    return '';
-  },
-
-  // Pull a generated image (b64_json) from an image-gen/edit response
-  _responseImage(response) {
-    const b64 = response?.data?.[0]?.b64_json;
-    return b64 ? `data:image/png;base64,${b64}` : null;
-  },
-
-  log(step, payload, response) {
+  // ── Core method: build one collapsible entry for a single OpenAI call ───────
+  _addEntry(step, payload, response) {
     const content = el('debugContent');
     if (!content) return;
 
-    const seq         = ++Debugger._seq;
-    const time        = new Date().toLocaleTimeString();
-    const model       = payload?.model || '—';
-    const isError     = !!(response?.error);
-    const effort      = payload?.reasoning?.effort || null;
-    const maxTok      = payload?.max_output_tokens || null;
+    const seq     = ++Debugger._seq;
+    const time    = new Date().toLocaleTimeString();
+    const model   = payload?.model || '—';
+    const isError = !!(response?.error);
+    const effort  = payload?.reasoning?.effort || null;
+    const maxTok  = payload?.max_output_tokens || null;
 
-    // Extract rich data BEFORE sanitising
-    const promptText  = Debugger._promptText(payload);
-    const sentImgs    = Debugger._sentImages(payload);
-    const respText    = Debugger._responseText(response);
-    const respImg     = Debugger._responseImage(response);
-    const usage       = response?.usage || null;
+    // Extract rich data before sanitising
+    const promptText = Debugger._promptText(payload);
+    const sentImgs   = Debugger._sentImages(payload);
+    const respText   = Debugger._responseText(response);
+    const respImg    = Debugger._responseImage(response);
+    const usage      = response?.usage || null;
 
-    // Safe JSON for raw view
-    const safePayload  = Debugger.sanitize(payload  || {});
-    const safeResponse = Debugger.sanitize(response || {});
+    // Archive for download
+    Debugger._logs.push({ seq, step, time, model, promptText, respText, usage, isError });
 
-    // ── helpers ────────────────────────────────────────────
-    const thumbs = (srcs) => srcs.map(s =>
-      `<img class="dbg-thumb" src="${s}" title="click to enlarge" onclick="this.classList.toggle('dbg-thumb-zoom')" />`
+    const safePayload  = Debugger._sanitize(payload  || {});
+    const safeResponse = Debugger._sanitize(response || {});
+
+    const thumbs = srcs => srcs.map(s =>
+      `<img class="dbg-thumb" src="${s}" title="Click to zoom" onclick="this.classList.toggle('dbg-thumb-zoom')" />`
     ).join('');
 
-    const metaTag = (label, val) =>
-      `<span class="dbg-meta-tag">${escapeHtml(label)}: <b>${escapeHtml(String(val))}</b></span>`;
+    const metaTag = (lbl, val) =>
+      `<span class="dbg-meta-tag">${escapeHtml(lbl)}: <b>${escapeHtml(String(val))}</b></span>`;
 
-    const rawBlock = (label, obj) => `
+    const rawBlock = (lbl, obj) => `
       <details class="dbg-raw">
-        <summary>${escapeHtml(label)}</summary>
+        <summary>${escapeHtml(lbl)}</summary>
         <pre class="dbg-pre">${escapeHtml(JSON.stringify(obj, null, 2))}</pre>
       </details>`;
 
-    // ── sent section ────────────────────────────────────────
     const sentMeta = [
       metaTag('model', model),
-      effort  ? metaTag('reasoning', effort) : '',
-      maxTok  ? metaTag('max_tokens', maxTok) : '',
-      sentImgs.length ? metaTag('images', sentImgs.length) : '',
+      effort ? metaTag('reasoning', effort) : '',
+      maxTok ? metaTag('max_tokens', maxTok) : '',
+      sentImgs.length ? metaTag('images_sent', sentImgs.length) : '',
     ].filter(Boolean).join('');
 
     const sentBody = `
@@ -518,19 +515,17 @@ const Debugger = {
       ${sentImgs.length ? `<div class="dbg-label">Images sent (${sentImgs.length})</div><div class="dbg-thumbs">${thumbs(sentImgs)}</div>` : ''}
       ${rawBlock('Raw request JSON', safePayload)}`;
 
-    // ── received section ────────────────────────────────────
     const usageHtml = usage
-      ? `<div class="dbg-usage">${usage.input_tokens ?? '?'} tokens in &nbsp;·&nbsp; ${usage.output_tokens ?? '?'} tokens out</div>`
+      ? `<div class="dbg-usage">↑ ${usage.input_tokens ?? '?'} in &nbsp;·&nbsp; ↓ ${usage.output_tokens ?? '?'} out</div>`
       : '';
 
     const recvBody = `
-      ${respText  ? `<div class="dbg-label">Output text</div><pre class="dbg-resp-pre">${escapeHtml(respText)}</pre>` : ''}
-      ${respImg   ? `<div class="dbg-label">Generated image</div><div class="dbg-thumbs">${thumbs([respImg])}</div>` : ''}
+      ${respText ? `<div class="dbg-label">Output text</div><pre class="dbg-resp-pre">${escapeHtml(respText)}</pre>` : ''}
+      ${respImg  ? `<div class="dbg-label">Generated image</div><div class="dbg-thumbs">${thumbs([respImg])}</div>` : ''}
       ${usageHtml}
-      ${isError   ? `<div class="dbg-error">${escapeHtml(JSON.stringify(response?.error))}</div>` : ''}
+      ${isError  ? `<div class="dbg-error">${escapeHtml(JSON.stringify(response?.error))}</div>` : ''}
       ${rawBlock('Raw response JSON', safeResponse)}`;
 
-    // ── assemble entry ──────────────────────────────────────
     const entry = document.createElement('details');
     entry.className = 'dbg-entry';
     entry.open = true;
@@ -555,15 +550,85 @@ const Debugger = {
 
     content.prepend(entry);
 
-    // Update count badge in header
     const badge = el('dbgCount');
-    if (badge) badge.textContent = seq;
+    if (badge) badge.textContent = Debugger._seq;
   },
 
+  // ── Extract prompt text from a responses-API or image-gen payload ──────────
+  _promptText(payload) {
+    const content = payload?.input?.[0]?.content;
+    if (Array.isArray(content)) {
+      const t = content.find(c => c.type === 'input_text');
+      if (t?.text) return t.text;
+    }
+    if (typeof payload?.prompt === 'string') return payload.prompt;
+    return '';
+  },
+
+  // ── Extract sent image data URLs ───────────────────────────────────────────
+  _sentImages(payload) {
+    const content = payload?.input?.[0]?.content;
+    if (!Array.isArray(content)) return [];
+    return content
+      .filter(c => c.type === 'input_image' && typeof c.image_url === 'string' && c.image_url.startsWith('data:'))
+      .map(c => c.image_url);
+  },
+
+  // ── Extract text output from a responses-API reply ─────────────────────────
+  _responseText(response) {
+    if (Array.isArray(response?.output)) {
+      for (const out of response.output) {
+        if (out.type === 'message') {
+          const t = (out.content || []).find(c => c.type === 'output_text');
+          if (t?.text) return t.text;
+        }
+      }
+    }
+    return '';
+  },
+
+  // ── Extract generated image from image-gen/edit response ──────────────────
+  _responseImage(response) {
+    const b64 = response?.data?.[0]?.b64_json;
+    return b64 ? `data:image/png;base64,${b64}` : null;
+  },
+
+  // ── Replace base64 blobs with size labels so raw JSON is readable ──────────
+  _sanitize(obj) {
+    if (obj === null || typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) return obj.map(v => Debugger._sanitize(v));
+    const out = {};
+    for (const k in obj) {
+      const v = obj[k];
+      if (typeof v === 'string' && v.length > 300 &&
+          (v.startsWith('data:image') || /^[A-Za-z0-9+/]{200}/.test(v))) {
+        out[k] = `[image ~${Math.round(v.length * 0.75 / 1024)}KB]`;
+      } else if (typeof v === 'object') {
+        out[k] = Debugger._sanitize(v);
+      } else {
+        out[k] = v;
+      }
+    }
+    return out;
+  },
+
+  // ── Download all logs as JSON ──────────────────────────────────────────────
+  download() {
+    const data = JSON.stringify(Debugger._logs, null, 2);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+    a.download = `poligrid-logs-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.json`;
+    a.click();
+  },
+
+  // ── Clear all entries ──────────────────────────────────────────────────────
   clear() {
     const content = el('debugContent');
     if (content) content.innerHTML = '';
-    Debugger._seq = 0;
+    Debugger._seq  = 0;
+    Debugger._pSeq = 0;
+    Debugger._logs = [];
+    Debugger._pending.clear();
     const badge = el('dbgCount');
     if (badge) badge.textContent = '0';
   }
@@ -632,16 +697,20 @@ function init() {
     if (latestArtifacts) downloadText("boq.csv", latestArtifacts.boq.csv, "text/csv");
   });
 
-  // Debug panel — toggle collapse + clear
-  const debugPanel = el("debugPanel");
+  // Debug panel — toggle collapse, clear, download
+  const debugPanel    = el("debugPanel");
   const debugToggleBtn = el("debugToggleBtn");
   el("debugHeader")?.addEventListener("click", () => {
     debugPanel.classList.toggle("collapsed");
     debugToggleBtn.textContent = debugPanel.classList.contains("collapsed") ? "▲" : "▼";
   });
   el("dbgClearBtn")?.addEventListener("click", e => {
-    e.stopPropagation(); // don't toggle panel
+    e.stopPropagation();
     Debugger.clear();
+  });
+  el("dbgDownloadBtn")?.addEventListener("click", e => {
+    e.stopPropagation();
+    Debugger.download();
   });
 
   // Clickable Checkpoint Pills
@@ -1222,8 +1291,29 @@ async function onGenerate() {
       }
     }
 
-    // BOQ comes from floor plan analysis (globalBoq already includes all furniture, plumbing, etc.)
+    // BOQ = floor plan structural items + furniture from AI renders (HYD premium pricing)
     const finalBoq = [...(appState.globalBoq || [])];
+
+    // Add furniture placed by AI in each rendered room (deduped by label per room)
+    for (const result of roomResults) {
+      if (!Array.isArray(result.placements)) continue;
+      const seen = new Set();
+      for (const p of result.placements) {
+        const key = `${result.room.label}:${(p.label || '').toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const isModular = p.type === 'cabinet' || p.type === 'study';
+        const rate = HYD_FURNITURE_RATES[p.type] || HYD_FURNITURE_RATES.custom;
+        finalBoq.push({
+          category: isModular ? 'Modular furniture' : 'Loose furniture',
+          item: `${p.label || 'Item'} — ${result.room.label}`,
+          qty: 1,
+          unit: 'pcs',
+          rate,
+          amount: rate
+        });
+      }
+    }
 
     drawBoq(finalBoq);
     latestArtifacts = buildArtifacts(planner?.getSceneState() || {}, finalBoq);
@@ -1254,7 +1344,7 @@ async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64) {
 
     // Both image-to-image (with photo) and text-to-image (without photo) use the same endpoint now!
     const res = await postJson("/api/furnish-room", {
-      emptyRoomBase64: src.photoDataUrl || "", // Empty string triggers server side Text-to-Image fallback
+      emptyRoomBase64: src.photoDataUrl || "",
       inspirationBase64: inspirationDataUrls,
       floorPlanBase64: floorPlanBase64,
       cameraContext: {
@@ -1262,6 +1352,13 @@ async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64) {
         yM: src.yM,
         angleDeg: src.angleDeg,
         fovDeg: src.fovDeg
+      },
+      roomContext: {
+        widthM:   src.widthM,
+        lengthM:  src.lengthM,
+        roomType: src.roomType,
+        archNotes: src.archNotes || '',
+        walls:    src.walls || []
       },
       mimeType: src.photoFile ? src.photoFile.type : "image/png",
       visionModel: "gpt-5.4",
@@ -1512,23 +1609,43 @@ async function renderPdfFirstPage(file, canvas) {
 
 // ─── Utilities ─────────────────────────────────────────────────────────────────
 
+const _STEP_LABELS = {
+  '/api/analyze/floorplan':  'Floor Plan Analysis',
+  '/api/furnish-room':       'Furnish Room Pipeline',
+  '/api/render/openai':      'Image Render',
+  '/api/chat/placement':     'Chat Assistant',
+  '/api/style/extract':      'Style Extraction',
+  '/api/analyze/room-image': 'Room Image Match',
+  '/api/furniture/autoplace':'Furniture Auto-Place',
+};
+
 async function postJson(url, body) {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
-  const text = await res.text();
+  const stepLabel = _STEP_LABELS[url] || url;
+  const pendingId = Debugger.pending(stepLabel);
+
   let json;
-  try { json = JSON.parse(text); } catch { throw new Error(text.slice(0, 200)); }
-  if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-  
-  // Intercept backend debug logs and render them locally
-  if (json._debug && Array.isArray(json._debug)) {
-    json._debug.forEach(log => Debugger.log(log.step, log.payload, log.response));
+  try {
+    const res  = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const text = await res.text();
+    try { json = JSON.parse(text); } catch { throw new Error(text.slice(0, 200)); }
+    if (!res.ok) {
+      const err = new Error(json?.error || `HTTP ${res.status}`);
+      Debugger.resolvePending(pendingId, null, err);
+      throw err;
+    }
+    Debugger.resolvePending(pendingId, json._debug || null, null);
+    return json;
+  } catch (err) {
+    // Only call resolvePending if not already called above
+    if (Debugger._pending.has(pendingId)) {
+      Debugger.resolvePending(pendingId, null, err);
+    }
+    throw err;
   }
-  
-  return json;
 }
 
 function readDataUrl(file) {

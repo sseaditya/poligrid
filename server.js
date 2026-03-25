@@ -276,15 +276,32 @@ async function furnishRoomWithOpenAi(body) {
   }
 
   // STEP 3: Render Generation (DALL-E)
-  const furnitureStr = placements.map(p => `- ${p.label} (${p.wM}x${p.dM}m)`).join("\n");
-  
+  const furnitureStr = placements.map(p => `- ${p.label} (${p.wM}x${p.dM}m, height ${p.hM || 0.9}m)`).join("\n");
+  const roomCtx = body.roomContext || {};
+  const roomDimsText = (roomCtx.widthM && roomCtx.lengthM)
+    ? `Room dimensions: ${roomCtx.widthM}m wide × ${roomCtx.lengthM}m long × 2.85m ceiling height.`
+    : '';
+
+  // Describe wall openings so the AI knows where doors/windows are
+  const wallLines = Array.isArray(roomCtx.walls) && roomCtx.walls.length
+    ? roomCtx.walls.map(w => {
+        const openings = (w.openings || []).map(o => `${o.type} (${o.widthM || 0.9}m wide)`).join(', ');
+        return `${w.side} wall: ${w.isExterior ? 'exterior' : 'interior'}${openings ? ' — ' + openings : ' — solid'}`;
+      }).join('; ')
+    : '';
+
   const renderPrompt = [
-    "Photorealistic architectural interior render.",
-    `Furnish the room strictly with the following items:\n${furnitureStr}`,
-    emptyRoomBase64 ? "Maintain the architectural geometry, lighting, and camera angle of the original empty room." : "",
-    body.brief ? `Design Brief / Style Preference: ${body.brief}` : "Apply standard styling.",
-    styleGuidance ? `CRITICAL Visual Inspiration Guidance: The entire scene MUST heavily reflect this specific style, materials, and color palette:\n${styleGuidance}` : "",
-    `CAMERA CONTEXT: ${cameraPositionText}. Ensure the placement of the furniture makes spatial sense from this specific viewing origin.`
+    "Photorealistic architectural interior render. Render ONLY what is visible from the camera — do not show the camera itself.",
+    roomDimsText,
+    wallLines ? `WALL LAYOUT: ${wallLines}. Respect these — do NOT place furniture blocking doors or in front of windows.` : "",
+    `FURNITURE TO PLACE (respect actual room dimensions; nothing should float or clip through walls):\n${furnitureStr}`,
+    emptyRoomBase64
+      ? "Maintain the exact architectural geometry, perspective, lighting, and camera angle of the provided empty room photo."
+      : `Room type: ${roomCtx.roomType || 'residential'}. Generate a realistic perspective view.`,
+    roomCtx.archNotes ? `Architectural notes: ${roomCtx.archNotes}` : "",
+    body.brief ? `Design Brief: ${body.brief}` : "Apply a modern, clean Indian residential style.",
+    styleGuidance ? `STYLE — apply this throughout (materials, colours, mood):\n${styleGuidance}` : "",
+    `CAMERA: ${cameraPositionText}. Ensure furniture placement is spatially coherent from this viewpoint.`
   ].filter(Boolean).join("\n");
 
   const renderResult = await renderWithOpenAi({
@@ -327,7 +344,7 @@ async function analyzeFloorPlanWithOpenAi(body) {
     isCommercial
       ? "  - roomType: one of: office, conference, reception, pantry, store, workstation, bathroom, utility, foyer, other"
       : "  - roomType: one of: bedroom, living, kitchen, bathroom, dining, study, balcony, foyer, utility, other",
-    "  - bbox: bounding box as fractions of image dimensions: { xPct, yPct, wPct, hPct } (0.0–1.0)",
+    "  - bbox: TIGHT bounding box hugging the room's actual wall lines, as fractions of image dimensions: { xPct, yPct, wPct, hPct } (0.0–1.0). Do NOT add padding — the box must align with the walls.",
     "  - widthM: width in meters derived from dimension annotations on the plan; estimate only if annotations are absent",
     "  - lengthM: length in meters derived from dimension annotations on the plan; estimate only if annotations are absent",
     "  - notes: brief plain-text summary of the space (e.g. 'open plan with glazed east partition')",
@@ -363,16 +380,27 @@ async function analyzeFloorPlanWithOpenAi(body) {
     "  - bhkType: e.g. '2BHK', '3BHK', 'Small Office', 'Open Plan Office'",
     "  - orientation: compass orientation if north arrow visible, else 'unknown'",
     "  - summary: 1-2 sentence description of the plan",
-    "  - globalBoq: an array of all bill of quantity line items identified from the entire floor plan. You MUST exhaustively extract every piece of furniture, structure, and material need visible on the drawing.",
-    "    CRITICAL: This array MUST NEVER BE EMPTY. Even if the floor plan is completely empty or basic, you MUST estimate standard fitout items (such as Flooring, Painting, Faux ceiling, Doors and windows) based on the calculated totalAreaM2.",
-    "    IMPORTANT: Every single item in `globalBoq` must be strictly categorized into ONE of the following exact strings: 'Civil work', 'Plumbing', 'Faux ceiling', 'Modular furniture', 'Loose furniture', 'Flooring', 'Doors and windows', 'Painting'.",
-    "    For each item in `globalBoq` return:",
-    "      - category: MUST be exactly one of the 8 strings above.",
-    "      - item: specific name e.g. 'Demolish partition wall', '3-Seater Sofa', 'Wooden flooring', 'Internal Door', 'Wardrobe'",
-    "      - qty: number (quantity or area size in appropriate units)",
-    "      - unit: e.g. 'sqm', 'pcs', 'rft', 'lump sum'",
-    "      - rate: realistic estimated rate in INR for this unit (e.g. 1500 for a door, 80 for sqm of painting, 50000 for a wardrobe)",
-    "      - amount: qty * rate",
+    "  - globalBoq: exhaustive bill of quantities for the ENTIRE project. CRITICAL RULES:",
+    "    1. NEVER return an empty array.",
+    "    2. You MUST return items in ALL 8 categories below — every project needs all of them.",
+    "    3. Use Hyderabad (India) premium market rates in INR.",
+    "    4. Estimate quantities from totalAreaM2 and room count if not explicitly visible on drawing.",
+    "    CATEGORIES (use EXACTLY these strings):",
+    "      'Civil work'      — demolition, partition walls, masonry, structural changes",
+    "      'Plumbing'        — supply lines, drainage, fixtures (bathrooms, kitchen) — estimate per room count",
+    "      'Faux ceiling'    — false ceiling with coves/lights — estimate sqm from room areas",
+    "      'Modular furniture' — wardrobes, kitchen cabinets, TV units, study units — count per room type",
+    "      'Loose furniture' — sofas, beds, dining tables, chairs — count per room type",
+    "      'Flooring'        — tiles or wood — total carpet area in sqm",
+    "      'Doors and windows' — count all doors and windows visible or typical for the layout",
+    "      'Painting'        — internal walls + ceiling — estimate 2.5× floor area for wall area",
+    "    For each item return:",
+    "      - category: EXACTLY one of the 8 strings above",
+    "      - item: descriptive name e.g. 'Vitrified tile flooring (800×800)', 'Full-height wardrobe', 'Internal flush door'",
+    "      - qty: numeric quantity",
+    "      - unit: 'sqm', 'pcs', 'rft', 'lump sum', 'points'",
+    "      - rate: Hyderabad premium INR rate per unit",
+    "      - amount: qty × rate",
     "",
     "Return STRICT JSON only (no markdown, no explanation):",
     "{",

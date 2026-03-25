@@ -456,7 +456,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 /* ── Debug Panel ─────────────────────────────────────────────────────────────── */
 .debug-panel {
   position: fixed; bottom: 0; right: 20px; z-index: 200;
-  width: 660px; max-height: 560px;
+  width: 680px; height: 520px;
   background: #0d0d10;
   border: 1px solid #2a2a35; border-bottom: none;
   border-radius: 10px 10px 0 0; display: flex; flex-direction: column;
@@ -474,57 +474,68 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
   user-select: none;
 }
 .debug-title { font-weight: 700; font-size: 11px; color: #888; letter-spacing: 0.08em; text-transform: uppercase; flex: 1; }
-.dbg-count-badge { font-size: 10px; color: #555; background: #1c1c24; border: 1px solid #2a2a35; border-radius: 20px; padding: 1px 8px; }
+.dbg-count-badge { font-size: 10px; color: #555; background: #1c1c24; border: 1px solid #2a2a35; border-radius: 20px; padding: 1px 8px; white-space: nowrap; }
 .dbg-count-badge span { color: #00cfff; font-weight: 700; }
-.dbg-clear-btn {
+.dbg-header-btn {
   font-size: 10px; color: #666; background: transparent; border: 1px solid #333;
   border-radius: 4px; padding: 2px 8px; cursor: pointer; font-family: inherit;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-color 0.15s; white-space: nowrap;
 }
-.dbg-clear-btn:hover { color: #ff6b6b; border-color: #ff6b6b; }
+.dbg-header-btn:hover { color: #aaa; border-color: #555; }
+.dbg-header-btn.danger:hover { color: #ff6b6b; border-color: #ff6b6b; }
 
 .debug-content {
-  flex: 1; overflow-y: auto; padding: 10px;
-  display: flex; flex-direction: column; gap: 8px;
+  flex: 1; min-height: 0; overflow-y: auto; padding: 8px;
+  display: flex; flex-direction: column; gap: 6px;
 }
-.debug-content::-webkit-scrollbar { width: 6px; }
+.debug-content::-webkit-scrollbar { width: 5px; }
 .debug-content::-webkit-scrollbar-track { background: transparent; }
 .debug-content::-webkit-scrollbar-thumb { background: #2a2a35; border-radius: 3px; }
 
 /* ── Each API call entry ── */
 .dbg-entry {
   background: #111116; border: 1px solid #222230;
-  border-radius: 8px; overflow: hidden;
+  border-radius: 8px; overflow: hidden; flex-shrink: 0;
 }
 .dbg-entry[open] { border-color: #2e2e44; }
+.dbg-entry.dbg-pending { border-color: #2a2a1a; opacity: 0.8; }
 
 .dbg-summary {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 12px; cursor: pointer; list-style: none;
-  background: #16161e;
-  font-size: 11px; line-height: 1;
+  background: #16161e; font-size: 11px; line-height: 1;
   user-select: none;
 }
 .dbg-summary::-webkit-details-marker { display: none; }
-.dbg-summary::before { content: '▶'; font-size: 8px; color: #444; transition: transform 0.15s; }
+.dbg-summary::before { content: '▶'; font-size: 8px; color: #444; transition: transform 0.15s; flex-shrink: 0; }
 .dbg-entry[open] > .dbg-summary::before { transform: rotate(90deg); color: #666; }
+.dbg-pending > .dbg-summary::before { content: none; }
 
-.dbg-seq { color: #444; font-size: 10px; min-width: 24px; }
+.dbg-seq { color: #3a3a5a; font-size: 10px; min-width: 22px; flex-shrink: 0; }
 .dbg-step-name { flex: 1; font-weight: 600; font-size: 12px; color: #d0d0e0; letter-spacing: 0.01em; }
 .dbg-model-pill {
   font-size: 9px; color: #7878a8; background: #1a1a28;
-  border: 1px solid #2a2a44; border-radius: 20px; padding: 1px 7px;
+  border: 1px solid #2a2a44; border-radius: 20px; padding: 1px 7px; flex-shrink: 0;
 }
-.dbg-time { font-size: 10px; color: #444; }
-.dbg-status-dot { font-size: 11px; font-weight: 700; }
+.dbg-time { font-size: 10px; color: #3a3a5a; flex-shrink: 0; }
+.dbg-status-dot { font-size: 11px; font-weight: 700; flex-shrink: 0; }
 .dbg-status-dot.ok  { color: #4ec9a0; }
 .dbg-status-dot.err { color: #f04747; }
+
+/* Spinner for pending entries */
+.dbg-spinner {
+  font-size: 13px; color: #888830; flex-shrink: 0;
+  display: inline-block;
+  animation: dbg-spin 1s linear infinite;
+}
+@keyframes dbg-spin { to { transform: rotate(360deg); } }
+.dbg-pending-msg { padding: 8px 12px; font-size: 11px; color: #666; font-style: italic; }
 
 /* ── Body inside an entry ── */
 .dbg-body { padding: 0 6px 6px; display: flex; flex-direction: column; gap: 4px; }
 
 /* ── Sent / Received sub-sections ── */
-.dbg-section { border-radius: 6px; overflow: hidden; }
+.dbg-section { border-radius: 6px; overflow: hidden; flex-shrink: 0; }
 .dbg-section-head {
   display: flex; align-items: center; gap: 6px;
   padding: 5px 10px; font-size: 10px; font-weight: 700;
@@ -532,12 +543,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
   cursor: pointer; list-style: none; user-select: none;
 }
 .dbg-section-head::-webkit-details-marker { display: none; }
-.dbg-section-head::before { content: '▶'; font-size: 7px; transition: transform 0.15s; margin-right: 2px; }
+.dbg-section-head::before { content: '▶'; font-size: 7px; transition: transform 0.15s; margin-right: 2px; flex-shrink: 0; }
 .dbg-section[open] > .dbg-section-head::before { transform: rotate(90deg); }
-
 .dbg-section-head.sent { background: rgba(235,180,50,0.08); color: #c9993a; }
 .dbg-section-head.recv { background: rgba(78,200,160,0.08); color: #4ec9a0; }
-
 .dbg-section-body { padding: 8px 10px; display: flex; flex-direction: column; gap: 8px; }
 
 /* ── Meta tags row ── */
@@ -558,8 +567,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
   border-radius: 4px; padding: 8px 10px;
   font-size: 11px; color: #e0d0a0; line-height: 1.55;
   white-space: pre-wrap; word-break: break-word;
-  max-height: 180px; overflow-y: auto; margin: 0;
+  max-height: 200px; overflow-y: auto; margin: 0;
 }
+.dbg-prompt-pre::-webkit-scrollbar { width: 4px; }
+.dbg-prompt-pre::-webkit-scrollbar-thumb { background: #3a3a2a; border-radius: 2px; }
 
 /* ── Response text ── */
 .dbg-resp-pre {
@@ -568,8 +579,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
   border-radius: 4px; padding: 8px 10px;
   font-size: 11px; color: #a0e0c0; line-height: 1.55;
   white-space: pre-wrap; word-break: break-word;
-  max-height: 180px; overflow-y: auto; margin: 0;
+  max-height: 200px; overflow-y: auto; margin: 0;
 }
+.dbg-resp-pre::-webkit-scrollbar { width: 4px; }
+.dbg-resp-pre::-webkit-scrollbar-thumb { background: #1a3a2a; border-radius: 2px; }
 
 /* ── Error block ── */
 .dbg-error {
@@ -587,18 +600,19 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 /* ── Image thumbnails ── */
 .dbg-thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
 .dbg-thumb {
-  width: 72px; height: 56px; object-fit: cover;
+  width: 80px; height: 60px; object-fit: cover;
   border-radius: 4px; border: 1px solid #2a2a35;
   cursor: zoom-in; transition: transform 0.15s, box-shadow 0.15s;
+  flex-shrink: 0;
 }
 .dbg-thumb:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.5); }
 .dbg-thumb.dbg-thumb-zoom {
-  width: 280px; height: auto; cursor: zoom-out;
+  width: 300px; height: auto; cursor: zoom-out;
   z-index: 10; position: relative;
 }
 
 /* ── Raw JSON collapsible ── */
-.dbg-raw { border-radius: 4px; overflow: hidden; }
+.dbg-raw { border-radius: 4px; overflow: hidden; flex-shrink: 0; }
 .dbg-raw > summary {
   font-size: 9px; color: #444; padding: 4px 8px; cursor: pointer;
   background: #0e0e14; border: 1px solid #1e1e28; border-radius: 4px;
@@ -613,3 +627,5 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
   font-size: 10px; color: #7070a0; line-height: 1.5;
   white-space: pre; overflow-x: auto; max-height: 260px; overflow-y: auto;
 }
+.dbg-pre::-webkit-scrollbar { width: 4px; height: 4px; }
+.dbg-pre::-webkit-scrollbar-thumb { background: #2a2a44; border-radius: 2px; }
