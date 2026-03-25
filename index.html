@@ -13,11 +13,30 @@
   <body>
     <div class="noise"></div>
 
+    <!-- ── PROJECT PICKER ───────────────────────────────────────────────────── -->
+    <div class="project-picker" id="projectPicker">
+      <div class="project-picker-inner">
+        <div class="project-picker-topbar">
+          <div class="project-picker-logo">
+            <span class="logo-text">Poligrid</span>
+            <span class="logo-sub">Interior Fitout Planner</span>
+          </div>
+          <button class="primary-btn" id="newProjectBtn">+ New Project</button>
+        </div>
+        <div class="project-picker-body">
+          <h2 class="project-picker-heading">Your Projects</h2>
+          <div id="projectPickerList" class="project-picker-list">
+            <div class="proj-loading">Loading projects…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── TOP BAR ──────────────────────────────────────────────────────────── -->
     <header class="top-bar">
       <div class="top-bar-left">
-        <span class="logo-text">Poligrid</span>
-        <span class="logo-sub">Interior Fitout Planner</span>
+        <button class="ghost-sm" id="backToProjects" title="All projects">← Projects</button>
+        <input id="projectNameInput" class="project-name-input" type="text" placeholder="Untitled project" maxlength="80" spellcheck="false" />
       </div>
       <!-- Phase progress bar -->
       <nav class="phase-bar" id="phaseBar">

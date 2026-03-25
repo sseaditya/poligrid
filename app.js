@@ -352,6 +352,7 @@ let activePinId = null;
 let latestArtifacts = null;
 
 const appState = {
+  projectId: generateUUID(),  // unique ID for this session, persisted to Supabase
   // Phase 1
   floorFile: null,
   inspirationFiles: [],
@@ -691,7 +692,14 @@ function init() {
   // Output
   dom.closeOutput?.addEventListener("click", () => { dom.outputPanel.hidden = true; document.querySelector(".workspace")?.classList.remove("output-open"); });
   dom.downloadScene.addEventListener("click", () => {
-    if (latestArtifacts) downloadText("scene.json", JSON.stringify(latestArtifacts.scene, null, 2), "application/json");
+    if (latestArtifacts) {
+      downloadText("scene.json", JSON.stringify(latestArtifacts.scene, null, 2), "application/json");
+      saveToDb("/api/project/save-scene", {
+        projectId: appState.projectId,
+        sceneJson: latestArtifacts.scene,
+        boqCsv: latestArtifacts.boq.csv
+      });
+    }
   });
   dom.downloadBoq.addEventListener("click", () => {
     if (latestArtifacts) downloadText("boq.csv", latestArtifacts.boq.csv, "text/csv");
@@ -739,7 +747,38 @@ function init() {
   }
 
   buildPalette();
-  advancePhase(1);
+
+  // Project name rename (debounced)
+  let _renameTimer = null;
+  el("projectNameInput")?.addEventListener("input", e => {
+    clearTimeout(_renameTimer);
+    _renameTimer = setTimeout(() => {
+      saveToDb("/api/project/rename", { projectId: appState.projectId, name: e.target.value });
+    }, 800);
+  });
+
+  // Global brief autosave (debounced)
+  let _briefTimer = null;
+  dom.globalBrief?.addEventListener("input", e => {
+    clearTimeout(_briefTimer);
+    _briefTimer = setTimeout(() => {
+      saveToDb("/api/project/save-brief", { projectId: appState.projectId, globalBrief: e.target.value });
+    }, 800);
+  });
+
+  // Back to projects
+  el("backToProjects")?.addEventListener("click", showProjectPicker);
+
+  // New project button
+  el("newProjectBtn")?.addEventListener("click", () => {
+    appState.projectId = generateUUID();
+    el("projectNameInput").value = "";
+    hideProjectPicker();
+    advancePhase(1);
+  });
+
+  // Show project picker on load instead of jumping straight to phase 1
+  showProjectPicker();
 }
 
 // ─── Phase 1: Upload + Analyse ─────────────────────────────────────────────────
@@ -757,6 +796,18 @@ function onInspirationPicked() {
   appState.inspirationFiles = files;
   dom.inspirationNames.textContent = files.length ? `${files.length} image(s)` : "Add inspiration images (optional)";
   dom.inspirationPreviews.innerHTML = "";
+
+  // Save inspiration images to Supabase in the background
+  if (files.length) {
+    Promise.all(files.map(async (f, i) => ({
+      base64: await readDataUrl(f),
+      mimeType: f.type || "image/jpeg",
+      fileName: f.name
+    }))).then(images => {
+      saveToDb("/api/project/save-inspiration", { projectId: appState.projectId, images });
+    }).catch(e => console.warn("[DB] Inspiration upload failed:", e.message));
+  }
+
   files.forEach(f => {
     const img = document.createElement("img");
     img.className = "insp-thumb";
@@ -788,6 +839,15 @@ async function onAnalyzePlan() {
     const analysis = await PA.analyzeFloorPlan(bgCanvas, appState.context);
     appState.detectedRooms = analysis.rooms || [];
     appState.globalBoq = analysis.globalBoq || [];
+
+    // Persist floor plan image + analysis to Supabase
+    saveToDb("/api/project/save-analysis", {
+      projectId: appState.projectId,
+      floorPlanBase64: bgCanvas.toDataURL("image/png"),
+      fileName: appState.floorFile?.name,
+      analysis,
+      context: appState.context
+    });
 
     dom.analysisChip.textContent = `✓ ${analysis.rooms.length} room(s) · ${analysis.bhkType || ""} · ${analysis.totalAreaM2 || "?"}m²`;
     dom.analysisSummaryText.textContent = analysis.summary || "";
@@ -863,6 +923,9 @@ function buildRoomChips(rooms) {
 async function onConfirmRooms() {
   const rooms = roomEditor ? roomEditor.getRooms() : (appState.detectedRooms || []);
   appState.confirmedRooms = rooms;
+
+  // Persist user-edited rooms to Supabase
+  saveToDb("/api/project/save-rooms", { projectId: appState.projectId, rooms });
 
   if (!rooms.length) { alert("No rooms to confirm."); return; }
 
@@ -1171,6 +1234,23 @@ function onPinPhotoUpload() {
     dom.pinPhotoPreview.hidden = false;
     dom.pinPhotoPreview.innerHTML = `<img src="${e.target.result}" alt="Pin photo"/>`;
     refreshPinsList();
+
+    // Persist pin with photo to Supabase
+    const pin = planner.cameraPins?.find(p => p.id === activePinId);
+    if (pin) {
+      saveToDb("/api/project/save-pin", {
+        projectId: appState.projectId,
+        pin: {
+          clientId: pin.id,
+          xM: pin.xM, yM: pin.yM,
+          angleDeg: pin.angleDeg, fovDeg: pin.fovDeg,
+          roomLabel: pin.roomLabel, brief: pin.brief,
+          photoDataUrl: e.target.result,
+          photoMimeType: file.type || "image/jpeg",
+          photoFileName: file.name
+        }
+      });
+    }
   };
   reader.readAsDataURL(file);
 }
@@ -1184,6 +1264,23 @@ function onPinFieldChange() {
   });
   planner.render();
   refreshPinsList();
+
+  // Persist updated pin to Supabase
+  const pin = planner.cameraPins?.find(p => p.id === activePinId);
+  if (pin) {
+    saveToDb("/api/project/save-pin", {
+      projectId: appState.projectId,
+      pin: {
+        clientId: pin.id,
+        xM: pin.xM, yM: pin.yM,
+        angleDeg: pin.angleDeg, fovDeg: pin.fovDeg,
+        roomLabel: pin.roomLabel, brief: pin.brief,
+        photoDataUrl: pin.photoDataUrl || null,
+        photoMimeType: pin.photoFile?.type || null,
+        photoFileName: pin.photoFile?.name || null
+      }
+    });
+  }
 }
 
 // ─── Phase 5: Generate ─────────────────────────────────────────────────────────
@@ -1321,6 +1418,19 @@ async function onGenerate() {
     dom.downloadBoq.disabled = false;
     dom.generateStatus.textContent = "✓ Done";
 
+    // Persist furniture BOQ items (generated) and all placements to Supabase
+    const furnitureBoq = finalBoq.filter(b =>
+      b.category === "Modular furniture" || b.category === "Loose furniture"
+    );
+    saveToDb("/api/project/save-boq", {
+      projectId: appState.projectId,
+      boqItems: furnitureBoq
+    });
+    saveToDb("/api/project/save-placements", {
+      projectId: appState.projectId,
+      placements: planner?.furniturePlacements || []
+    });
+
   } catch (err) {
     dom.generateStatus.textContent = `⚠ ${err.message}`;
     console.error(err);
@@ -1378,7 +1488,18 @@ async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64) {
     }
 
     renders.push({ name: src.photoDataUrl ? `Photo ${i + 1}` : `Generated ${i + 1}`, dataUrl: finalDataUrl, source: "openai" });
-    
+
+    // Persist render image to Supabase
+    saveToDb("/api/project/save-render", {
+      projectId: appState.projectId,
+      pinClientId: src.pinId || null,
+      roomLabel: src.roomLabel,
+      dataUrl: finalDataUrl,
+      modelUsed: "gpt-image-1.5",
+      furnitureList: res.furnitureList || [],
+      generationType: src.photoDataUrl ? "edit" : "generate"
+    });
+
     // Accumulate the generated or floor-plan placements into the global BOQ
     const furnitureToAdd = (res.furnitureList && res.furnitureList.length) ? res.furnitureList : (src.placements || []);
     if (Array.isArray(furnitureToAdd)) {
@@ -1618,6 +1739,291 @@ const _STEP_LABELS = {
   '/api/analyze/room-image': 'Room Image Match',
   '/api/furniture/autoplace':'Furniture Auto-Place',
 };
+
+// ─── Supabase / Project Persistence ──────────────────────────────────────────
+
+function generateUUID() {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+// Fire-and-forget save. Errors are logged but never block the UI.
+function saveToDb(url, body) {
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  }).then(r => {
+    if (!r.ok) r.text().then(t => console.warn(`[DB] ${url} failed:`, t));
+  }).catch(e => console.warn(`[DB] ${url} error:`, e.message));
+}
+
+// ─── Project Picker ───────────────────────────────────────────────────────────
+
+function showProjectPicker() {
+  el("projectPicker").classList.remove("hidden");
+  loadProjectList();
+}
+
+function hideProjectPicker() {
+  el("projectPicker").classList.add("hidden");
+}
+
+async function loadProjectList() {
+  const list = el("projectPickerList");
+  list.innerHTML = '<div class="proj-loading">Loading projects…</div>';
+  try {
+    const res = await fetch("/api/project/list");
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderProjectCards(data.projects || []);
+  } catch (e) {
+    list.innerHTML = `<div class="proj-loading">Could not load projects: ${e.message}</div>`;
+  }
+}
+
+function renderProjectCards(projects) {
+  const list = el("projectPickerList");
+  if (!projects.length) {
+    list.innerHTML = '<div class="proj-empty">No projects yet. Click <strong>+ New Project</strong> to start.</div>';
+    return;
+  }
+  list.innerHTML = "";
+  for (const p of projects) {
+    const card = document.createElement("div");
+    card.className = "proj-card";
+    card.dataset.id = p.id;
+    const date = new Date(p.updated_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    const meta = [p.property_type, p.bhk_type || p.bhk, p.total_area_m2 ? p.total_area_m2 + " m²" : null].filter(Boolean).join(" · ");
+    card.innerHTML = `
+      <div class="proj-card-thumb">
+        ${p.thumbnail_url ? `<img src="${p.thumbnail_url}" alt="" loading="lazy" />` : '<div class="proj-card-thumb-empty">🏠</div>'}
+      </div>
+      <div class="proj-card-body">
+        <div class="proj-card-name">${escapeHtml(p.name || "Untitled project")}</div>
+        <div class="proj-card-meta">${escapeHtml(meta)}</div>
+        ${p.summary ? `<div class="proj-card-summary">${escapeHtml(p.summary)}</div>` : ""}
+        <div class="proj-card-date">${date}</div>
+      </div>
+    `;
+    card.addEventListener("click", () => loadProject(p.id));
+    list.appendChild(card);
+  }
+}
+
+async function loadProject(id) {
+  const list = el("projectPickerList");
+  list.innerHTML = '<div class="proj-loading">Opening project…</div>';
+  try {
+    const res = await fetch(`/api/project/load?id=${id}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const proj = data.project;
+
+    // Reset state for this project
+    appState.projectId = id;
+    appState.floorFile = null;
+    appState.inspirationFiles = [];
+    appState.detectedRooms = null;
+    appState.confirmedRooms = null;
+    appState.globalBoq = [];
+    planner = null;
+    roomEditor = null;
+    latestArtifacts = null;
+
+    // Restore context
+    appState.context = {
+      propertyType: proj.property_type || "Apartment",
+      bhk: proj.bhk || "2BHK",
+      totalAreaM2: proj.total_area_m2 || null,
+      notes: proj.notes || ""
+    };
+    restoreContextForm(appState.context);
+
+    // Restore project name in header
+    el("projectNameInput").value = proj.name || "";
+
+    hideProjectPicker();
+
+    // Nothing persisted beyond context → go to phase 1
+    if (!data.floorPlan?.url) {
+      advancePhase(1);
+      return;
+    }
+
+    // Load floor plan image to canvas
+    const bgCanvas = dom.floorBgCanvas;
+    try {
+      await loadImageUrlToCanvas(data.floorPlan.url, bgCanvas);
+    } catch (e) {
+      console.warn("Could not load floor plan image:", e);
+      advancePhase(1);
+      return;
+    }
+
+    dom.roomEditorCanvas.width = bgCanvas.width;
+    dom.roomEditorCanvas.height = bgCanvas.height;
+    dom.canvasPlaceholder.hidden = true;
+    dom.canvasWrap.hidden = false;
+
+    // Restore rooms
+    const rooms = (data.rooms || []).map(dbRoomToAppRoom);
+    appState.detectedRooms = rooms;
+    appState.confirmedRooms = rooms;
+    appState.globalBoq = (data.boqItems || [])
+      .filter(b => b.source === "floor_plan_analysis")
+      .map(({ category, item, qty, unit, rate, amount }) => ({ category, item, qty, unit, rate, amount }));
+
+    // Init RoomEditor
+    roomEditor = new RoomEditor(dom.roomEditorCanvas, bgCanvas, {
+      onRoomsChange: onRoomsChange,
+      onSelect: onRoomSelected
+    });
+    roomEditor.setRooms(rooms, bgCanvas.width, bgCanvas.height);
+    buildRoomChips(rooms);
+
+    dom.analysisChip.hidden = false;
+    dom.analysisChip.textContent = `✓ ${rooms.length} room(s) · ${proj.bhk_type || proj.bhk || ""} · ${proj.total_area_m2 || "?"}m²`;
+    dom.analysisSummaryText.textContent = proj.summary || "";
+    dom.analysisSummaryWrap.hidden = !proj.summary;
+
+    advancePhase(2);
+
+    // If project has camera pins, restore planner and advance to phase 3
+    if (data.cameraPins && data.cameraPins.length > 0) {
+      dom.roomEditorCanvas.hidden = true;
+      dom.plannerCanvas.hidden = false;
+      dom.plannerCanvas.width = bgCanvas.width;
+      dom.plannerCanvas.height = bgCanvas.height;
+
+      planner = new PlannerCanvas(dom.plannerCanvas, {
+        onStateChange: onSceneChange,
+        onPinSelect: openPinPopover
+      });
+      planner.setFloorPlanImage(bgCanvas);
+      planner.setDetectedRooms(rooms);
+
+      // Restore furniture placements
+      planner.furniturePlacements = (data.furniturePlacements || []).map(p => ({
+        id: p.client_id || generateUUID(),
+        moduleId: p.module_id || "custom",
+        label: p.label || "Item",
+        type: p.type || "other",
+        roomLabel: p.room_label || "",
+        roomType: p.room_type || "",
+        xM: p.x_m || 1, yM: p.y_m || 1,
+        wM: p.w_m || 1, dM: p.d_m || 0.6, hM: p.h_m || 0.9,
+        rotationY: p.rotation_y || 0,
+        wall: p.wall || "south",
+        color: p.color || FURN_COLORS[0],
+        source: p.source || "manual"
+      }));
+
+      // Restore camera pins (photos loaded async below)
+      planner.cameraPins = data.cameraPins.map(p => ({
+        id: p.client_id,
+        xM: p.x_m || 0, yM: p.y_m || 0,
+        angleDeg: p.angle_deg || 0,
+        fovDeg: p.fov_deg || 60,
+        roomLabel: p.room_label || "",
+        brief: p.brief || "",
+        photoFile: null,
+        photoDataUrl: null
+      }));
+
+      // Load pin photos in background
+      for (const dbPin of data.cameraPins) {
+        if (!dbPin.photo_url) continue;
+        loadUrlToDataUrl(dbPin.photo_url).then(dataUrl => {
+          if (!dataUrl || !planner) return;
+          const pin = planner.cameraPins.find(p => p.id === dbPin.client_id);
+          if (pin) { pin.photoDataUrl = dataUrl; planner.render(); refreshPinsList(); }
+        }).catch(() => {});
+      }
+
+      planner.render();
+      refreshPinsList();
+      if (dom.chatPanel) dom.chatPanel.hidden = false;
+
+      if (proj.global_brief) dom.globalBrief.value = proj.global_brief;
+
+      advancePhase(3);
+    }
+
+  } catch (err) {
+    console.error("loadProject failed:", err);
+    list.innerHTML = `<div class="proj-loading">⚠ Failed to load: ${err.message}</div>`;
+  }
+}
+
+// Convert a DB room row (snake_case columns) back to the app room shape
+function dbRoomToAppRoom(r) {
+  return {
+    id: r.id,
+    label: r.label,
+    name: r.name,
+    roomType: r.room_type,
+    bbox: { xPct: r.bbox_x_pct, yPct: r.bbox_y_pct, wPct: r.bbox_w_pct, hPct: r.bbox_h_pct },
+    widthM: r.width_m,
+    lengthM: r.length_m,
+    notes: r.notes,
+    walls: r.walls || [],
+    placements: r.fp_placements || []
+  };
+}
+
+// Load a public URL (storage) into a canvas element (matches renderImageToCanvas dimensions)
+async function loadImageUrlToCanvas(url, canvas) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const maxW = 960;
+      const scale = img.width > maxW ? maxW / img.width : 1;
+      canvas.width  = Math.max(2, Math.round(img.width  * scale));
+      canvas.height = Math.max(2, Math.round(img.height * scale));
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve();
+    };
+    img.onerror = () => reject(new Error("Image failed to load from: " + url));
+    img.src = url;
+  });
+}
+
+// Fetch a URL and return it as a base64 data URL (for pin photos)
+async function loadUrlToDataUrl(url) {
+  const r = await fetch(url);
+  if (!r.ok) return null;
+  const blob = await r.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Fill the Phase 1 context form from an appState.context object
+function restoreContextForm(ctx) {
+  // Property type
+  document.querySelectorAll("#propTypeCtrl .seg-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.val === ctx.propertyType);
+  });
+  const isComm = ctx.propertyType === "Commercial";
+  el("configRowResidential").style.display = isComm ? "none" : "";
+  el("configRowCommercial").style.display  = isComm ? "" : "none";
+  // BHK / space type
+  const ctrlId = isComm ? "commCtrl" : "bhkCtrl";
+  document.querySelectorAll(`#${ctrlId} .seg-btn`).forEach(b => {
+    b.classList.toggle("active", b.dataset.val === ctx.bhk);
+  });
+  // Area + notes
+  if (el("totalAreaInput")) el("totalAreaInput").value = ctx.totalAreaM2 || "";
+  if (el("ctxNotes"))       el("ctxNotes").value = ctx.notes || "";
+}
 
 async function postJson(url, body) {
   const stepLabel = _STEP_LABELS[url] || url;

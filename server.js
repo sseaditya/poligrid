@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const db = require("./db.js");
 
 const ROOT = process.cwd();
 const PORT = Number(process.env.PORT || 8080);
@@ -73,6 +74,24 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/chat/placement") {
       const body = await readJson(req);
       const result = await chatPlacementWithOpenAi(body);
+      return sendJson(res, 200, result);
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/project/list") {
+      const result = await projectList();
+      return sendJson(res, 200, result);
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/project/load") {
+      const id = url.searchParams.get("id");
+      const result = await projectLoad(id);
+      return sendJson(res, 200, result);
+    }
+
+    if (req.method === "POST" && url.pathname.startsWith("/api/project/")) {
+      const body = await readJson(req);
+      const action = url.pathname.slice("/api/project/".length);
+      const result = await handleProjectAction(action, body);
       return sendJson(res, 200, result);
     }
 
@@ -1239,4 +1258,352 @@ function loadEnvFile(envPath) {
       process.env[key] = value;
     }
   }
+}
+
+// ─── Project DB Handlers ─────────────────────────────────────────────────────
+
+async function handleProjectAction(action, body) {
+  switch (action) {
+    case "save-analysis":    return projectSaveAnalysis(body);
+    case "save-rooms":       return projectSaveRooms(body);
+    case "save-inspiration": return projectSaveInspiration(body);
+    case "save-pin":         return projectSavePin(body);
+    case "save-render":      return projectSaveRender(body);
+    case "save-placements":  return projectSavePlacements(body);
+    case "save-boq":         return projectSaveBoq(body);
+    case "save-scene":       return projectSaveScene(body);
+    case "rename":           return projectRename(body);
+    case "save-brief":       return projectSaveBrief(body);
+    default: throw httpError(404, "Unknown project action: " + action);
+  }
+}
+
+async function projectSaveAnalysis(body) {
+  const { projectId, floorPlanBase64, fileName, analysis, context } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  await db.upsertProject(projectId, {
+    property_type: context?.propertyType,
+    bhk: context?.bhk,
+    total_area_m2: context?.totalAreaM2 || analysis?.totalAreaM2,
+    notes: context?.notes,
+    bhk_type: analysis?.bhkType,
+    orientation: analysis?.orientation,
+    summary: analysis?.summary
+  });
+
+  const storagePath = await db.uploadBase64(
+    "poligrid-floor-plans",
+    `${projectId}/floorplan.png`,
+    floorPlanBase64,
+    "image/png"
+  );
+
+  const fpId = await db.insertRow("floor_plans", {
+    project_id: projectId,
+    file_name: fileName || "floorplan.png",
+    storage_path: storagePath,
+    analysis_raw: analysis,
+    analyzed_at: new Date().toISOString()
+  });
+
+  const rooms = analysis?.rooms || [];
+  if (rooms.length) {
+    await db.replaceRows("rooms", { project_id: projectId }, rooms.map(r => ({
+      project_id: projectId,
+      floor_plan_id: fpId,
+      label: r.label,
+      name: r.name,
+      room_type: r.roomType,
+      bbox_x_pct: r.bbox?.xPct,
+      bbox_y_pct: r.bbox?.yPct,
+      bbox_w_pct: r.bbox?.wPct,
+      bbox_h_pct: r.bbox?.hPct,
+      width_m: r.widthM,
+      length_m: r.lengthM,
+      notes: r.notes,
+      walls: r.walls || null,
+      fp_placements: r.placements || null
+    })));
+  }
+
+  const boq = analysis?.globalBoq || [];
+  if (boq.length) {
+    await db.replaceRows(
+      "boq_items",
+      { project_id: projectId, source: "floor_plan_analysis" },
+      boq.map(b => ({
+        project_id: projectId,
+        source: "floor_plan_analysis",
+        category: b.category,
+        item: b.item,
+        qty: b.qty,
+        unit: b.unit,
+        rate: b.rate,
+        amount: b.amount
+      }))
+    );
+  }
+
+  return { ok: true };
+}
+
+async function projectSaveRooms(body) {
+  const { projectId, rooms } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  await db.replaceRows("rooms", { project_id: projectId }, (rooms || []).map(r => ({
+    project_id: projectId,
+    label: r.label,
+    name: r.name,
+    room_type: r.roomType,
+    bbox_x_pct: r.bbox?.xPct,
+    bbox_y_pct: r.bbox?.yPct,
+    bbox_w_pct: r.bbox?.wPct,
+    bbox_h_pct: r.bbox?.hPct,
+    width_m: r.widthM,
+    length_m: r.lengthM,
+    notes: r.notes
+  })));
+
+  return { ok: true };
+}
+
+async function projectSaveInspiration(body) {
+  const { projectId, images } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  const rows = [];
+  for (let i = 0; i < (images || []).length; i++) {
+    const img = images[i];
+    if (!img.base64) continue;
+    const ext = (img.mimeType || "").includes("png") ? "png" : "jpg";
+    const storagePath = await db.uploadBase64(
+      "poligrid-inspiration",
+      `${projectId}/${i}.${ext}`,
+      img.base64,
+      img.mimeType || "image/jpeg"
+    );
+    rows.push({
+      project_id: projectId,
+      file_name: img.fileName || `${i}.${ext}`,
+      storage_path: storagePath,
+      sort_order: i
+    });
+  }
+
+  await db.replaceRows("inspiration_images", { project_id: projectId }, rows);
+  return { ok: true };
+}
+
+async function projectSavePin(body) {
+  const { projectId, pin } = body;
+  if (!projectId || !pin?.clientId) throw httpError(400, "Missing projectId or pin.clientId");
+
+  let photoStoragePath = null;
+  if (pin.photoDataUrl) {
+    const ext = (pin.photoMimeType || "").includes("png") ? "png" : "jpg";
+    photoStoragePath = await db.uploadBase64(
+      "poligrid-pin-photos",
+      `${projectId}/${pin.clientId}.${ext}`,
+      pin.photoDataUrl,
+      pin.photoMimeType || "image/jpeg"
+    );
+  }
+
+  await db.upsertPin(projectId, {
+    project_id: projectId,
+    client_id: pin.clientId,
+    x_m: pin.xM,
+    y_m: pin.yM,
+    angle_deg: pin.angleDeg,
+    fov_deg: pin.fovDeg,
+    room_label: pin.roomLabel,
+    brief: pin.brief,
+    photo_file_name: pin.photoFileName || null,
+    photo_storage_path: photoStoragePath || pin.existingPhotoPath || null
+  });
+
+  return { ok: true };
+}
+
+async function projectSaveRender(body) {
+  const { projectId, pinClientId, roomLabel, dataUrl, modelUsed, furnitureList, generationType } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  const ts = Date.now();
+  const safe = (roomLabel || "room").replace(/[^a-z0-9_]/gi, "_").toLowerCase();
+  const storagePath = await db.uploadBase64(
+    "poligrid-renders",
+    `${projectId}/${safe}_${ts}.png`,
+    dataUrl,
+    "image/png"
+  );
+
+  await db.insertRow("renders", {
+    project_id: projectId,
+    camera_pin_client_id: pinClientId || null,
+    room_label: roomLabel,
+    storage_path: storagePath,
+    model_used: modelUsed || null,
+    furniture_list: furnitureList || null,
+    generation_type: generationType || "generate"
+  });
+
+  return { ok: true };
+}
+
+async function projectSavePlacements(body) {
+  const { projectId, placements } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  await db.replaceRows("furniture_placements", { project_id: projectId }, (placements || []).map(p => ({
+    project_id: projectId,
+    client_id: p.id,
+    module_id: p.moduleId,
+    label: p.label,
+    type: p.type,
+    room_label: p.roomLabel,
+    room_type: p.roomType,
+    x_m: p.xM,
+    y_m: p.yM,
+    w_m: p.wM,
+    d_m: p.dM,
+    h_m: p.hM,
+    rotation_y: p.rotationY,
+    wall: p.wall,
+    color: p.color,
+    source: p.source || "manual"
+  })));
+
+  return { ok: true };
+}
+
+async function projectSaveBoq(body) {
+  const { projectId, boqItems } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  await db.replaceRows(
+    "boq_items",
+    { project_id: projectId, source: "furniture_generated" },
+    (boqItems || []).map(b => ({
+      project_id: projectId,
+      source: "furniture_generated",
+      category: b.category,
+      item: b.item,
+      qty: b.qty,
+      unit: b.unit,
+      rate: b.rate,
+      amount: b.amount
+    }))
+  );
+
+  return { ok: true };
+}
+
+async function projectSaveScene(body) {
+  const { projectId, sceneJson, boqCsv } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  let csvPath = null;
+  if (boqCsv) {
+    csvPath = await db.uploadText(
+      "poligrid-exports",
+      `${projectId}/boq_${Date.now()}.csv`,
+      boqCsv,
+      "text/csv; charset=utf-8"
+    );
+  }
+
+  await db.insertRow("scene_exports", {
+    project_id: projectId,
+    scene_json: sceneJson || null,
+    boq_csv_storage_path: csvPath
+  });
+
+  return { ok: true };
+}
+
+async function projectList() {
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const { data, error } = await sb
+    .from("projects")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at")
+    .order("updated_at", { ascending: false });
+  if (error) throw httpError(500, "Failed to list projects: " + error.message);
+
+  const projects = await Promise.all((data || []).map(async p => {
+    const { data: fps } = await sb
+      .from("floor_plans")
+      .select("storage_path")
+      .eq("project_id", p.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const fp = fps && fps[0];
+    return {
+      ...p,
+      thumbnail_url: fp?.storage_path
+        ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
+        : null
+    };
+  }));
+  return { projects };
+}
+
+async function projectLoad(id) {
+  if (!id) throw httpError(400, "Missing project id");
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const pubUrl = (bucket, storagePath) =>
+    storagePath ? `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}` : null;
+
+  const [
+    { data: project },
+    { data: fps },
+    { data: rooms },
+    { data: cameraPins },
+    { data: furniturePlacements },
+    { data: boqItems }
+  ] = await Promise.all([
+    sb.from("projects").select("*").eq("id", id).single(),
+    sb.from("floor_plans").select("*").eq("project_id", id).order("created_at", { ascending: false }).limit(1),
+    sb.from("rooms").select("*").eq("project_id", id),
+    sb.from("camera_pins").select("*").eq("project_id", id),
+    sb.from("furniture_placements").select("*").eq("project_id", id),
+    sb.from("boq_items").select("*").eq("project_id", id)
+  ]);
+
+  if (!project) throw httpError(404, "Project not found");
+  const fp = fps && fps[0] ? { ...fps[0], url: pubUrl("poligrid-floor-plans", fps[0].storage_path) } : null;
+
+  return {
+    project,
+    floorPlan: fp,
+    rooms: rooms || [],
+    cameraPins: (cameraPins || []).map(p => ({
+      ...p,
+      photo_url: pubUrl("poligrid-pin-photos", p.photo_storage_path)
+    })),
+    furniturePlacements: furniturePlacements || [],
+    boqItems: boqItems || []
+  };
+}
+
+async function projectRename(body) {
+  const { projectId, name } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+  const sb = db.getClient();
+  const { error } = await sb.from("projects").update({ name: name || null }).eq("id", projectId);
+  if (error) throw httpError(500, "Rename failed: " + error.message);
+  return { ok: true };
+}
+
+async function projectSaveBrief(body) {
+  const { projectId, globalBrief } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+  const sb = db.getClient();
+  const { error } = await sb.from("projects").update({ global_brief: globalBrief || null }).eq("id", projectId);
+  if (error) throw httpError(500, "Save brief failed: " + error.message);
+  return { ok: true };
 }
