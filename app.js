@@ -2135,6 +2135,56 @@ async function loadProject(id) {
     dom.analysisSummaryText.textContent = proj.summary || "";
     dom.analysisSummaryWrap.hidden = !proj.summary;
 
+    // Group existing renders and boq INDEPENDENT of camera pins
+    if (data.renders && data.renders.length > 0) {
+      // Build mock results view for history
+      appState.existingRendersData = data.renders;
+      const btn = el("viewExistingRendersBtn");
+      if (btn) btn.hidden = false;
+      dom.downloadScene.disabled = false;
+      dom.downloadBoq.disabled = false;
+      dom.generateStatus.textContent = `✓ Loaded ${data.renders.length} renders`;
+      dom.generateStatus.hidden = false;
+
+      dom.roomResults.innerHTML = "";
+      
+      // Group multiple versions by room_label
+      const viewRendersByRoom = {};
+      for (const render of data.renders) {
+        const mLabel = render.room_label || "Unknown Room";
+        if (!viewRendersByRoom[mLabel]) viewRendersByRoom[mLabel] = [];
+        viewRendersByRoom[mLabel].push(render);
+      }
+      
+      for (const [rLabel, rList] of Object.entries(viewRendersByRoom)) {
+        // Find matching room to get dims
+        const roomObj = rooms.find(r => r.label === rLabel || r.name === rLabel) || { width_m: 0, length_m: 0 };
+        const result = {
+          room: { name: rLabel, widthM: roomObj.width_m, lengthM: roomObj.length_m },
+          renders: rList.map(item => ({ dataUrl: item.url })),
+          sourcePhotos: [] // Don't have original photo mapping easily, skipping BEFORE cell
+        };
+        drawRoomResult(result);
+      }
+      
+      // Also populate existing Inspiration Images to appState if we regenerated
+      if (data.inspirationImages && data.inspirationImages.length) {
+        appState.inspirationFiles = data.inspirationImages.map(img => ({
+           isExisting: true,
+           url: img.url,
+           // Mime type and name mock
+           type: 'image/jpeg',
+           name: img.file_name
+        }));
+        _inspirationDataUrls = appState.inspirationFiles.map(img => img.url);
+      }
+
+      drawBoq(appState.globalBoq);
+    } else {
+      const btn = el("viewExistingRendersBtn");
+      if (btn) btn.hidden = true;
+    }
+
     advancePhase(2);
 
     // If project has camera pins, restore planner and advance to phase 3
@@ -2195,56 +2245,6 @@ async function loadProject(id) {
 
       if (proj.global_brief) dom.globalBrief.value = proj.global_brief;
 
-      // Group existing renders and boq
-      if (data.renders && data.renders.length > 0) {
-        // Build mock results view for history
-        appState.existingRendersData = data.renders;
-        const btn = el("viewExistingRendersBtn");
-        if (btn) btn.hidden = false;
-        dom.downloadScene.disabled = false;
-        dom.downloadBoq.disabled = false;
-        dom.generateStatus.textContent = `✓ Loaded ${data.renders.length} renders`;
-        dom.generateStatus.hidden = false;
-
-        dom.roomResults.innerHTML = "";
-        
-        // Group multiple versions by room_label
-        const viewRendersByRoom = {};
-        for (const render of data.renders) {
-          const mLabel = render.room_label || "Unknown Room";
-          if (!viewRendersByRoom[mLabel]) viewRendersByRoom[mLabel] = [];
-          viewRendersByRoom[mLabel].push(render);
-        }
-        
-        for (const [rLabel, rList] of Object.entries(viewRendersByRoom)) {
-          // Find matching room to get dims
-          const roomObj = rooms.find(r => r.label === rLabel || r.name === rLabel) || { width_m: 0, length_m: 0 };
-          const result = {
-            room: { name: rLabel, widthM: roomObj.width_m, lengthM: roomObj.length_m },
-            renders: rList.map(item => ({ dataUrl: item.url })),
-            sourcePhotos: [] // Don't have original photo mapping easily, skipping BEFORE cell
-          };
-          drawRoomResult(result);
-        }
-        
-        // Also populate existing Inspiration Images to appState if we regenerated
-        if (data.inspirationImages && data.inspirationImages.length) {
-          appState.inspirationFiles = data.inspirationImages.map(img => ({
-             isExisting: true,
-             url: img.url,
-             // Mime type and name mock
-             type: 'image/jpeg',
-             name: img.file_name
-          }));
-        }
-
-        drawBoq(appState.globalBoq);
-      } else {
-        const btn = el("viewExistingRendersBtn");
-        if (btn) btn.hidden = true;
-      }
-
-      advancePhase(3);
     }
 
   } catch (err) {
