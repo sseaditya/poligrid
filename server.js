@@ -356,6 +356,7 @@ async function analyzeFloorPlanWithOpenAi(body) {
     "  - orientation: compass orientation if north arrow visible, else 'unknown'",
     "  - summary: 1-2 sentence description of the plan",
     "  - globalBoq: an array of all bill of quantity line items identified from the entire floor plan. You MUST exhaustively extract every piece of furniture, structure, and material need visible on the drawing.",
+    "    CRITICAL: This array MUST NEVER BE EMPTY. Even if the floor plan is completely empty or basic, you MUST estimate standard fitout items (such as Flooring, Painting, Faux ceiling, Doors and windows) based on the calculated totalAreaM2.",
     "    IMPORTANT: Every single item in `globalBoq` must be strictly categorized into ONE of the following exact strings: 'Civil work', 'Plumbing', 'Faux ceiling', 'Modular furniture', 'Loose furniture', 'Flooring', 'Doors and windows', 'Painting'.",
     "    For each item in `globalBoq` return:",
     "      - category: MUST be exactly one of the 8 strings above.",
