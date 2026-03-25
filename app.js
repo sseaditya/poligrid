@@ -466,7 +466,20 @@ function goBack(targetPhase) {
   } else if (targetPhase >= 3) {
     dom.roomEditorCanvas.hidden = true;
     dom.plannerCanvas.hidden = false;
+    
+    // Auto-confirm rooms if planner isn't initialized yet
+    if (!planner && appState.detectedRooms) {
+      appState.confirmedRooms = roomEditor ? roomEditor.getRooms() : appState.detectedRooms;
+      planner = new PlannerCanvas(dom.plannerCanvas, {
+        onStateChange: onSceneChange,
+        onPinSelect: openPinPopover
+      });
+      planner.setFloorPlanImage(dom.floorBgCanvas);
+      planner.setDetectedRooms(appState.confirmedRooms);
+    }
+    
     if (planner) planner.render();
+    if (dom.chatPanel) dom.chatPanel.hidden = false;
   }
 }
 
