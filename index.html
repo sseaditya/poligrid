@@ -190,6 +190,7 @@
             <textarea id="globalBrief" rows="4" placeholder="e.g. Warm modern Indian, matte walnut finish, minimal handles, warm lighting, concealed wiring…"></textarea>
           </label>
           <button id="generateBtn" class="primary-btn generate-btn" disabled>✦ Generate Renders + BOQ</button>
+          <button id="viewExistingRendersBtn" class="primary-btn mt8" hidden>View Existing Renders</button>
           <div id="generateStatus" class="status-chip" hidden></div>
 
           <div class="phase-footer" style="margin-top:4px">
@@ -295,7 +296,11 @@
                 Modified design brief
                 <textarea id="regenBriefInput" rows="3" placeholder="e.g. Contemporary minimal, warm oak tones, natural light…"></textarea>
               </label>
-              <button class="primary-btn regen-submit-btn" id="regenBtn">↺ Regenerate All Renders</button>
+              <label class="field-label" style="margin-top: 12px;">
+                Add new inspiration images
+                <input type="file" id="regenInspirationInput" accept="image/*" multiple />
+              </label>
+              <button class="primary-btn regen-submit-btn" id="regenBtn" style="margin-top: 12px;">↺ Regenerate All Renders</button>
             </div>
             <div id="regenStatus" class="status-chip" hidden></div>
           </div>

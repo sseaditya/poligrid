@@ -1640,14 +1640,18 @@ async function projectLoad(id) {
     { data: rooms },
     { data: cameraPins },
     { data: furniturePlacements },
-    { data: boqItems }
+    { data: boqItems },
+    { data: renders },
+    { data: inspirationImages }
   ] = await Promise.all([
     sb.from("projects").select("*").eq("id", id).single(),
     sb.from("floor_plans").select("*").eq("project_id", id).order("created_at", { ascending: false }).limit(1),
     sb.from("rooms").select("*").eq("project_id", id),
     sb.from("camera_pins").select("*").eq("project_id", id),
     sb.from("furniture_placements").select("*").eq("project_id", id),
-    sb.from("boq_items").select("*").eq("project_id", id)
+    sb.from("boq_items").select("*").eq("project_id", id),
+    sb.from("renders").select("*").eq("project_id", id).order("created_at", { ascending: false }),
+    sb.from("inspiration_images").select("*").eq("project_id", id).order("sort_order", { ascending: true })
   ]);
 
   if (!project) throw httpError(404, "Project not found");
@@ -1662,7 +1666,15 @@ async function projectLoad(id) {
       photo_url: pubUrl("poligrid-pin-photos", p.photo_storage_path)
     })),
     furniturePlacements: furniturePlacements || [],
-    boqItems: boqItems || []
+    boqItems: boqItems || [],
+    renders: (renders || []).map(r => ({
+      ...r,
+      url: pubUrl("poligrid-renders", r.storage_path)
+    })),
+    inspirationImages: (inspirationImages || []).map(i => ({
+      ...i,
+      url: pubUrl("poligrid-inspiration", i.storage_path)
+    }))
   };
 }
 

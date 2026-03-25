@@ -841,6 +841,31 @@ function init() {
     const regenBtn = el("regenBtn");
     const regenBrief = el("regenBriefInput")?.value?.trim();
     if (regenBrief && dom.globalBrief) dom.globalBrief.value = regenBrief;
+    
+    // Add newly uploaded inspiration images
+    const regenInput = el("regenInspirationInput");
+    if (regenInput && regenInput.files.length > 0) {
+      if (!appState.inspirationFiles) appState.inspirationFiles = [];
+      const newFiles = Array.from(regenInput.files);
+      appState.inspirationFiles.push(...newFiles);
+      
+      const imagesPayload = [];
+      for (const f of newFiles) {
+        let base64 = await readDataUrl(f);
+        base64 = base64.split(",")[1];
+        imagesPayload.push({
+          fileName: f.name,
+          mimeType: f.type,
+          base64
+        });
+      }
+      saveToDb("/api/project/save-inspiration", {
+        projectId: appState.projectId,
+        images: imagesPayload
+      });
+      regenInput.value = ""; // clear
+    }
+
     if (regenBtn) { regenBtn.disabled = true; regenBtn.textContent = "Regenerating…"; }
     dom.roomResults.innerHTML = "";
     dom.statusBox.textContent = "Preparing regeneration…";
@@ -878,7 +903,7 @@ function init() {
     Debugger.download();
   });
 
-  // Clickable Checkpoint Pills
+  // Clickable Checkpoint Pills and Panel Headers
   for (let i = 1; i <= 4; i++) {
     const pill = el(`pill${i}`);
     if (pill) {
@@ -891,6 +916,23 @@ function init() {
       });
     }
   }
+  document.querySelectorAll(".panel-head").forEach((head, index) => {
+    head.addEventListener("click", () => {
+      const p = index + 1; // panels 1 to 4
+      const pill = el(`pill${p}`);
+      if (pill && !pill.disabled) {
+        hideResultsView();
+        goBack(p);
+      }
+    });
+  });
+
+  // View existing renders button
+  el("viewExistingRendersBtn")?.addEventListener("click", () => {
+    if (appState.existingRendersData && appState.existingRendersData.length) {
+      dom.resultsView.hidden = false;
+    }
+  });
 
   buildPalette();
 
@@ -2019,6 +2061,7 @@ async function loadProject(id) {
     appState.detectedRooms = null;
     appState.confirmedRooms = null;
     appState.globalBoq = [];
+    appState.existingRendersData = null;
     planner = null;
     roomEditor = null;
     latestArtifacts = null;
@@ -2138,6 +2181,55 @@ async function loadProject(id) {
       if (dom.chatPanel) dom.chatPanel.hidden = false;
 
       if (proj.global_brief) dom.globalBrief.value = proj.global_brief;
+
+      // Group existing renders and boq
+      if (data.renders && data.renders.length > 0) {
+        // Build mock results view for history
+        appState.existingRendersData = data.renders;
+        const btn = el("viewExistingRendersBtn");
+        if (btn) btn.hidden = false;
+        dom.downloadScene.disabled = false;
+        dom.downloadBoq.disabled = false;
+        dom.generateStatus.textContent = `✓ Loaded ${data.renders.length} renders`;
+        dom.generateStatus.hidden = false;
+
+        dom.roomResults.innerHTML = "";
+        
+        // Group multiple versions by room_label
+        const viewRendersByRoom = {};
+        for (const render of data.renders) {
+          const mLabel = render.room_label || "Unknown Room";
+          if (!viewRendersByRoom[mLabel]) viewRendersByRoom[mLabel] = [];
+          viewRendersByRoom[mLabel].push(render);
+        }
+        
+        for (const [rLabel, rList] of Object.entries(viewRendersByRoom)) {
+          // Find matching room to get dims
+          const roomObj = rooms.find(r => r.label === rLabel || r.name === rLabel) || { width_m: 0, length_m: 0 };
+          const result = {
+            room: { name: rLabel, widthM: roomObj.width_m, lengthM: roomObj.length_m },
+            renders: rList.map(item => ({ dataUrl: item.url })),
+            sourcePhotos: [] // Don't have original photo mapping easily, skipping BEFORE cell
+          };
+          drawRoomResult(result);
+        }
+        
+        // Also populate existing Inspiration Images to appState if we regenerated
+        if (data.inspirationImages && data.inspirationImages.length) {
+          appState.inspirationFiles = data.inspirationImages.map(img => ({
+             isExisting: true,
+             url: img.url,
+             // Mime type and name mock
+             type: 'image/jpeg',
+             name: img.file_name
+          }));
+        }
+
+        drawBoq(appState.globalBoq);
+      } else {
+        const btn = el("viewExistingRendersBtn");
+        if (btn) btn.hidden = true;
+      }
 
       advancePhase(3);
     }
