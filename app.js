@@ -1713,7 +1713,7 @@ async function renderImageToCanvas(file, canvas) {
 async function renderPdfFirstPage(file, canvas) {
   const pdfjsLib = window.pdfjsLib;
   if (!pdfjsLib) throw new Error("PDF renderer not available.");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "/node_modules/pdfjs-dist/build/pdf.worker.min.js";
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
   const page = await pdf.getPage(1);
