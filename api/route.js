@@ -1119,18 +1119,27 @@ function extractJsonFromText(text) {
 
 function extractResponsesText(response) {
   const output = Array.isArray(response && response.output) ? response.output : [];
+  // Prefer output_text typed items (the actual model reply) over any other text.
+  // Reasoning models return reasoning summaries as plain text items first —
+  // picking them up causes the JSON parse to fail with their prose content.
+  for (const item of output) {
+    const content = Array.isArray(item && item.content) ? item.content : [];
+    for (const c of content) {
+      if (c && c.type === "output_text" && typeof c.text === "string" && c.text.trim()) {
+        return c.text.trim();
+      }
+    }
+  }
+  // Fallback: accept any text content if no output_text found
   for (const item of output) {
     const content = Array.isArray(item && item.content) ? item.content : [];
     for (const c of content) {
       if (c && typeof c.text === "string" && c.text.trim()) {
         return c.text.trim();
       }
-      if (c && c.type === "output_text" && typeof c.text === "string" && c.text.trim()) {
-        return c.text.trim();
-      }
     }
   }
-  // fallback: some variants store in response.output_text
+  // Last resort: some variants store in response.output_text
   if (typeof response?.output_text === "string") {
     return response.output_text.trim();
   }

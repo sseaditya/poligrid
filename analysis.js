@@ -30,9 +30,10 @@ async function analyzeFloorPlan(canvas, context) {
     body: JSON.stringify({ imageBase64, mimeType: "image/png", context })
   });
   const raw = await response.text();
-  const parsed = raw ? JSON.parse(raw) : null;
+  let parsed = null;
+  try { parsed = raw ? JSON.parse(raw) : null; } catch { /* non-JSON response (e.g. 504 HTML) */ }
   if (!response.ok) {
-    throw new Error(parsed?.error || "Floor plan analysis failed.");
+    throw new Error(parsed?.error || `Floor plan analysis failed (HTTP ${response.status}).`);
   }
   return parsed.analysis; // { rooms, totalAreaM2, bhkType, orientation, summary }
 }
