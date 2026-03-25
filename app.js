@@ -1367,7 +1367,7 @@ async function onGenerate() {
     const inspirationDataUrls = await Promise.all(
       appState.inspirationFiles.map(f => readDataUrl(f))
     );
-    const floorPlanBase64 = appState.floorFile ? await readDataUrl(appState.floorFile) : "";
+    const floorPlanBase64 = dom.floorBgCanvas ? dom.floorBgCanvas.toDataURL("image/png") : "";
 
     const roomGroups = {};
     for (const src of renderSources) {
