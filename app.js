@@ -1112,9 +1112,25 @@ async function onGenerate() {
       }
     }
 
-    // BOQ
-    drawBoq(appState.globalBoq);
-    latestArtifacts = buildArtifacts(planner.getSceneState(), appState.globalBoq);
+    // Compile Final BOQ combining Floor Plan Analysis items + Directly Generated Room Furniture
+    const finalBoq = [...(appState.globalBoq || [])];
+    
+    for (const result of roomResults) {
+      if (!result.placements) continue;
+      for (const p of result.placements) {
+        finalBoq.push({
+          category: p.type === "cabinet" ? "Modular furniture" : "Loose furniture",
+          item: `${p.label} (${(Number(p.wM) || 1).toFixed(1)}x${(Number(p.dM) || 1).toFixed(1)}m) in ${p.roomLabel || result.room.name || "Room"}`,
+          qty: 1,
+          unit: "pcs",
+          rate: p.type === "cabinet" ? 25000 : 15000,
+          amount: p.type === "cabinet" ? 25000 : 15000
+        });
+      }
+    }
+
+    drawBoq(finalBoq);
+    latestArtifacts = buildArtifacts(planner?.getSceneState() || {}, finalBoq);
     dom.downloadScene.disabled = false;
     dom.downloadBoq.disabled = false;
     dom.generateStatus.textContent = "✓ Done";
