@@ -884,7 +884,6 @@ function init() {
     }
 
     if (regenBtn) { regenBtn.disabled = true; regenBtn.textContent = "Regenerating…"; }
-    dom.roomResults.innerHTML = "";
     dom.statusBox.textContent = "Preparing regeneration…";
     el("resultsScroll")?.scrollTo({ top: 0, behavior: "smooth" });
     await onGenerate();
@@ -1573,7 +1572,6 @@ async function onGenerate() {
     );
     _inspirationDataUrls = inspirationDataUrls; // cache for results view
     showResultsView(); // populates inspiration strip, scrolls to top
-    dom.roomResults.innerHTML = "";
     const floorPlanBase64 = dom.floorBgCanvas ? dom.floorBgCanvas.toDataURL("image/png") : "";
 
     const roomGroups = {};
@@ -1735,19 +1733,37 @@ async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64) {
 // ─── Draw Output ───────────────────────────────────────────────────────────────
 
 function drawRoomResult(result) {
-  const card = document.createElement("div");
-  card.className = "render-room-card";
+  const roomName = escapeHtml(result.room.name || result.room.label);
   const w = result.room.widthM, l = result.room.lengthM;
 
-  // Header
-  const header = document.createElement("div");
-  header.className = "render-card-header";
-  header.innerHTML = `
-    <h2 class="render-card-title">${escapeHtml(result.room.name || result.room.label)}</h2>
-    <span class="render-card-meta">${w ? w.toFixed(1) + " × " + l.toFixed(1) + " m" : ""} · ${escapeHtml(result.laminate?.name || "")}</span>`;
-  card.appendChild(header);
+  // Search for an existing card for this room
+  let card = null;
+  const existingCards = Array.from(dom.roomResults.querySelectorAll(".render-room-card"));
+  for (const c of existingCards) {
+    const title = c.querySelector(".render-card-title");
+    if (title && title.textContent === roomName) {
+      card = c;
+      break;
+    }
+  }
 
-  // Each render view (with optional before photo)
+  if (!card) {
+    card = document.createElement("div");
+    card.className = "render-room-card";
+
+    // Header
+    const header = document.createElement("div");
+    header.className = "render-card-header";
+    header.innerHTML = `
+      <h2 class="render-card-title">${roomName}</h2>
+      <span class="render-card-meta">${w ? w.toFixed(1) + " × " + l.toFixed(1) + " m" : ""} · ${escapeHtml(result.laminate?.name || "")}</span>`;
+    card.appendChild(header);
+    dom.roomResults.appendChild(card);
+  }
+
+  // Prepend new renders to the top of this room's card (below header)
+  let insertRef = card.children.length > 1 ? card.children[1] : null;
+
   result.renders.forEach((render, i) => {
     const sourcePhoto = result.sourcePhotos?.[i] || null;
 
@@ -1784,10 +1800,12 @@ function drawRoomResult(result) {
     afterCell.appendChild(afterLabel);
     compareWrap.appendChild(afterCell);
 
-    card.appendChild(compareWrap);
+    if (insertRef) {
+      card.insertBefore(compareWrap, insertRef);
+    } else {
+      card.appendChild(compareWrap);
+    }
   });
-
-  dom.roomResults.appendChild(card);
 }
 
 function drawBoq(globalBoq) {
@@ -2179,13 +2197,12 @@ async function loadProject(id) {
         }));
         _inspirationDataUrls = appState.inspirationFiles.map(img => img.url);
       }
-
-      drawBoq(appState.globalBoq);
     } else {
       const btn = el("viewExistingRendersBtn");
       if (btn) btn.hidden = true;
     }
     
+    drawBoq(appState.globalBoq);
     advancePhase(2);
 
     // If project has camera pins, restore planner and advance to phase 3
