@@ -198,22 +198,28 @@ async function furnishRoomWithOpenAi(body) {
   let styleGuidance = "";
   if (inspirationImages.length > 0) {
     const stylePrompt = [
-      "Describe the interior design style, color palette, materials, and overall mood shown in these inspiration images.",
-      "Keep it strictly under 3 sentences, focusing only on actionable visual details."
+      "You are a senior interior designer. Analyze these inspiration images and extract HIGHLY SPECIFIC, ACTIONABLE design details that can guide a photorealistic render.",
+      "Structure your response in these exact sections:",
+      "COLOR PALETTE: List each color with descriptive names (e.g. 'warm ivory walls #F5F0E8', 'dark charcoal sofa fabric', 'aged brass hardware', 'off-white ceiling'). Be specific.",
+      "MATERIALS & FINISHES: Name exact materials (e.g. 'matte walnut veneer cabinetry', 'honed Carrara marble countertop', 'brushed brass fixtures', 'bouclé upholstery', 'wide-plank oak flooring', 'limewash walls'). List every material visible.",
+      "FURNITURE FORM LANGUAGE: Describe the silhouette and construction style (e.g. 'low-profile tight-back sofa on tapered legs', 'curved fluted cabinet fronts', 'minimalist floating shelves with no visible hardware', 'rattan accent chairs').",
+      "LIGHTING CHARACTER: Describe quality and sources (e.g. 'warm 2700K ambient light from concealed cove', 'pendant lights over dining table', 'natural light through sheer white linen curtains', 'soft bounce off white walls').",
+      "SPATIAL MOOD & ATMOSPHERE: One sentence describing the feel (e.g. 'quiet understated luxury with an earthy warmth', 'crisp Japandi minimalism', 'layered bohemian warmth').",
+      "DECORATIVE DETAILS: List specific decor items visible (e.g. 'large-format abstract canvas on wall', 'sculptural ceramic vases', 'woven jute rug', 'potted fiddle-leaf fig', 'stacked art books on coffee table').",
+      "Be exhaustive and precise — a render artist must be able to reproduce this style exactly from your description."
     ].join("\n");
     const styleContent = [{ type: "input_text", text: stylePrompt }];
-    // Limit to 3 images to prevent payload size limits or proxy timeouts
-    for (const inspBase64 of inspirationImages.slice(0, 3)) {
+    for (const inspBase64 of inspirationImages.slice(0, 4)) {
       styleContent.push({
         type: "input_image",
-        image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:${mimeType};base64,${inspBase64}`
+        image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:image/jpeg;base64,${inspBase64}`
       });
     }
     try {
       const stylePayload = {
         model: visionModel,
-        reasoning: { effort: "medium" }, // Increased effort for better extraction
-        max_output_tokens: 500,
+        reasoning: { effort: "high" },
+        max_output_tokens: 1800,
         input: [{ role: "user", content: styleContent }]
       };
       const res = await fetch("https://api.openai.com/v1/responses", {
@@ -240,22 +246,41 @@ async function furnishRoomWithOpenAi(body) {
 
   if (!placements || placements.length === 0) {
     if (!emptyRoomBase64) {
-      throw httpError(400, "Missing empty room photo for Vision Planning. Please provide a photo or floor plan placements.");
+      throw httpError(400, "Missing empty room photo for Vision Planning.");
     }
+    const roomCtxForPlan = body.roomContext || {};
+    const roomSizeText = (roomCtxForPlan.widthM && roomCtxForPlan.lengthM)
+      ? `${roomCtxForPlan.widthM}m wide × ${roomCtxForPlan.lengthM}m long`
+      : "unknown size";
+    // Describe camera FOV sectors for spatial awareness
+    const fovDeg = cam.fovDeg || 60;
+    const halfFov = fovDeg / 2;
+    const facingAngle = cam.angleDeg || 0;
+    const leftEdge = ((facingAngle - halfFov) + 360) % 360;
+    const rightEdge = (facingAngle + halfFov) % 360;
     const planningPrompt = [
-      "You are an expert interior designer. You have been given a photo of an empty room.",
-      floorPlanBase64 ? "You have also been given the top-down floor plan image for spatial context." : "",
-      body.brief ? `CRITICAL CONTEXT: The user requested the following Design Brief/Room Type: "${body.brief}". Prioritize furnishing it matching this exact purpose.` : "",
-      styleGuidance ? `STYLE CONTEXT: Use the following extracted style guidance to determine appropriate furniture choices:\n"${styleGuidance}"` : "",
-      `CAMERA POSITIONS: ${cameraPositionText}. Use this to understand what parts of the room are currently visible in the provided empty room photo before deciding furniture placement.`,
-      "Based on the room's geometry, requested brief, and the implied style, generate a complete list of furniture necessary to furnish this room.",
-      "Return strict JSON with a `placements` array, where each item has:",
-      "  - label: e.g., '3-Seater Sofa'",
-      "  - type: 'seating', 'table', 'cabinet', 'bed', 'decor', or 'custom'",
-      "  - wM: approx width in meters",
-      "  - dM: approx depth in meters",
-      "  - hM: approx height in meters",
-      "Return nothing but JSON."
+      "You are a senior interior designer. Plan a COMPLETE furniture scheme for the entire room — not just what's visible in the photo.",
+      `ROOM: ${roomCtxForPlan.roomType || 'residential'}, ${roomSizeText}`,
+      roomCtxForPlan.archNotes ? `ARCHITECTURAL NOTES: ${roomCtxForPlan.archNotes}` : "",
+      `CAMERA REFERENCE (for spatial context only): positioned at (${cam.xM || 0}m, ${cam.yM || 0}m), facing ${facingAngle}°, FOV ${fovDeg}°. Use this to understand what the photo shows, but plan furniture for the ENTIRE room — the BOQ must cover everything, not just visible items.`,
+      floorPlanBase64 ? "The floor plan is provided — use it to understand all walls, zones, and room boundaries to plan complete furniture placement." : "",
+      body.brief ? `DESIGN BRIEF: "${body.brief}"` : "",
+      styleGuidance
+        ? [
+            "STYLE DIRECTIVE — This is the most critical instruction. Every item MUST reflect this extracted style:",
+            styleGuidance,
+            "Name each item with its material/finish explicitly (e.g. 'Walnut-veneer Full-Height Wardrobe', 'Bouclé 3-Seater Sofa on brass legs', 'Fluted oak TV unit'). The label should be descriptive enough to price it."
+          ].join("\n")
+        : "",
+      "Return STRICT JSON only — a 'placements' array covering ALL furniture for this room type. Each item:",
+      "  label: specific descriptive name with material and finish (e.g. 'Matte walnut 3-door full-height wardrobe', 'Marble-top 6-seater dining table', 'Linen-upholstered queen bed with padded headboard')",
+      "  type: exactly one of 'seating'|'table'|'cabinet'|'bed'|'decor'|'custom'",
+      "  category: either 'Modular furniture' (built-in/fitted: wardrobes, kitchen cabinets, TV units, study units, shoe racks) or 'Loose furniture' (free-standing: sofas, beds, dining tables, chairs, decor)",
+      "  wM: realistic width in meters for Indian rooms",
+      "  dM: depth in meters",
+      "  hM: height in meters",
+      "  rateINR: your best estimate of the Hyderabad premium market price in INR for this specific item (one unit, supply + install). Be realistic — e.g. a full-height sliding wardrobe ₹95,000, a 3-seater sofa ₹70,000-85,000, a queen bed ₹55,000-70,000, kitchen cabinets ₹45,000-65,000 per unit.",
+      "Return NOTHING but valid JSON."
     ].filter(Boolean).join("\n");
 
     const contentArray = [
@@ -270,13 +295,19 @@ async function furnishRoomWithOpenAi(body) {
       });
     }
 
+    // Include inspiration images in planning so AI picks style-matching furniture
+    for (const inspBase64 of inspirationImages.slice(0, 2)) {
+      contentArray.push({
+        type: "input_image",
+        image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:image/jpeg;base64,${inspBase64}`
+      });
+    }
+
     const payload = {
       model: visionModel,
-      reasoning: { effort: "medium" },
+      reasoning: { effort: "high" },
       max_output_tokens: 4000,
-      input: [
-        { role: "user", content: contentArray }
-      ]
+      input: [{ role: "user", content: contentArray }]
     };
 
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -287,7 +318,7 @@ async function furnishRoomWithOpenAi(body) {
 
     const raw = await response.text();
     if (!response.ok) throw httpError(response.status, extractApiError(raw));
-    
+
     const parsed = safeJson(raw);
     _debug.push({ step: "Vision Room Planning", payload: payload, response: parsed });
     const jsonOutput = extractJsonFromText(extractResponsesText(parsed));
@@ -295,33 +326,69 @@ async function furnishRoomWithOpenAi(body) {
   }
 
   // STEP 3: Render Generation (DALL-E)
-  const furnitureStr = placements.map(p => `- ${p.label} (${p.wM}x${p.dM}m, height ${p.hM || 0.9}m)`).join("\n");
   const roomCtx = body.roomContext || {};
+  const furnitureStr = placements.map(p => `- ${p.label} (${p.wM || '?'}m wide × ${p.dM || '?'}m deep × ${p.hM || 0.9}m tall)`).join("\n");
   const roomDimsText = (roomCtx.widthM && roomCtx.lengthM)
-    ? `Room dimensions: ${roomCtx.widthM}m wide × ${roomCtx.lengthM}m long × 2.85m ceiling height.`
+    ? `Room: ${roomCtx.widthM}m wide × ${roomCtx.lengthM}m long × 2.85m ceiling height.`
     : '';
 
-  // Describe wall openings so the AI knows where doors/windows are
   const wallLines = Array.isArray(roomCtx.walls) && roomCtx.walls.length
     ? roomCtx.walls.map(w => {
-        const openings = (w.openings || []).map(o => `${o.type} (${o.widthM || 0.9}m wide)`).join(', ');
-        return `${w.side} wall: ${w.isExterior ? 'exterior' : 'interior'}${openings ? ' — ' + openings : ' — solid'}`;
-      }).join('; ')
+        const openings = (w.openings || []).map(o => `${o.type} (${o.widthM || 0.9}m)`).join(', ');
+        return `${w.side}: ${w.isExterior ? 'exterior' : 'interior'}${openings ? ' — ' + openings : ''}`;
+      }).join(' | ')
     : '';
 
-  const renderPrompt = [
-    "Photorealistic architectural interior render. Render ONLY what is visible from the camera — do not show the camera itself.",
-    roomDimsText,
-    wallLines ? `WALL LAYOUT: ${wallLines}. Respect these — do NOT place furniture blocking doors or in front of windows.` : "",
-    `FURNITURE TO PLACE (respect actual room dimensions; nothing should float or clip through walls):\n${furnitureStr}`,
-    emptyRoomBase64
-      ? "Maintain the exact architectural geometry, perspective, lighting, and camera angle of the provided empty room photo."
-      : `Room type: ${roomCtx.roomType || 'residential'}. Generate a realistic perspective view.`,
-    roomCtx.archNotes ? `Architectural notes: ${roomCtx.archNotes}` : "",
-    body.brief ? `Design Brief: ${body.brief}` : "Apply a modern, clean Indian residential style.",
-    styleGuidance ? `STYLE — apply this throughout (materials, colours, mood):\n${styleGuidance}` : "",
-    `CAMERA: ${cameraPositionText}. Ensure furniture placement is spatially coherent from this viewpoint.`
-  ].filter(Boolean).join("\n");
+  let renderPrompt;
+
+  if (emptyRoomBase64) {
+    // ── IMAGE-TO-IMAGE: preserve structure, apply style to surfaces + add furniture ──
+    renderPrompt = [
+      "INTERIOR DESIGN RENDER — editing an existing empty room photograph.",
+      "═══ STRUCTURAL RULES — these must not change ═══",
+      "• Room geometry: wall positions, ceiling height, floor area, room proportions — UNCHANGED",
+      "• Architectural elements: all doors (position, size, swing), all windows (position, size) — UNCHANGED",
+      "• Camera viewpoint: same perspective, focal length, spatial distortion — UNCHANGED",
+      "═══ STYLE TRANSFORMATION — you MAY and SHOULD update these ═══",
+      "• Wall paint and finish: update to match the style guide below",
+      "• Floor finish: update to match style (tile, wood, stone — as specified)",
+      "• Ceiling finish and cove lighting: update per style",
+      "• Lighting mood: warm or cool per style directive",
+      "═══ PRIMARY TASK — add furniture ═══",
+      "Place and render the furniture items below into the room. Each piece must:",
+      "- Sit flush on the floor with correct perspective foreshortening",
+      "- Cast realistic shadows consistent with the room's light sources",
+      "- Be scaled correctly relative to the room dimensions",
+      "- Reflect in any glossy floor or surface",
+      roomDimsText,
+      wallLines ? `ARCHITECTURE: ${wallLines}. Never block doors or window light.` : "",
+      `FURNITURE:\n${furnitureStr}`,
+      body.brief ? `DESIGN BRIEF: ${body.brief}` : "",
+      styleGuidance
+        ? ["STYLE GUIDE — apply to all surfaces AND furniture:", styleGuidance].join("\n")
+        : "",
+      `CAMERA: ${cameraPositionText}. Compose and render from this exact viewpoint.`
+    ].filter(Boolean).join("\n");
+  } else {
+    // ── TEXT-TO-IMAGE: generate full room render ──────────────────────────────
+    renderPrompt = [
+      "Photorealistic interior design photograph, professional architectural photography quality, shot on full-frame camera.",
+      roomDimsText,
+      wallLines ? `ROOM LAYOUT — walls: ${wallLines}. Do NOT block doors or windows with furniture.` : "",
+      `ROOM TYPE: ${roomCtx.roomType || 'residential living space'}`,
+      roomCtx.archNotes ? `ARCHITECTURAL NOTES: ${roomCtx.archNotes}` : "",
+      `FURNITURE (place all items; respect room scale and ensure natural circulation paths):\n${furnitureStr}`,
+      body.brief ? `DESIGN BRIEF: ${body.brief}` : "Modern Indian residential interior, warm and liveable.",
+      styleGuidance
+        ? [
+            "COMPREHENSIVE STYLE GUIDE — apply every detail below faithfully:",
+            styleGuidance,
+            "Match colors, materials, finishes, lighting mood, and decorative elements from the style guide exactly."
+          ].join("\n")
+        : "",
+      `CAMERA: ${cameraPositionText}. Compose the shot from this exact viewpoint.`
+    ].filter(Boolean).join("\n");
+  }
 
   const renderResult = await renderWithOpenAi({
     model: body.renderModel || "gpt-image-1.5",
@@ -399,26 +466,26 @@ async function analyzeFloorPlanWithOpenAi(body) {
     "  - bhkType: e.g. '2BHK', '3BHK', 'Small Office', 'Open Plan Office'",
     "  - orientation: compass orientation if north arrow visible, else 'unknown'",
     "  - summary: 1-2 sentence description of the plan",
-    "  - globalBoq: exhaustive bill of quantities for the ENTIRE project. CRITICAL RULES:",
-    "    1. NEVER return an empty array.",
-    "    2. You MUST return items in ALL 8 categories below — every project needs all of them.",
-    "    3. Use Hyderabad (India) premium market rates in INR.",
-    "    4. Estimate quantities from totalAreaM2 and room count if not explicitly visible on drawing.",
-    "    CATEGORIES (use EXACTLY these strings):",
-    "      'Civil work'      — demolition, partition walls, masonry, structural changes",
-    "      'Plumbing'        — supply lines, drainage, fixtures (bathrooms, kitchen) — estimate per room count",
-    "      'Faux ceiling'    — false ceiling with coves/lights — estimate sqm from room areas",
-    "      'Modular furniture' — wardrobes, kitchen cabinets, TV units, study units — count per room type",
-    "      'Loose furniture' — sofas, beds, dining tables, chairs — count per room type",
-    "      'Flooring'        — tiles or wood — total carpet area in sqm",
-    "      'Doors and windows' — count all doors and windows visible or typical for the layout",
-    "      'Painting'        — internal walls + ceiling — estimate 2.5× floor area for wall area",
+    "  - globalBoq: comprehensive bill of quantities for the ENTIRE project — STRUCTURAL AND INFRASTRUCTURE ONLY. CRITICAL RULES:",
+    "    1. NEVER return an empty array. Every project needs all 6 categories below.",
+    "    2. Do NOT include modular furniture or loose furniture — those are handled separately in the render phase.",
+    "    3. Use Hyderabad (India) premium market rates in INR. Derive quantities from totalAreaM2 and room counts.",
+    "    4. Be realistic — estimate generously based on the floor plan size and room types.",
+    "    CATEGORIES (use EXACTLY these 6 strings):",
+    "      'Civil work'      — demolition (if renovation), partition walls, masonry, structural changes, waterproofing for wet areas",
+    "                          Rates: tile/stone demolition ₹40-80/sqft, new partition wall ₹800-1400/rft, waterproofing ₹120-200/sqft wet area",
+    "      'Plumbing'        — CP fittings, sanitary ware, supply/drainage pipes. Estimate: ₹45,000-70,000 per bathroom, ₹30,000-50,000 for kitchen",
+    "      'Electrical'      — wiring, conduits, switches, distribution board, MCBs, earthing. Estimate: ₹1,800-2,800 per sqm of total area",
+    "      'Faux ceiling'    — gypsum board false ceiling with coves and lighting provision. Rate: ₹95-140/sqft. Estimate 60-80% of floor area has false ceiling.",
+    "      'Flooring'        — vitrified tiles, wood, or stone. Living/dining ₹150-220/sqft, bedrooms ₹130-180/sqft, kitchen/bath ₹110-160/sqft",
+    "      'Doors and windows' — count doors and windows from plan. Internal flush door ₹22,000-32,000, main door ₹55,000-90,000, UPVC window ₹900-1,400/sqft",
+    "      'Painting'        — premium emulsion interior. Wall area ≈ 2.5× floor area + ceiling area. Rate ₹35-55/sqft",
     "    For each item return:",
-    "      - category: EXACTLY one of the 8 strings above",
-    "      - item: descriptive name e.g. 'Vitrified tile flooring (800×800)', 'Full-height wardrobe', 'Internal flush door'",
+    "      - category: EXACTLY one of the 6 strings above",
+    "      - item: specific descriptive name e.g. 'Vitrified tile flooring (800×800mm) — Living & Dining', 'UPVC sliding window 4×4ft — Bedroom', 'Gypsum board false ceiling with cove — Living Room'",
     "      - qty: numeric quantity",
-    "      - unit: 'sqm', 'pcs', 'rft', 'lump sum', 'points'",
-    "      - rate: Hyderabad premium INR rate per unit",
+    "      - unit: 'sqft', 'sqm', 'pcs', 'rft', 'points', 'lump sum'",
+    "      - rate: Hyderabad premium INR rate per unit (a single number)",
     "      - amount: qty × rate",
     "",
     "Return STRICT JSON only (no markdown, no explanation):",
