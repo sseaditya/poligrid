@@ -12,4 +12,4 @@ We use the following structure
         flooring - derive based on floor plan
         doors and windows
         paintwork - entire house
-        use hyd premium prices for this
+        use hyd premium prices for this.
