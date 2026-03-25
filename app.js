@@ -481,6 +481,12 @@ function goBack(targetPhase) {
     if (planner) planner.render();
     if (dom.chatPanel) dom.chatPanel.hidden = false;
   }
+  
+  if (targetPhase === 4) {
+    if ((appState.existingRendersData && appState.existingRendersData.length) || dom.roomResults.children.length > 0) {
+      showResultsView();
+    }
+  }
 }
 
 // ─── Init ──────────────────────────────────────────────────────────────────────
