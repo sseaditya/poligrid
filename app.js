@@ -791,6 +791,7 @@ function setMode(mode, tab1, tab2) {
 }
 
 function buildPalette() {
+  if (!dom.furniturePalette) return;
   dom.furniturePalette.innerHTML = "";
   MODULE_LIBRARY.forEach((m, idx) => {
     const item = document.createElement("div");
@@ -816,15 +817,16 @@ function onSceneChange(state) {
   const hasPins = state.cameraPins && state.cameraPins.length > 0;
   dom.generateBtn.disabled = !hasPins;
   dom.downloadScene.disabled = false;
+  
   if (state.selected?.type === "furniture") {
     const f = state.furniturePlacements?.find(x => x.id === state.selected.id);
-    if (f) {
+    if (f && dom.selectionPanel) {
       dom.selectionPanel.hidden = false;
-      dom.selectionLabel.textContent = f.label;
-      dom.selectionDims.textContent = `${f.wM.toFixed(2)}m × ${f.dM.toFixed(2)}m`;
+      if (dom.selectionLabel) dom.selectionLabel.textContent = f.label;
+      if (dom.selectionDims) dom.selectionDims.textContent = `${f.wM.toFixed(2)}m × ${f.dM.toFixed(2)}m`;
     }
   } else {
-    dom.selectionPanel.hidden = true;
+    if (dom.selectionPanel) dom.selectionPanel.hidden = true;
   }
 }
 
