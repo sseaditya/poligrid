@@ -388,19 +388,19 @@ const FURN_COLORS = [
 function advancePhase(n) {
   currentPhase = n;
   // Update pills
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 5; i++) {
     const pill = el(`pill${i}`);
     if (!pill) continue;
     pill.classList.toggle("active", i === n);
     pill.classList.toggle("done", i < n);
   }
   // Connectors
-  for (let i = 1; i <= 3; i++) {
+  for (let i = 1; i <= 4; i++) {
     const conn = el(`conn${i}${i + 1}`);
     if (conn) conn.style.background = i < n ? "var(--success)" : "var(--border)";
   }
   // Show/hide panels
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 5; i++) {
     const p = el(`panel${i}`);
     if (p) p.hidden = i !== n;
   }
@@ -463,7 +463,7 @@ function goBack(targetPhase) {
     dom.roomEditorCanvas.hidden = false;
     dom.plannerCanvas.hidden = true;
     if (roomEditor) roomEditor.render();
-  } else if (targetPhase >= 3) {
+  } else if (targetPhase === 3 || targetPhase === 4) {
     dom.roomEditorCanvas.hidden = true;
     dom.plannerCanvas.hidden = false;
     
@@ -482,10 +482,8 @@ function goBack(targetPhase) {
     if (dom.chatPanel) dom.chatPanel.hidden = false;
   }
   
-  if (targetPhase === 4) {
-    if ((appState.existingRendersData && appState.existingRendersData.length) || dom.roomResults.children.length > 0) {
-      showResultsView();
-    }
+  if (targetPhase === 5) {
+    showResultsView();
   }
 }
 
@@ -852,6 +850,7 @@ function init() {
   // Results view: close → go back to phase 4 (edit)
   dom.closeOutput?.addEventListener("click", () => {
     hideResultsView();
+    goBack(4);
   });
 
   // Regenerate button
@@ -922,7 +921,7 @@ function init() {
   });
 
   // Clickable Checkpoint Pills and Panel Headers
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 5; i++) {
     const pill = el(`pill${i}`);
     if (pill) {
       pill.style.cursor = "pointer";
@@ -1629,7 +1628,9 @@ async function onGenerate() {
     latestArtifacts = buildArtifacts(planner?.getSceneState() || {}, finalBoq);
     dom.downloadScene.disabled = false;
     dom.downloadBoq.disabled = false;
-    dom.generateStatus.textContent = "✓ Done";
+    dom.generateStatus.textContent = "✓ Generation complete";
+    advancePhase(5);
+    showResultsView();
     dom.statusBox.textContent = "";
 
     // Persist furniture BOQ items (generated) and all placements to Supabase
@@ -2184,7 +2185,7 @@ async function loadProject(id) {
       const btn = el("viewExistingRendersBtn");
       if (btn) btn.hidden = true;
     }
-
+    
     advancePhase(2);
 
     // If project has camera pins, restore planner and advance to phase 3
