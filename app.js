@@ -1092,6 +1092,7 @@ async function onGenerate() {
     const inspirationDataUrls = await Promise.all(
       appState.inspirationFiles.map(f => readDataUrl(f))
     );
+    const floorPlanBase64 = appState.floorFile ? await readDataUrl(appState.floorFile) : "";
 
     const roomGroups = {};
     for (const src of renderSources) {
@@ -1103,7 +1104,7 @@ async function onGenerate() {
     for (const [roomLabel, srcs] of Object.entries(roomGroups)) {
       dom.generateStatus.textContent = `Preparing: ${roomLabel}…`;
       try {
-        const result = await generateRoom(srcs, inspirationDataUrls);
+        const result = await generateRoom(srcs, inspirationDataUrls, floorPlanBase64);
         roomResults.push(result);
         drawRoomResult(result);
       } catch (err) {
@@ -1144,7 +1145,7 @@ async function onGenerate() {
   }
 }
 
-async function generateRoom(srcs, inspirationDataUrls) {
+async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64) {
   const mainSrc = srcs[0];
 
   const renders = [];
@@ -1160,6 +1161,13 @@ async function generateRoom(srcs, inspirationDataUrls) {
     const res = await postJson("/api/furnish-room", {
       emptyRoomBase64: src.photoDataUrl || "", // Empty string triggers server side Text-to-Image fallback
       inspirationBase64: inspirationDataUrls,
+      floorPlanBase64: floorPlanBase64,
+      cameraContext: {
+        xM: src.xM,
+        yM: src.yM,
+        angleDeg: src.angleDeg,
+        fovDeg: src.fovDeg
+      },
       mimeType: src.photoFile ? src.photoFile.type : "image/png",
       visionModel: "gpt-5.4",
       renderModel: "gpt-image-1.5",

@@ -173,66 +173,7 @@ async function furnishRoomWithOpenAi(body) {
   const mimeType = String(body.mimeType || "image/jpeg").trim();
   const inspirationImages = Array.isArray(body.inspirationBase64) ? body.inspirationBase64 : [];
 
-  // STEP 1: Vision Planning (Decide what furniture to place)
-  const _debug = [];
-  const providedPlacements = Array.isArray(body.placements) ? body.placements : null;
-  let placements = providedPlacements;
-
-  if (!placements || placements.length === 0) {
-    if (!emptyRoomBase64) {
-      throw httpError(400, "Missing empty room photo for Vision Planning. Please provide a photo or floor plan placements.");
-    }
-    const planningPrompt = [
-      "You are an expert interior designer. You have been given a photo of an empty room.",
-      body.brief ? `CRITICAL CONTEXT: The user requested the following Design Brief/Room Type: "${body.brief}". Prioritize furnishing it matching this exact purpose (e.g. if it says Office, place desks and chairs; if Living Room, place sofa).` : "",
-      inspirationImages.length ? "You have also been given inspiration images showing the desired style." : "",
-      "Based on the room's geometry, requested brief, and the implied style, generate a complete list of furniture necessary to furnish this room.",
-      "Return strict JSON with a `placements` array, where each item has:",
-      "  - label: e.g., '3-Seater Sofa'",
-      "  - type: 'seating', 'table', 'cabinet', 'bed', 'decor', or 'custom'",
-      "  - wM: approx width in meters",
-      "  - dM: approx depth in meters",
-      "  - hM: approx height in meters",
-      "Return nothing but JSON."
-    ].filter(Boolean).join("\n");
-
-    const contentArray = [
-      { type: "input_text", text: planningPrompt },
-      { type: "input_image", image_url: emptyRoomBase64.startsWith("data:") ? emptyRoomBase64 : `data:${mimeType};base64,${emptyRoomBase64}` }
-    ];
-
-    for (const inspBase64 of inspirationImages) {
-      contentArray.push({
-        type: "input_image",
-        image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:${mimeType};base64,${inspBase64}`
-      });
-    }
-
-    const payload = {
-      model: visionModel,
-      reasoning: { effort: "medium" },
-      max_output_tokens: 4000,
-      input: [
-        { role: "user", content: contentArray }
-      ]
-    };
-
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    const raw = await response.text();
-    if (!response.ok) throw httpError(response.status, extractApiError(raw));
-    
-    const parsed = safeJson(raw);
-    _debug.push({ step: "Vision Room Planning", payload: payload, response: parsed });
-    const jsonOutput = extractJsonFromText(extractResponsesText(parsed));
-    placements = jsonOutput?.placements || [];
-  }
-
-  // STEP 1.5: Extract Style from Inspiration Images
+  // STEP 1: Extract Style from Inspiration Images
   let styleGuidance = "";
   if (inspirationImages.length > 0) {
     const stylePrompt = [
@@ -268,7 +209,71 @@ async function furnishRoomWithOpenAi(body) {
     }
   }
 
-  // STEP 2: Render Generation (DALL-E)
+  // STEP 2: Vision Planning (Decide what furniture to place)
+  const providedPlacements = Array.isArray(body.placements) ? body.placements : null;
+  let placements = providedPlacements;
+  
+  const floorPlanBase64 = String(body.floorPlanBase64 || "").trim();
+  const cam = body.cameraContext || {};
+  const cameraPositionText = `Camera is located at X:${cam.xM || 0}m, Y:${cam.yM || 0}m relative to the room origin, facing angle ${cam.angleDeg || 0}° with a ${cam.fovDeg || 60}° Field of View.`;
+
+  if (!placements || placements.length === 0) {
+    if (!emptyRoomBase64) {
+      throw httpError(400, "Missing empty room photo for Vision Planning. Please provide a photo or floor plan placements.");
+    }
+    const planningPrompt = [
+      "You are an expert interior designer. You have been given a photo of an empty room.",
+      floorPlanBase64 ? "You have also been given the top-down floor plan image for spatial context." : "",
+      body.brief ? `CRITICAL CONTEXT: The user requested the following Design Brief/Room Type: "${body.brief}". Prioritize furnishing it matching this exact purpose.` : "",
+      styleGuidance ? `STYLE CONTEXT: Use the following extracted style guidance to determine appropriate furniture choices:\n"${styleGuidance}"` : "",
+      `CAMERA POSITIONS: ${cameraPositionText}. Use this to understand what parts of the room are currently visible in the provided empty room photo before deciding furniture placement.`,
+      "Based on the room's geometry, requested brief, and the implied style, generate a complete list of furniture necessary to furnish this room.",
+      "Return strict JSON with a `placements` array, where each item has:",
+      "  - label: e.g., '3-Seater Sofa'",
+      "  - type: 'seating', 'table', 'cabinet', 'bed', 'decor', or 'custom'",
+      "  - wM: approx width in meters",
+      "  - dM: approx depth in meters",
+      "  - hM: approx height in meters",
+      "Return nothing but JSON."
+    ].filter(Boolean).join("\n");
+
+    const contentArray = [
+      { type: "input_text", text: planningPrompt },
+      { type: "input_image", image_url: emptyRoomBase64.startsWith("data:") ? emptyRoomBase64 : `data:${mimeType};base64,${emptyRoomBase64}` }
+    ];
+
+    if (floorPlanBase64) {
+      contentArray.push({
+        type: "input_image",
+        image_url: floorPlanBase64.startsWith("data:") ? floorPlanBase64 : `data:image/png;base64,${floorPlanBase64}`
+      });
+    }
+
+    const payload = {
+      model: visionModel,
+      reasoning: { effort: "medium" },
+      max_output_tokens: 4000,
+      input: [
+        { role: "user", content: contentArray }
+      ]
+    };
+
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const raw = await response.text();
+    if (!response.ok) throw httpError(response.status, extractApiError(raw));
+    
+    const parsed = safeJson(raw);
+    _debug.push({ step: "Vision Room Planning", payload: payload, response: parsed });
+    const jsonOutput = extractJsonFromText(extractResponsesText(parsed));
+    placements = jsonOutput?.placements || [];
+  }
+
+  // STEP 3: Render Generation (DALL-E)
   const furnitureStr = placements.map(p => `- ${p.label} (${p.wM}x${p.dM}m)`).join("\n");
   
   const renderPrompt = [
@@ -276,7 +281,8 @@ async function furnishRoomWithOpenAi(body) {
     `Furnish the room strictly with the following items:\n${furnitureStr}`,
     emptyRoomBase64 ? "Maintain the architectural geometry, lighting, and camera angle of the original empty room." : "",
     body.brief ? `Design Brief / Style Preference: ${body.brief}` : "Apply standard styling.",
-    styleGuidance ? `CRITICAL Visual Inspiration Guidance: The entire scene MUST heavily reflect this specific style, materials, and color palette:\n${styleGuidance}` : ""
+    styleGuidance ? `CRITICAL Visual Inspiration Guidance: The entire scene MUST heavily reflect this specific style, materials, and color palette:\n${styleGuidance}` : "",
+    `CAMERA CONTEXT: ${cameraPositionText}. Ensure the placement of the furniture makes spatial sense from this specific viewing origin.`
   ].filter(Boolean).join("\n");
 
   const renderResult = await renderWithOpenAi({
