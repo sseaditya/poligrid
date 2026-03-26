@@ -1253,13 +1253,27 @@ async function projectSaveAnalysis(body) {
     "image/png"
   );
 
-  const fpId = await db.insertRow("floor_plans", {
-    project_id: projectId,
-    file_name: fileName || "floorplan.png",
-    storage_path: storagePath,
-    analysis_raw: analysis,
-    analyzed_at: new Date().toISOString()
-  });
+  // Floor plan is static per project — upsert in place rather than inserting a new row
+  const sb = db.getClient();
+  const { data: existingFp } = await sb.from("floor_plans").select("id").eq("project_id", projectId).limit(1).single();
+  let fpId;
+  if (existingFp) {
+    await sb.from("floor_plans").update({
+      file_name: fileName || "floorplan.png",
+      storage_path: storagePath,
+      analysis_raw: analysis,
+      analyzed_at: new Date().toISOString()
+    }).eq("id", existingFp.id);
+    fpId = existingFp.id;
+  } else {
+    fpId = await db.insertRow("floor_plans", {
+      project_id: projectId,
+      file_name: fileName || "floorplan.png",
+      storage_path: storagePath,
+      analysis_raw: analysis,
+      analyzed_at: new Date().toISOString()
+    });
+  }
 
   const rooms = analysis?.rooms || [];
   if (rooms.length) {
@@ -1327,6 +1341,19 @@ async function projectSaveInspiration(body) {
   const { projectId, images } = body;
   if (!projectId) throw httpError(400, "Missing projectId");
 
+  // Ensure the project row exists before inserting child rows (FK constraint)
+  await db.upsertProject(projectId, {});
+
+  // Get current max sort_order so new images append rather than collide
+  const sb = db.getClient();
+  const { data: existing } = await sb
+    .from("inspiration_images")
+    .select("sort_order")
+    .eq("project_id", projectId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  const offset = existing?.[0]?.sort_order != null ? existing[0].sort_order + 1 : 0;
+
   const rows = [];
   for (let i = 0; i < (images || []).length; i++) {
     const img = images[i];
@@ -1334,7 +1361,7 @@ async function projectSaveInspiration(body) {
     const ext = (img.mimeType || "").includes("png") ? "png" : "jpg";
     const storagePath = await db.uploadBase64(
       "poligrid-inspiration",
-      `${projectId}/${i}.${ext}`,
+      `${projectId}/${Date.now()}_${i}.${ext}`,
       img.base64,
       img.mimeType || "image/jpeg"
     );
@@ -1342,11 +1369,14 @@ async function projectSaveInspiration(body) {
       project_id: projectId,
       file_name: img.fileName || `${i}.${ext}`,
       storage_path: storagePath,
-      sort_order: i
+      sort_order: offset + i
     });
   }
 
-  await db.replaceRows("inspiration_images", { project_id: projectId }, rows);
+  if (rows.length) {
+    const { error } = await sb.from("inspiration_images").insert(rows);
+    if (error) console.error("[DB] Insert inspiration_images failed:", error.message);
+  }
   return { ok: true };
 }
 
