@@ -1145,8 +1145,51 @@ function init() {
 
   // New project button
   el("newProjectBtn")?.addEventListener("click", () => {
+    // Reset all state
     appState.projectId = generateUUID();
+    appState.floorFile = null;
+    appState.inspirationFiles = [];
+    appState.storedInspirationUrls = [];
+    appState.context = { propertyType: "Apartment", bhk: "2BHK", totalAreaM2: null, notes: "" };
+    appState.detectedRooms = null;
+    appState.confirmedRooms = null;
+    appState.globalBoq = [];
+    appState.currentVersionId = null;
+    _allVersions = [];
+    _activeCameraPins = [];
+    _projectBoqItems = [];
+
+    // Reset UI
     el("projectNameInput").value = "";
+    el("floorPlanName").textContent = "Click or drag floor plan PDF / image";
+    el("floorPlan").value = "";
+    el("inspirationNames").textContent = "Add inspiration images (optional)";
+    el("inspirationImages").value = "";
+    el("inspirationPreviews").innerHTML = "";
+    restoreContextForm(appState.context);
+    el("globalBrief").value = "";
+    el("analyzeBtn").disabled = true;
+    el("analysisChip").hidden = true;
+    el("analysisSummaryWrap").hidden = true;
+    el("roomChipList").innerHTML = "";
+    el("pinsList").innerHTML = "";
+    el("noPinsHint").hidden = false;
+
+    // Reset canvas
+    dom.canvasWrap.hidden = true;
+    dom.canvasPlaceholder.hidden = false;
+    if (roomEditor) roomEditor.setRooms([], 0, 0);
+    if (planner) { planner.furniturePlacements = []; planner.render?.(); }
+    const bgCtx = dom.floorBgCanvas?.getContext("2d");
+    if (bgCtx) bgCtx.clearRect(0, 0, dom.floorBgCanvas.width, dom.floorBgCanvas.height);
+
+    // Reset results
+    hideResultsView();
+    el("roomResults").innerHTML = "";
+    el("statusBox").textContent = "";
+    el("versionTabsBar").hidden = true;
+    el("versionTabs").innerHTML = "";
+
     hideProjectPicker();
     advancePhase(1);
   });
@@ -1770,7 +1813,6 @@ async function onGenerate() {
 
     showResultsView();
     dom.roomResults.innerHTML = "";
-    const floorPlanBase64 = dom.floorBgCanvas ? dom.floorBgCanvas.toDataURL("image/png") : "";
 
     const roomGroups = {};
     for (const src of renderSources) {
@@ -1778,12 +1820,16 @@ async function onGenerate() {
       roomGroups[src.roomLabel].push(src);
     }
 
+    const allRooms = appState.confirmedRooms || appState.detectedRooms || [];
+
     const roomResults = [];
     for (const [roomLabel, srcs] of Object.entries(roomGroups)) {
       const statusMsg = `Generating render: ${roomLabel}…`;
       dom.generateStatus.textContent = statusMsg;
       dom.statusBox.textContent = statusMsg;
       try {
+        const targetRoom = allRooms.find(r => r.label === roomLabel || r.name === roomLabel);
+        const floorPlanBase64 = buildRoomFloorPlanSnippet(targetRoom, allRooms);
         const result = await generateRoom(srcs, inspirationDataUrls, floorPlanBase64);
         roomResults.push(result);
         drawRoomResult(result);
@@ -1868,6 +1914,73 @@ async function onGenerate() {
     dom.generateBtn.disabled = false;
     dom.generateBtn.textContent = "✦ Generate Renders + BOQ";
   }
+}
+
+// Builds a cropped+composited floor plan snippet for a target room.
+// Composites the BG canvas + room editor overlay, then crops to the target
+// room bbox expanded by ~50% padding so neighbouring rooms are visible.
+// Falls back to the full composited floor plan if no bbox is available.
+function buildRoomFloorPlanSnippet(targetRoom, allRooms) {
+  const bgCanvas = dom.floorBgCanvas;
+  const overlayCanvas = document.getElementById("roomEditorCanvas");
+  if (!bgCanvas || bgCanvas.width === 0) return "";
+
+  // Composite BG + overlay into a temp canvas
+  const comp = document.createElement("canvas");
+  comp.width  = bgCanvas.width;
+  comp.height = bgCanvas.height;
+  const ctx = comp.getContext("2d");
+  ctx.drawImage(bgCanvas, 0, 0);
+  if (overlayCanvas && overlayCanvas.width === bgCanvas.width) {
+    ctx.drawImage(overlayCanvas, 0, 0);
+  }
+
+  // If no bbox, return full composited image
+  if (!targetRoom?.bbox) return comp.toDataURL("image/png");
+
+  const W = comp.width, H = comp.height;
+  const b = targetRoom.bbox;
+
+  // Find bounding box that also encloses all adjacent rooms (rooms that share a wall label)
+  const adjacentLabels = new Set();
+  (targetRoom.walls || []).forEach(w => {
+    if (w.adjacentRoomLabel) adjacentLabels.add(w.adjacentRoomLabel);
+  });
+
+  let minX = b.xPct, minY = b.yPct;
+  let maxX = b.xPct + b.wPct, maxY = b.yPct + b.hPct;
+
+  for (const room of (allRooms || [])) {
+    if (!room.bbox) continue;
+    if (room === targetRoom || adjacentLabels.has(room.label) || adjacentLabels.has(room.name)) {
+      minX = Math.min(minX, room.bbox.xPct);
+      minY = Math.min(minY, room.bbox.yPct);
+      maxX = Math.max(maxX, room.bbox.xPct + room.bbox.wPct);
+      maxY = Math.max(maxY, room.bbox.yPct + room.bbox.hPct);
+    }
+  }
+
+  // Add 30% padding around the combined region
+  const padX = (maxX - minX) * 0.30, padY = (maxY - minY) * 0.30;
+  const cx = Math.max(0, (minX - padX) * W);
+  const cy = Math.max(0, (minY - padY) * H);
+  const cw = Math.min(W - cx, (maxX - minX + padX * 2) * W);
+  const ch = Math.min(H - cy, (maxY - minY + padY * 2) * H);
+
+  // Crop to a square output (max 800px) to keep token cost low
+  const size = Math.min(800, Math.max(cw, ch));
+  const out = document.createElement("canvas");
+  out.width = size; out.height = size;
+  const octx = out.getContext("2d");
+  octx.fillStyle = "#f5f3ee";
+  octx.fillRect(0, 0, size, size);
+  // Center the crop inside the square
+  const scale = Math.min(size / cw, size / ch);
+  const dx = (size - cw * scale) / 2;
+  const dy = (size - ch * scale) / 2;
+  octx.drawImage(comp, cx, cy, cw, ch, dx, dy, cw * scale, ch * scale);
+
+  return out.toDataURL("image/jpeg", 0.88);
 }
 
 async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64) {
