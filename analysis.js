@@ -24,18 +24,9 @@ const FURNITURE_COLORS = [
 
 async function analyzeFloorPlan(canvas, context) {
   const imageBase64 = canvasToPngBase64(canvas);
-  const response = await fetch("/api/analyze/floorplan", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageBase64, mimeType: "image/png", context })
-  });
-  const raw = await response.text();
-  let parsed = null;
-  try { parsed = raw ? JSON.parse(raw) : null; } catch { /* non-JSON response (e.g. 504 HTML) */ }
-  if (!response.ok) {
-    throw new Error(parsed?.error || `Floor plan analysis failed (HTTP ${response.status}).`);
-  }
-  return parsed.analysis; // { rooms, totalAreaM2, bhkType, orientation, summary }
+  // Use postJson so the Debugger panel captures this call (postJson is defined in app.js, same page scope)
+  const result = await postJson("/api/analyze/floorplan", { imageBase64, mimeType: "image/png", context });
+  return result.analysis; // { rooms, totalAreaM2, bhkType, orientation, summary, globalBoq }
 }
 
 // ─── Room Image Matching ──────────────────────────────────────────────────────

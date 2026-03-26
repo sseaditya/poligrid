@@ -857,16 +857,35 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .render-room-card { display: flex; flex-direction: column; gap: 18px; }
 
 .render-card-header {
-  display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
 }
+.render-card-header-main { display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .render-card-title {
   font-family: var(--font-serif);
   font-size: 30px; color: var(--text); letter-spacing: -0.6px;
 }
 .render-card-meta { font-size: 13px; color: var(--text-dim); }
 .render-card-actions { margin-left: auto; display: flex; gap: 8px; }
+
+.render-card-mapwrap { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.render-card-minimap {
+  width: 110px; height: 110px; object-fit: cover;
+  border-radius: 8px; border: 1px solid var(--border);
+  cursor: zoom-in;
+}
+
+.render-cell-angle {
+  position: absolute; top: 10px; right: 10px;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px);
+  color: rgba(255,255,255,0.82);
+  font-size: 10px; font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 4px 10px; border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.12);
+}
 
 /* Before / After compare */
 .render-compare-wrap {

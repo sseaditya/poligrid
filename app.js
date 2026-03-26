@@ -550,22 +550,38 @@ function drawVersionRenders(renders, cameraPins) {
 
     const header = document.createElement("div");
     header.className = "render-card-header";
-    header.innerHTML = `
+    const headerMain = document.createElement("div");
+    headerMain.className = "render-card-header-main";
+    headerMain.innerHTML = `
       <h2 class="render-card-title">${escapeHtml(roomLabel)}</h2>
       ${w ? `<span class="render-card-meta">${parseFloat(w).toFixed(1)} × ${parseFloat(l).toFixed(1)} m</span>` : ""}`;
+    header.appendChild(headerMain);
+    const mapSnippet = buildFloorPlanSnippetForCard(roomLabel);
+    if (mapSnippet) {
+      const mapWrap = document.createElement("div");
+      mapWrap.className = "render-card-mapwrap";
+      const mapImg = document.createElement("img");
+      mapImg.src = mapSnippet;
+      mapImg.className = "render-card-minimap";
+      mapImg.alt = "Floor plan";
+      mapImg.addEventListener("click", () => openLightbox(mapSnippet));
+      mapWrap.appendChild(mapImg);
+      header.appendChild(mapWrap);
+    }
     card.appendChild(header);
 
     roomRenders.forEach(render => {
-      // Find matching camera pin to get reference photo URL
+      // Find matching camera pin to get reference photo URL and angle info
       const pin = (cameraPins || []).find(p => p.client_id === render.camera_pin_client_id);
       const refPhotoUrl = pin?.photo_url || null;
 
       const compareWrap = document.createElement("div");
-      compareWrap.className = refPhotoUrl ? "render-compare-wrap" : "render-compare-wrap single";
+      compareWrap.className = "render-compare-wrap";
 
+      // BEFORE cell: reference photo, or floor plan snippet when no reference photo
+      const beforeCell = document.createElement("div");
+      beforeCell.className = "render-compare-cell";
       if (refPhotoUrl) {
-        const beforeCell = document.createElement("div");
-        beforeCell.className = "render-compare-cell";
         const beforeImg = document.createElement("img");
         beforeImg.src = refPhotoUrl;
         beforeImg.alt = "Reference photo";
@@ -575,8 +591,27 @@ function drawVersionRenders(renders, cameraPins) {
         lbl.className = "render-cell-label";
         lbl.textContent = "Reference";
         beforeCell.appendChild(lbl);
-        compareWrap.appendChild(beforeCell);
+      } else {
+        const mapSnippet2 = buildFloorPlanSnippetForCard(roomLabel);
+        if (mapSnippet2) {
+          const mapImg2 = document.createElement("img");
+          mapImg2.src = mapSnippet2;
+          mapImg2.alt = "Room layout";
+          mapImg2.addEventListener("click", () => openLightbox(mapSnippet2));
+          beforeCell.appendChild(mapImg2);
+        }
+        const lbl = document.createElement("span");
+        lbl.className = "render-cell-label";
+        lbl.textContent = "Room Layout";
+        beforeCell.appendChild(lbl);
       }
+      if (pin?.angle_deg !== undefined) {
+        const angleBadge = document.createElement("span");
+        angleBadge.className = "render-cell-angle";
+        angleBadge.textContent = `${pin.angle_deg}° · ${pin.fov_deg || 60}° FOV`;
+        beforeCell.appendChild(angleBadge);
+      }
+      compareWrap.appendChild(beforeCell);
 
       const afterCell = document.createElement("div");
       afterCell.className = "render-compare-cell";
@@ -587,7 +622,7 @@ function drawVersionRenders(renders, cameraPins) {
       afterCell.appendChild(afterImg);
       const lbl = document.createElement("span");
       lbl.className = "render-cell-label";
-      lbl.textContent = refPhotoUrl ? "Furnished" : "Furnished Render";
+      lbl.textContent = "Furnished";
       afterCell.appendChild(lbl);
       compareWrap.appendChild(afterCell);
 
@@ -1256,6 +1291,7 @@ async function onAnalyzePlan() {
     const analysis = await PA.analyzeFloorPlan(bgCanvas, appState.context);
     appState.detectedRooms = analysis.rooms || [];
     appState.globalBoq = analysis.globalBoq || [];
+    console.log(`[Poligrid] Floor plan analysis complete: ${appState.detectedRooms.length} rooms, ${appState.globalBoq.length} BOQ items`);
 
     // Persist floor plan image + analysis to Supabase
     saveToDb("/api/project/save-analysis", {
@@ -1789,6 +1825,12 @@ async function onGenerate() {
     const inspirationDataUrls = await getInspirationDataUrls();
     _inspirationDataUrls = inspirationDataUrls;
 
+    // Extract inspiration style guidance ONCE for all rooms
+    dom.statusBox.textContent = "Analysing inspiration style…";
+    console.log(`[Poligrid] extractInspirationStyle → POST /api/inspire/extract-furnish-style (${inspirationDataUrls.length} images)`);
+    const precomputedStyleGuidance = await extractInspirationStyle(inspirationDataUrls);
+    console.log(`[Poligrid] extractInspirationStyle ✓ ${precomputedStyleGuidance.length} chars`);
+
     // Create a new project version before generation starts
     dom.statusBox.textContent = "Creating design version…";
     appState.currentVersionId = null;
@@ -1830,7 +1872,7 @@ async function onGenerate() {
       try {
         const targetRoom = allRooms.find(r => r.label === roomLabel || r.name === roomLabel);
         const floorPlanBase64 = buildRoomFloorPlanSnippet(targetRoom, allRooms);
-        const result = await generateRoom(srcs, inspirationDataUrls, floorPlanBase64);
+        const result = await generateRoom(srcs, inspirationDataUrls, floorPlanBase64, precomputedStyleGuidance);
         roomResults.push(result);
         drawRoomResult(result);
       } catch (err) {
@@ -1983,7 +2025,29 @@ function buildRoomFloorPlanSnippet(targetRoom, allRooms) {
   return out.toDataURL("image/jpeg", 0.88);
 }
 
-async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64) {
+// Builds a small floor plan snippet for render card display — returns dataUrl or "".
+function buildFloorPlanSnippetForCard(roomLabel) {
+  const allRooms = appState.confirmedRooms || appState.detectedRooms || [];
+  const targetRoom = allRooms.find(r => r.label === roomLabel || r.name === roomLabel);
+  return buildRoomFloorPlanSnippet(targetRoom, allRooms);
+}
+
+// Extracts inspiration style guidance once (before the per-room loop) to avoid redundant API calls.
+async function extractInspirationStyle(inspirationDataUrls) {
+  if (!inspirationDataUrls || inspirationDataUrls.length === 0) return "";
+  try {
+    const res = await postJson("/api/inspire/extract-furnish-style", {
+      inspirationBase64: inspirationDataUrls,
+      visionModel: "gpt-5.4"
+    });
+    return res.styleGuidance || "";
+  } catch (e) {
+    console.warn("Inspiration style pre-extraction failed:", e.message);
+    return "";
+  }
+}
+
+async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64, precomputedStyleGuidance) {
   const mainSrc = srcs[0];
 
   const renders = [];
@@ -1996,9 +2060,11 @@ async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64) {
     dom.generateStatus.textContent = `Generating: ${src.roomLabel} (${i + 1}/${srcs.length})…`;
 
     // Both image-to-image (with photo) and text-to-image (without photo) use the same endpoint now!
+    console.log(`[Poligrid] furnish-room → POST /api/furnish-room room=${src.roomLabel} hasPhoto=${!!src.photoDataUrl} inspirationImages=${inspirationDataUrls.length}`);
     const res = await postJson("/api/furnish-room", {
       emptyRoomBase64: src.photoDataUrl || "",
       inspirationBase64: inspirationDataUrls,
+      precomputedStyleGuidance: precomputedStyleGuidance || "",
       floorPlanBase64: floorPlanBase64,
       cameraContext: {
         xM: src.xM,
@@ -2057,7 +2123,8 @@ async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64) {
   return {
     room: { label: mainSrc.roomLabel, name: mainSrc.roomLabel, roomType: mainSrc.roomType, widthM: mainSrc.widthM, lengthM: mainSrc.lengthM },
     laminate, style: {}, placements, renders,
-    sourcePhotos: srcs.map(s => s.photoDataUrl).filter(Boolean)
+    sourcePhotos: srcs.map(s => s.photoDataUrl || null),
+    cameraPins: srcs.map(s => ({ xM: s.xM, yM: s.yM, angleDeg: s.angleDeg, fovDeg: s.fovDeg }))
   };
 }
 
@@ -2082,12 +2149,27 @@ function drawRoomResult(result) {
     card = document.createElement("div");
     card.className = "render-room-card";
 
-    // Header
+    // Header with floor plan minimap
     const header = document.createElement("div");
     header.className = "render-card-header";
-    header.innerHTML = `
+    const headerMain = document.createElement("div");
+    headerMain.className = "render-card-header-main";
+    headerMain.innerHTML = `
       <h2 class="render-card-title">${roomName}</h2>
       <span class="render-card-meta">${w ? w.toFixed(1) + " × " + l.toFixed(1) + " m" : ""} · ${escapeHtml(result.laminate?.name || "")}</span>`;
+    header.appendChild(headerMain);
+    const mapSnippet = buildFloorPlanSnippetForCard(result.room.label);
+    if (mapSnippet) {
+      const mapWrap = document.createElement("div");
+      mapWrap.className = "render-card-mapwrap";
+      const mapImg = document.createElement("img");
+      mapImg.src = mapSnippet;
+      mapImg.className = "render-card-minimap";
+      mapImg.alt = "Floor plan";
+      mapImg.addEventListener("click", () => openLightbox(mapSnippet));
+      mapWrap.appendChild(mapImg);
+      header.appendChild(mapWrap);
+    }
     card.appendChild(header);
     dom.roomResults.appendChild(card);
   }
@@ -2097,14 +2179,15 @@ function drawRoomResult(result) {
 
   result.renders.forEach((render, i) => {
     const sourcePhoto = result.sourcePhotos?.[i] || null;
+    const pinInfo = result.cameraPins?.[i] || {};
 
     const compareWrap = document.createElement("div");
-    compareWrap.className = sourcePhoto ? "render-compare-wrap" : "render-compare-wrap single";
+    compareWrap.className = "render-compare-wrap";
 
+    // BEFORE cell: reference photo, or floor plan snippet when no reference photo
+    const beforeCell = document.createElement("div");
+    beforeCell.className = "render-compare-cell";
     if (sourcePhoto) {
-      // BEFORE cell
-      const beforeCell = document.createElement("div");
-      beforeCell.className = "render-compare-cell";
       const beforeImg = document.createElement("img");
       beforeImg.src = sourcePhoto;
       beforeImg.alt = "Reference photo";
@@ -2114,8 +2197,27 @@ function drawRoomResult(result) {
       beforeLabel.className = "render-cell-label";
       beforeLabel.textContent = "Reference";
       beforeCell.appendChild(beforeLabel);
-      compareWrap.appendChild(beforeCell);
+    } else {
+      const mapSnippet2 = buildFloorPlanSnippetForCard(result.room.label);
+      if (mapSnippet2) {
+        const mapImg2 = document.createElement("img");
+        mapImg2.src = mapSnippet2;
+        mapImg2.alt = "Room layout";
+        mapImg2.addEventListener("click", () => openLightbox(mapSnippet2));
+        beforeCell.appendChild(mapImg2);
+      }
+      const beforeLabel = document.createElement("span");
+      beforeLabel.className = "render-cell-label";
+      beforeLabel.textContent = "Room Layout";
+      beforeCell.appendChild(beforeLabel);
     }
+    if (pinInfo.angleDeg !== undefined) {
+      const angleBadge = document.createElement("span");
+      angleBadge.className = "render-cell-angle";
+      angleBadge.textContent = `${pinInfo.angleDeg}° · ${pinInfo.fovDeg || 60}° FOV`;
+      beforeCell.appendChild(angleBadge);
+    }
+    compareWrap.appendChild(beforeCell);
 
     // AFTER cell
     const afterCell = document.createElement("div");
@@ -2127,7 +2229,7 @@ function drawRoomResult(result) {
     afterCell.appendChild(afterImg);
     const afterLabel = document.createElement("span");
     afterLabel.className = "render-cell-label";
-    afterLabel.textContent = sourcePhoto ? "Furnished" : "Furnished Render";
+    afterLabel.textContent = "Furnished";
     afterCell.appendChild(afterLabel);
     compareWrap.appendChild(afterCell);
 
@@ -2325,13 +2427,14 @@ async function renderPdfFirstPage(file, canvas) {
 // ─── Utilities ─────────────────────────────────────────────────────────────────
 
 const _STEP_LABELS = {
-  '/api/analyze/floorplan':  'Floor Plan Analysis',
-  '/api/furnish-room':       'Furnish Room Pipeline',
-  '/api/render/openai':      'Image Render',
-  '/api/chat/placement':     'Chat Assistant',
-  '/api/style/extract':      'Style Extraction',
-  '/api/analyze/room-image': 'Room Image Match',
-  '/api/furniture/autoplace':'Furniture Auto-Place',
+  '/api/analyze/floorplan':           'Floor Plan Analysis + BOQ',
+  '/api/furnish-room':                'Furnish Room Pipeline',
+  '/api/render/openai':               'Image Render',
+  '/api/chat/placement':              'Chat Assistant',
+  '/api/style/extract':               'Style Extraction',
+  '/api/analyze/room-image':          'Room Image Match',
+  '/api/furniture/autoplace':         'Furniture Auto-Place',
+  '/api/inspire/extract-furnish-style': 'Inspiration Style (once)',
 };
 
 // ─── Supabase / Project Persistence ──────────────────────────────────────────

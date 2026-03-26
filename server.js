@@ -41,6 +41,12 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, result);
     }
 
+    if (req.method === "POST" && url.pathname === "/api/inspire/extract-furnish-style") {
+      const body = await readJson(req);
+      const result = await extractFurnishStyleGuidance(body);
+      return sendJson(res, 200, result);
+    }
+
     if (req.method === "POST" && url.pathname === "/api/analyze/floorplan") {
       const body = await readJson(req);
       const result = await analyzeFloorPlanWithOpenAi(body);
@@ -197,49 +203,22 @@ async function furnishRoomWithOpenAi(body) {
   const emptyRoomBase64 = String(body.emptyRoomBase64 || "").trim();
   const mimeType = String(body.mimeType || "image/jpeg").trim();
   const inspirationImages = Array.isArray(body.inspirationBase64) ? body.inspirationBase64 : [];
+  const roomLabel = body.roomContext?.roomType || "unknown";
+
+  console.log(`[OpenAI] furnishRoom START room=${roomLabel} hasPhoto=${!!emptyRoomBase64} inspirationImages=${inspirationImages.length} precomputedStyle=${!!body.precomputedStyleGuidance}`);
 
   const _debug = [];
 
-  // STEP 1: Extract Style from Inspiration Images
-  let styleGuidance = "";
-  if (inspirationImages.length > 0) {
-    const stylePrompt = [
-      "You are a senior interior designer. Analyze these inspiration images and extract HIGHLY SPECIFIC, ACTIONABLE design details that can guide a photorealistic render.",
-      "Structure your response in these exact sections:",
-      "COLOR PALETTE: List each color with descriptive names (e.g. 'warm ivory walls #F5F0E8', 'dark charcoal sofa fabric', 'aged brass hardware', 'off-white ceiling'). Be specific.",
-      "MATERIALS & FINISHES: Name exact materials (e.g. 'matte walnut veneer cabinetry', 'honed Carrara marble countertop', 'brushed brass fixtures', 'bouclé upholstery', 'wide-plank oak flooring', 'limewash walls'). List every material visible.",
-      "FURNITURE FORM LANGUAGE: Describe the silhouette and construction style (e.g. 'low-profile tight-back sofa on tapered legs', 'curved fluted cabinet fronts', 'minimalist floating shelves with no visible hardware', 'rattan accent chairs').",
-      "LIGHTING CHARACTER: Describe quality and sources (e.g. 'warm 2700K ambient light from concealed cove', 'pendant lights over dining table', 'natural light through sheer white linen curtains', 'soft bounce off white walls').",
-      "SPATIAL MOOD & ATMOSPHERE: One sentence describing the feel (e.g. 'quiet understated luxury with an earthy warmth', 'crisp Japandi minimalism', 'layered bohemian warmth').",
-      "DECORATIVE DETAILS: List specific decor items visible (e.g. 'large-format abstract canvas on wall', 'sculptural ceramic vases', 'woven jute rug', 'potted fiddle-leaf fig', 'stacked art books on coffee table').",
-      "Be exhaustive and precise — a render artist must be able to reproduce this style exactly from your description."
-    ].join("\n");
-    const styleContent = [{ type: "input_text", text: stylePrompt }];
-    for (const inspBase64 of inspirationImages.slice(0, 4)) {
-      styleContent.push({
-        type: "input_image",
-        image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:image/jpeg;base64,${inspBase64}`
-      });
-    }
-    try {
-      const stylePayload = {
-        model: visionModel,
-        reasoning: { effort: "high" },
-        max_output_tokens: 1800,
-        input: [{ role: "user", content: styleContent }]
-      };
-      const res = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify(stylePayload)
-      });
-      const raw = await res.text();
-      const parsed = safeJson(raw);
-      _debug.push({ step: "Vision Style Extraction", payload: stylePayload, response: parsed });
-      styleGuidance = extractResponsesText(parsed) || "";
-    } catch (e) {
-      console.warn("Style extraction failed:", e);
-    }
+  // STEP 1: Extract Style from Inspiration Images (skip if pre-computed by caller)
+  let styleGuidance = String(body.precomputedStyleGuidance || "").trim();
+  if (!styleGuidance && inspirationImages.length > 0) {
+    console.log(`[OpenAI] furnishRoom STEP1 → extracting style from ${inspirationImages.length} images (inline, not pre-computed)`);
+    const extracted = await extractFurnishStyleGuidance({ inspirationBase64: inspirationImages, visionModel });
+    styleGuidance = extracted.styleGuidance;
+    console.log(`[OpenAI] furnishRoom STEP1 ✓ styleGuidance ${styleGuidance.length} chars`);
+    _debug.push({ step: "Vision Style Extraction (inline)", styleGuidance });
+  } else if (styleGuidance) {
+    console.log(`[OpenAI] furnishRoom STEP1 skipped (pre-computed ${styleGuidance.length} chars)`);
   }
 
   // STEP 2: Vision Planning (Decide what furniture to place)
@@ -329,6 +308,9 @@ async function furnishRoomWithOpenAi(body) {
     _debug.push({ step: "Vision Room Planning", payload: payload, response: parsed });
     const jsonOutput = extractJsonFromText(extractResponsesText(parsed));
     placements = jsonOutput?.placements || [];
+    console.log(`[OpenAI] furnishRoom STEP2 ✓ placements=${placements.length}`);
+  } else {
+    console.log(`[OpenAI] furnishRoom STEP2 skipped (${placements?.length ?? 0} pre-provided placements)`);
   }
 
   // STEP 3: Render Generation (DALL-E)
@@ -396,6 +378,8 @@ async function furnishRoomWithOpenAi(body) {
     ].filter(Boolean).join("\n");
   }
 
+  console.log(`[OpenAI] furnishRoom STEP3 → render model=${body.renderModel || "gpt-image-1.5"} mode=${emptyRoomBase64 ? "image-edit" : "text-to-image"} promptLen=${renderPrompt.length}`);
+
   const renderResult = await renderWithOpenAi({
     model: body.renderModel || "gpt-image-1.5",
     prompt: renderPrompt,
@@ -404,8 +388,9 @@ async function furnishRoomWithOpenAi(body) {
   });
 
   if (renderResult._debug) _debug.push(...renderResult._debug);
+  console.log(`[OpenAI] furnishRoom STEP3 ✓ render complete`);
 
-  return { 
+  return {
     dataUrl: renderResult.dataUrl,
     furnitureList: placements,
     _debug
@@ -421,6 +406,8 @@ async function analyzeFloorPlanWithOpenAi(body) {
   if (!imageBase64) {
     throw httpError(400, "Missing imageBase64 for floor plan analysis.");
   }
+
+  console.log(`[OpenAI] analyzeFloorPlan → model=${model} imageSize=${Math.round(imageBase64.length/1024)}KB`);
 
   const isCommercial = (body.context?.propertyType || "").toLowerCase().includes("commercial");
 
@@ -552,12 +539,13 @@ async function analyzeFloorPlanWithOpenAi(body) {
   const text = extractResponsesText(parsed);
   const json = extractJsonFromText(text);
   if (!json || !Array.isArray(json.rooms)) {
-    console.error("Floor plan analysis failed to parse. Raw text:", text.slice(0, 500));
+    console.error("[OpenAI] analyzeFloorPlan ✗ failed to parse. Raw text:", text.slice(0, 500));
     throw httpError(502, "Floor plan analysis returned unexpected output.");
   }
 
-  return { 
-    model, 
+  console.log(`[OpenAI] analyzeFloorPlan ✓ rooms=${json.rooms?.length ?? 0} boqItems=${json.globalBoq?.length ?? 0} area=${json.totalAreaM2 ?? "?"}m²`);
+  return {
+    model,
     analysis: json,
     _debug: [{ step: "Floor Plan Analysis", payload, response: parsed }]
   };
@@ -1038,6 +1026,60 @@ async function chatPlacementWithOpenAi(body) {
     actions: json.actions || [json.action].filter(Boolean),
     _debug: [{ step: "Chat Placement Assistant", payload, response: parsed }]
   };
+}
+
+async function extractFurnishStyleGuidance(body) {
+  const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
+  const visionModel = String(body.visionModel || DEFAULT_OPENAI_VISION_MODEL).trim();
+  const inspirationImages = Array.isArray(body.inspirationBase64) ? body.inspirationBase64 : [];
+
+  if (inspirationImages.length === 0) return { styleGuidance: "" };
+
+  console.log(`[OpenAI] extractFurnishStyle → model=${visionModel} images=${inspirationImages.length}`);
+
+  const stylePrompt = [
+    "You are a senior interior designer. Analyze these inspiration images and extract HIGHLY SPECIFIC, ACTIONABLE design details that can guide a photorealistic render.",
+    "Structure your response in these exact sections:",
+    "COLOR PALETTE: List each color with descriptive names (e.g. 'warm ivory walls #F5F0E8', 'dark charcoal sofa fabric', 'aged brass hardware', 'off-white ceiling'). Be specific.",
+    "MATERIALS & FINISHES: Name exact materials (e.g. 'matte walnut veneer cabinetry', 'honed Carrara marble countertop', 'brushed brass fixtures', 'bouclé upholstery', 'wide-plank oak flooring', 'limewash walls'). List every material visible.",
+    "FURNITURE FORM LANGUAGE: Describe the silhouette and construction style (e.g. 'low-profile tight-back sofa on tapered legs', 'curved fluted cabinet fronts', 'minimalist floating shelves with no visible hardware', 'rattan accent chairs').",
+    "LIGHTING CHARACTER: Describe quality and sources (e.g. 'warm 2700K ambient light from concealed cove', 'pendant lights over dining table', 'natural light through sheer white linen curtains', 'soft bounce off white walls').",
+    "SPATIAL MOOD & ATMOSPHERE: One sentence describing the feel (e.g. 'quiet understated luxury with an earthy warmth', 'crisp Japandi minimalism', 'layered bohemian warmth').",
+    "DECORATIVE DETAILS: List specific decor items visible (e.g. 'large-format abstract canvas on wall', 'sculptural ceramic vases', 'woven jute rug', 'potted fiddle-leaf fig', 'stacked art books on coffee table').",
+    "Be exhaustive and precise — a render artist must be able to reproduce this style exactly from your description."
+  ].join("\n");
+
+  const styleContent = [{ type: "input_text", text: stylePrompt }];
+  for (const inspBase64 of inspirationImages.slice(0, 4)) {
+    styleContent.push({
+      type: "input_image",
+      image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:image/jpeg;base64,${inspBase64}`
+    });
+  }
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: visionModel,
+        reasoning: { effort: "high" },
+        max_output_tokens: 1800,
+        input: [{ role: "user", content: styleContent }]
+      })
+    });
+    const raw = await res.text();
+    const parsed = safeJson(raw);
+    const styleGuidance = extractResponsesText(parsed) || "";
+    console.log(`[OpenAI] extractFurnishStyle ✓ ${styleGuidance.length} chars`);
+    return {
+      styleGuidance,
+      _debug: [{ step: "Inspiration Style Extraction", payload: { model: visionModel, images: inspirationImages.length }, response: parsed }]
+    };
+  } catch (e) {
+    console.warn("[OpenAI] extractFurnishStyle ✗ failed:", e);
+    return { styleGuidance: "" };
+  }
 }
 
 async function extractStyleWithOpenAi(body) {
