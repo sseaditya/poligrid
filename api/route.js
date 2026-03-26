@@ -266,18 +266,43 @@ async function furnishRoomWithOpenAi(body) {
       }).join('; ')
     : '';
 
+  const fovDeg = cam.fovDeg || 60;
+  const angleDeg = cam.angleDeg != null ? cam.angleDeg : 0;
+  // Convert numeric angle to compass description (0°=North, clockwise)
+  const compassDirs = ["North","NNE","NE","ENE","East","ESE","SE","SSE","South","SSW","SW","WSW","West","WNW","NW","NNW"];
+  const compassFacing = compassDirs[Math.round(((angleDeg % 360) + 360) % 360 / 22.5) % 16];
+  // Determine which walls are in view based on facing angle + FOV
+  const halfFov = fovDeg / 2;
+  const visibleWalls = [];
+  const cardinals = [["North wall",0],["East wall",90],["South wall",180],["West wall",270]];
+  for (const [wallName, wallAngle] of cardinals) {
+    let diff = Math.abs(((wallAngle - angleDeg) % 360 + 360) % 360);
+    if (diff > 180) diff = 360 - diff;
+    if (diff <= halfFov + 45) visibleWalls.push(wallName);
+  }
+  const cameraViewText = [
+    `CRITICAL CAMERA CONSTRAINTS — MUST BE FOLLOWED EXACTLY:`,
+    `  • Camera is at position X:${cam.xM != null ? cam.xM : 0}m, Y:${cam.yM != null ? cam.yM : 0}m in the room, facing ${compassFacing} (${angleDeg}°).`,
+    `  • Field of View: ${fovDeg}°. Only what falls within this cone from the camera position is visible.`,
+    `  • Walls visible in this shot: ${visibleWalls.join(", ")}. These walls MUST appear as solid boundaries in the render.`,
+    `  • DO NOT omit walls that are in the camera's view — every visible wall must be rendered with its correct surface.`,
+    `  • Door and window openings on visible walls MUST be faithfully rendered — do NOT block or fill them with furniture.`,
+    `  • Maintain correct one-point or two-point perspective for this camera direction. Vanishing points must match ${compassFacing}-facing view.`,
+    `  • Furniture must sit on the floor, against the correct walls, with proper clearance gaps between pieces and walls.`,
+  ].join("\n");
+
   const renderPrompt = [
-    "Photorealistic architectural interior render. Render ONLY what is visible from the camera — do not show the camera itself.",
+    "Photorealistic architectural interior render.",
+    cameraViewText,
     roomDimsText,
-    wallLines ? `WALL LAYOUT: ${wallLines}. Respect these — do NOT place furniture blocking doors or in front of windows.` : "",
-    `FURNITURE TO PLACE (respect actual room dimensions; nothing should float or clip through walls):\n${furnitureStr}`,
+    wallLines ? `WALL LAYOUT: ${wallLines}. These walls, doors, and windows ARE REAL — render them faithfully.` : "",
+    `FURNITURE TO PLACE (must fit within room; respect clearances between pieces and walls):\n${furnitureStr}`,
     emptyRoomBase64
-      ? "Maintain the exact architectural geometry, perspective, lighting, and camera angle of the provided empty room photo."
-      : `Room type: ${roomCtx.roomType || 'residential'}. Generate a realistic perspective view.`,
+      ? "Maintain the EXACT architectural geometry, perspective, lighting, wall positions, and camera angle of the provided empty room photo. Do not alter any architectural element."
+      : `Room type: ${roomCtx.roomType || 'residential'}. Generate a realistic perspective view from the specified camera angle.`,
     roomCtx.archNotes ? `Architectural notes: ${roomCtx.archNotes}` : "",
     body.brief ? `Design Brief: ${body.brief}` : "Apply a modern, clean Indian residential style.",
     styleGuidance ? `STYLE — apply this throughout (materials, colours, mood):\n${styleGuidance}` : "",
-    `CAMERA: ${cameraPositionText}. Ensure furniture placement is spatially coherent from this viewpoint.`
   ].filter(Boolean).join("\n");
 
   const renderResult = await renderWithOpenAi({
@@ -1123,6 +1148,67 @@ function extractJsonFromText(text) {
   return null;
 }
 
+// BOQ-specific extraction: handles truncated globalBoq arrays by closing them properly
+function extractBoqJson(text) {
+  if (!text) return null;
+
+  // Try clean parse first
+  let parsed = safeJson(text);
+  if (parsed && Array.isArray(parsed.globalBoq)) return parsed;
+
+  // Strip markdown fences
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  let content = fence ? fence[1].trim() : text;
+
+  // Find the start of the outer object
+  const start = content.indexOf('{');
+  if (start < 0) return null;
+  content = content.slice(start);
+
+  // Try direct parse
+  parsed = safeJson(content);
+  if (parsed && Array.isArray(parsed.globalBoq)) return parsed;
+
+  // The response is likely truncated mid-array. Find the globalBoq array start.
+  const arrStart = content.indexOf('"globalBoq"');
+  if (arrStart < 0) return null;
+
+  // Find the last complete BOQ item (ends with }) and close the structure
+  // Collect all complete objects from the array
+  const arrayOpen = content.indexOf('[', arrStart);
+  if (arrayOpen < 0) return null;
+
+  // Walk through to find all complete {...} objects
+  const items = [];
+  let depth = 0, inStr = false, escape = false, itemStart = -1;
+  for (let i = arrayOpen + 1; i < content.length; i++) {
+    const ch = content[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inStr) { escape = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{') { if (depth === 0) itemStart = i; depth++; }
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0 && itemStart >= 0) {
+        items.push(content.slice(itemStart, i + 1));
+        itemStart = -1;
+      }
+    } else if (ch === ']' && depth === 0) break;
+  }
+
+  if (items.length === 0) return null;
+
+  // Reconstruct valid JSON from the complete items we found
+  const reconstructed = `{"globalBoq":[${items.join(",")}]}`;
+  parsed = safeJson(reconstructed);
+  if (parsed && Array.isArray(parsed.globalBoq)) {
+    console.log(`[BOQ] Repaired truncated JSON: recovered ${parsed.globalBoq.length} items`);
+    return parsed;
+  }
+  return null;
+}
+
 function extractResponsesText(response) {
   const output = Array.isArray(response && response.output) ? response.output : [];
   // Prefer output_text typed items (the actual model reply) over any other text.
@@ -1187,12 +1273,12 @@ async function extractFurnishStyleGuidance(body) {
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: visionModel,
-        reasoning: { effort: "high" },
-        max_output_tokens: 1800,
+        max_output_tokens: 2000,
         input: [{ role: "user", content: styleContent }]
       })
     });
     const raw = await res.text();
+    if (!res.ok) throw httpError(res.status, extractApiError(raw));
     const parsed = safeJson(raw);
     const styleGuidance = extractResponsesText(parsed) || "";
     console.log(`[OpenAI] extractFurnishStyle ✓ ${styleGuidance.length} chars`);
@@ -1201,7 +1287,7 @@ async function extractFurnishStyleGuidance(body) {
       _debug: [{ step: "Inspiration Style Extraction", payload: { model: visionModel, images: inspirationImages.length }, response: parsed }]
     };
   } catch (e) {
-    console.warn("[OpenAI] extractFurnishStyle ✗ failed:", e);
+    console.warn("[OpenAI] extractFurnishStyle ✗ failed:", e.message);
     return { styleGuidance: "" };
   }
 }
@@ -1225,35 +1311,28 @@ async function generateStructuralBoqWithOpenAi(body) {
   const prompt = [
     "You are an expert interior design project estimator specialising in Indian residential and commercial interiors.",
     "Generate a COMPREHENSIVE structural Bill of Quantities (BOQ) for the project described below.",
-    "Use HYDERABAD PREMIUM MARKET RATES (INR). Be generous and realistic — this is a premium interior project.",
+    "Use current HYDERABAD PREMIUM MARKET RATES (INR) — derive all rates yourself based on your knowledge of premium Hyderabad interior market. Do NOT use generic or average rates.",
+    floorPlanBase64 ? "You have been provided the floor plan image. Study it carefully to count every room, wet area, door, window, and balcony before computing quantities." : "",
     "",
     `Project: ${ctx.propertyType || "Apartment"}, ${ctx.bhk || ""}, total area ≈ ${totalAreaM2.toFixed(1)} m² (${(totalAreaM2 * 10.764).toFixed(0)} sqft)`,
     `Rooms:\n${roomSummary}`,
     ctx.notes ? `Client notes: ${ctx.notes}` : "",
     "",
     "Return STRICT JSON only — a single object with a \"globalBoq\" array.",
-    "Include ALL 7 categories with MULTIPLE line items each (be detailed, not lumped):",
+    "Include ALL 7 categories with MULTIPLE detailed line items each:",
     "",
-    "'Civil work'        — partition walls (rft × rate), waterproofing for bathrooms/kitchen/balcony (sqft × rate), any masonry or structural work",
-    "                      Rates: partition wall ₹900-1,400/rft, waterproofing ₹130-200/sqft",
-    "'Plumbing'          — per room: CP fittings (EWC, wash basin, shower, bathtub), supply pipes, drainage. Separate line per bathroom/kitchen.",
-    "                      Rates: per bathroom ₹50,000-75,000 lump sum, kitchen plumbing ₹35,000-55,000 lump sum, balcony point ₹8,000-12,000",
-    "'Electrical'        — DB/MCB panel, wiring (light + power points per room), earthing, switches+sockets. Separate line per room.",
-    "                      Rates: DB + MCBs ₹25,000-40,000, per room wiring+points ₹8,000-18,000 depending on room size",
-    "'Faux ceiling'      — gypsum board false ceiling with cove lighting per room (living, dining, master bed, kitchen). Separate line per room.",
-    "                      Rates: ₹100-145/sqft. Estimate 60-80% of each room has false ceiling.",
-    "'Flooring'          — vitrified tiles or wood finish per room. Separate line per room.",
-    "                      Rates: living/dining ₹160-220/sqft, bedrooms ₹135-185/sqft, kitchen/bath ₹115-165/sqft",
-    "'Doors and windows' — count from room data. Main entrance door, internal flush doors, bathroom doors, UPVC windows per room.",
-    "                      Rates: main door ₹60,000-95,000, internal flush door ₹24,000-34,000, bathroom door ₹18,000-26,000, UPVC window ₹950-1,450/sqft",
-    "'Painting'          — premium emulsion for walls + ceiling per room. Wall area ≈ 2.5× floor area per room + ceiling area.",
-    "                      Rates: ₹38-58/sqft (walls+ceiling combined)",
+    "'Civil work'        — partition walls (per rft), waterproofing per wet area (sqft), masonry or structural work as needed",
+    "'Plumbing'          — itemise separately per bathroom, kitchen, balcony: CP fittings (EWC, wash basin, shower, bathtub as applicable), supply lines, drainage",
+    "'Electrical'        — DB/MCB panel, per-room wiring and points (light, power, AC, fan), earthing, switches and sockets per room",
+    "'Faux ceiling'      — gypsum false ceiling with cove lighting per applicable room (living, dining, master bed, kitchen); give per-room sqft quantity",
+    "'Flooring'          — appropriate finish per room type (vitrified/porcelain tile or engineered wood); give per-room sqft quantity",
+    "'Doors and windows' — main entrance door, internal flush doors, bathroom doors, UPVC/aluminium windows; count from floor plan",
+    "'Painting'          — premium emulsion for walls and ceiling per room; compute wall area from floor plan dimensions",
     "",
     "For each item: { \"category\": string, \"item\": string, \"qty\": number, \"unit\": string, \"rate\": number, \"amount\": number }",
     "unit must be one of: 'sqft', 'sqm', 'pcs', 'rft', 'points', 'lump sum'",
     "amount = qty × rate",
-    "NEVER return an empty globalBoq. Every project has all 7 categories.",
-    floorPlanBase64 ? "Use the floor plan image provided to accurately count doors, windows, and wet areas." : ""
+    "NEVER return an empty globalBoq. Every project must have all 7 categories with itemised line items."
   ].filter(Boolean).join("\n");
 
   const content = [{ type: "input_text", text: prompt }];
@@ -1264,10 +1343,10 @@ async function generateStructuralBoqWithOpenAi(body) {
     });
   }
 
+  // No reasoning — give all tokens to the JSON output
   const payload = {
     model,
-    reasoning: { effort: "medium" },
-    max_output_tokens: 8000,
+    max_output_tokens: 10000,
     input: [{ role: "user", content }]
   };
 
@@ -1282,10 +1361,16 @@ async function generateStructuralBoqWithOpenAi(body) {
 
   const parsed = safeJson(raw);
   const text = extractResponsesText(parsed);
-  const json = extractJsonFromText(text);
+  console.log(`[OpenAI] generateStructuralBoq raw text length=${text ? text.length : 0}`);
+
+  const json = extractBoqJson(text);
   const globalBoq = json?.globalBoq || [];
 
   console.log(`[OpenAI] generateStructuralBoq ✓ ${globalBoq.length} items across ${new Set(globalBoq.map(b => b.category)).size} categories`);
+
+  if (globalBoq.length === 0) {
+    console.error("[OpenAI] generateStructuralBoq returned 0 items. Raw text:", text ? text.slice(0, 500) : "(null)");
+  }
 
   return {
     globalBoq,

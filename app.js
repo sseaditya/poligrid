@@ -1996,7 +1996,7 @@ function buildRoomFloorPlanSnippet(targetRoom, allRooms) {
   const overlayCanvas = document.getElementById("roomEditorCanvas");
   if (!bgCanvas || bgCanvas.width === 0) return "";
 
-  // Composite BG + overlay into a temp canvas
+  // Composite BG + overlay + planner (camera FOV cones) into a temp canvas
   const comp = document.createElement("canvas");
   comp.width  = bgCanvas.width;
   comp.height = bgCanvas.height;
@@ -2004,6 +2004,11 @@ function buildRoomFloorPlanSnippet(targetRoom, allRooms) {
   ctx.drawImage(bgCanvas, 0, 0);
   if (overlayCanvas && overlayCanvas.width === bgCanvas.width) {
     ctx.drawImage(overlayCanvas, 0, 0);
+  }
+  // Include planner canvas so camera pins + FOV cones are visible to the AI
+  const plannerCv = dom.plannerCanvas;
+  if (plannerCv && !plannerCv.hidden && plannerCv.width === bgCanvas.width) {
+    ctx.drawImage(plannerCv, 0, 0);
   }
 
   // If no bbox, return full composited image
