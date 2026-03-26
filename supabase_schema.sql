@@ -162,3 +162,26 @@ create index on furniture_placements (project_id);
 create index on renders        (project_id);
 create index on boq_items      (project_id, source);
 create index on scene_exports  (project_id);
+
+-- ─── Migration: Add Project Versions (run after initial schema) ───────────────
+-- Run these statements in the Supabase SQL Editor if the schema was already deployed.
+
+-- 1. Version table — each version shares floor plan + rooms + pins but has its own
+--    brief, inspiration images, renders, and BOQ.
+create table if not exists project_versions (
+  id                        uuid primary key default uuid_generate_v4(),
+  project_id                uuid not null references projects(id) on delete cascade,
+  version_number            integer not null,
+  created_at                timestamptz not null default now(),
+  design_brief              text,
+  regen_inspiration_paths   jsonb,   -- storage paths of version-specific inspiration images
+  unique(project_id, version_number)
+);
+create index if not exists idx_project_versions_project_id on project_versions(project_id);
+
+-- 2. Link renders to a version
+alter table renders add column if not exists version_id uuid references project_versions(id) on delete set null;
+create index if not exists idx_renders_version_id on renders(version_id);
+
+-- 3. Link furniture BOQ items to a version
+alter table boq_items add column if not exists version_id uuid references project_versions(id) on delete set null;

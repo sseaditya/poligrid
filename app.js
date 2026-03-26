@@ -339,6 +339,13 @@ const dom = {
   placementSummary: el("placementSummary"),
   downloadScene: el("downloadScene"),
   downloadBoq: el("downloadBoq"),
+  // Version UI
+  versionTabsBar: el("versionTabsBar"),
+  versionTabs: el("versionTabs"),
+  resultsBriefSection: el("resultsBriefSection"),
+  resultsBriefText: el("resultsBriefText"),
+  regenInspirationInput: el("regenInspirationInput"),
+  regenInspirationPreviews: el("regenInspirationPreviews"),
 };
 
 function el(id) { return document.getElementById(id); }
@@ -347,6 +354,10 @@ function el(id) { return document.getElementById(id); }
 
 let currentPhase = 1;
 let planner = null;
+// Version management
+let _allVersions = [];        // All versions for the current project (full objects with renders/BOQ)
+let _activeCameraPins = [];   // DB camera pin objects (with photo_url) for render display
+let _projectBoqItems = [];    // Project-level floor plan BOQ items (shared across all versions)
 let roomEditor = null;
 let activePinId = null;
 let latestArtifacts = null;
@@ -357,6 +368,7 @@ const appState = {
   // Phase 1
   floorFile: null,
   inspirationFiles: [],
+  storedInspirationUrls: [], // Public URLs of inspiration images from DB (loaded project)
   context: {
     propertyType: "Apartment",
     bhk: "2BHK",
@@ -367,6 +379,8 @@ const appState = {
   detectedRooms: null,
   confirmedRooms: null,
   globalBoq: [], // Derived strictly from Floor Plan analysis
+  // Version tracking
+  currentVersionId: null, // Version ID for the current generate operation
 };
 
 const ROOM_DOT_COLORS = {
@@ -410,34 +424,192 @@ function advancePhase(n) {
 
 function showResultsView() {
   el("resultsView").hidden = false;
-  // Populate inspiration strip
-  const strip = el("resultsInspirationStrip");
-  const section = el("resultsInspiration");
-  if (strip && _inspirationDataUrls.length) {
-    strip.innerHTML = "";
-    _inspirationDataUrls.forEach(url => {
-      const img = document.createElement("img");
-      img.src = url;
-      img.alt = "Inspiration";
-      img.addEventListener("click", () => openLightbox(url));
-      strip.appendChild(img);
-    });
-    if (section) section.hidden = false;
-  } else if (section) {
-    section.hidden = true;
-  }
   // Pre-fill regen brief with current global brief
-  const regenInput = el("regenBriefInput");
-  if (regenInput) regenInput.value = dom.globalBrief?.value || "";
-  const regenSection = el("regenerateSection");
-  if (regenSection) regenSection.hidden = false;
-  // Scroll results to top
+  const regenBriefInput = el("regenBriefInput");
+  if (regenBriefInput) regenBriefInput.value = dom.globalBrief?.value || "";
+  el("regenerateSection").hidden = false;
   const scroll = el("resultsScroll");
   if (scroll) scroll.scrollTop = 0;
 }
 
 function hideResultsView() {
   el("resultsView").hidden = true;
+}
+
+// ─── Version UI ────────────────────────────────────────────────────────────────
+
+// Builds/re-builds the version tab bar. Activates the tab at `activeIndex` (default: last).
+function renderVersionsUI(versions, cameraPins, activeIndex) {
+  _allVersions = versions || [];
+  _activeCameraPins = cameraPins || [];
+
+  const bar = dom.versionTabsBar;
+  const tabs = dom.versionTabs;
+  if (!bar || !tabs) return;
+
+  if (_allVersions.length === 0) { bar.hidden = true; return; }
+
+  bar.hidden = false;
+  tabs.innerHTML = "";
+
+  _allVersions.forEach((v, idx) => {
+    const tab = document.createElement("button");
+    tab.className = "version-tab";
+    tab.dataset.versionId = v.id;
+    const date = new Date(v.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" });
+    tab.innerHTML = `<span class="version-tab-num">V${v.version_number}</span><span class="version-tab-date">${date}</span>`;
+    tab.addEventListener("click", () => {
+      tabs.querySelectorAll(".version-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      showVersion(v);
+    });
+    tabs.appendChild(tab);
+  });
+
+  const targetIdx = activeIndex !== undefined ? activeIndex : _allVersions.length - 1;
+  const tabEls = tabs.querySelectorAll(".version-tab");
+  if (tabEls[targetIdx]) tabEls[targetIdx].classList.add("active");
+}
+
+// Renders the content for a specific version (renders, inspiration, brief, BOQ).
+function showVersion(version) {
+  if (!version) return;
+
+  // Brief
+  const briefSection = dom.resultsBriefSection;
+  const briefText = dom.resultsBriefText;
+  if (briefSection && briefText) {
+    if (version.design_brief) {
+      briefText.textContent = version.design_brief;
+      briefSection.hidden = false;
+    } else {
+      briefSection.hidden = true;
+    }
+  }
+
+  // Pre-fill regen brief so user can iterate
+  const regenBriefInput = el("regenBriefInput");
+  if (regenBriefInput) regenBriefInput.value = version.design_brief || dom.globalBrief?.value || "";
+
+  // Inspiration strip
+  const strip = el("resultsInspirationStrip");
+  const inspSection = el("resultsInspiration");
+  if (strip && inspSection) {
+    strip.innerHTML = "";
+    const urls = version.inspirationUrls || [];
+    if (urls.length) {
+      urls.forEach(url => {
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "Inspiration";
+        img.addEventListener("click", () => openLightbox(url));
+        strip.appendChild(img);
+      });
+      inspSection.hidden = false;
+    } else {
+      inspSection.hidden = true;
+    }
+  }
+
+  // Render cards
+  dom.roomResults.innerHTML = "";
+  const renders = version.renders || [];
+  if (renders.length > 0) {
+    drawVersionRenders(renders, _activeCameraPins);
+  } else {
+    dom.roomResults.innerHTML = '<p class="results-empty-msg">No renders saved for this version.</p>';
+  }
+
+  // BOQ: project-level (floor plan) + version-specific (furniture)
+  const combinedBoq = [..._projectBoqItems, ...(version.boqItems || [])];
+  drawBoq(combinedBoq);
+  if (combinedBoq.length > 0) {
+    dom.downloadBoq.disabled = false;
+    latestArtifacts = buildArtifacts(planner?.getSceneState() || {}, combinedBoq);
+    dom.downloadScene.disabled = false;
+  }
+}
+
+// Draws render cards from DB render objects grouped by room.
+function drawVersionRenders(renders, cameraPins) {
+  // Group by room_label
+  const roomMap = {};
+  for (const r of renders) {
+    const key = r.room_label || "Unknown Room";
+    if (!roomMap[key]) roomMap[key] = [];
+    roomMap[key].push(r);
+  }
+
+  for (const [roomLabel, roomRenders] of Object.entries(roomMap)) {
+    const card = document.createElement("div");
+    card.className = "render-room-card";
+
+    // Find matching room dims
+    const room = (appState.confirmedRooms || appState.detectedRooms || []).find(r => r.label === roomLabel || r.name === roomLabel);
+    const w = room?.widthM, l = room?.lengthM;
+
+    const header = document.createElement("div");
+    header.className = "render-card-header";
+    header.innerHTML = `
+      <h2 class="render-card-title">${escapeHtml(roomLabel)}</h2>
+      ${w ? `<span class="render-card-meta">${parseFloat(w).toFixed(1)} × ${parseFloat(l).toFixed(1)} m</span>` : ""}`;
+    card.appendChild(header);
+
+    roomRenders.forEach(render => {
+      // Find matching camera pin to get reference photo URL
+      const pin = (cameraPins || []).find(p => p.client_id === render.camera_pin_client_id);
+      const refPhotoUrl = pin?.photo_url || null;
+
+      const compareWrap = document.createElement("div");
+      compareWrap.className = refPhotoUrl ? "render-compare-wrap" : "render-compare-wrap single";
+
+      if (refPhotoUrl) {
+        const beforeCell = document.createElement("div");
+        beforeCell.className = "render-compare-cell";
+        const beforeImg = document.createElement("img");
+        beforeImg.src = refPhotoUrl;
+        beforeImg.alt = "Reference photo";
+        beforeImg.addEventListener("click", () => openLightbox(refPhotoUrl));
+        beforeCell.appendChild(beforeImg);
+        const lbl = document.createElement("span");
+        lbl.className = "render-cell-label";
+        lbl.textContent = "Reference";
+        beforeCell.appendChild(lbl);
+        compareWrap.appendChild(beforeCell);
+      }
+
+      const afterCell = document.createElement("div");
+      afterCell.className = "render-compare-cell";
+      const afterImg = document.createElement("img");
+      afterImg.src = render.url;
+      afterImg.alt = `Furnished — ${roomLabel}`;
+      afterImg.addEventListener("click", () => openLightbox(render.url));
+      afterCell.appendChild(afterImg);
+      const lbl = document.createElement("span");
+      lbl.className = "render-cell-label";
+      lbl.textContent = refPhotoUrl ? "Furnished" : "Furnished Render";
+      afterCell.appendChild(lbl);
+      compareWrap.appendChild(afterCell);
+
+      card.appendChild(compareWrap);
+    });
+
+    dom.roomResults.appendChild(card);
+  }
+}
+
+// Returns inspiration data URLs: from uploaded files, stored public URLs (fetched), or [].
+async function getInspirationDataUrls() {
+  if (appState.inspirationFiles.length > 0) {
+    return Promise.all(appState.inspirationFiles.map(f => readDataUrl(f)));
+  }
+  if (appState.storedInspirationUrls.length > 0) {
+    const results = await Promise.allSettled(
+      appState.storedInspirationUrls.map(url => loadUrlToDataUrl(url))
+    );
+    return results.filter(r => r.status === "fulfilled" && r.value).map(r => r.value);
+  }
+  return [];
 }
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
@@ -853,41 +1025,44 @@ function init() {
     goBack(4);
   });
 
-  // Regenerate button
+  // Regen inspiration image preview
+  dom.regenInspirationInput?.addEventListener("change", () => {
+    const files = Array.from(dom.regenInspirationInput.files || []);
+    const previews = dom.regenInspirationPreviews;
+    if (!previews) return;
+    previews.innerHTML = "";
+    files.forEach(f => {
+      const img = document.createElement("img");
+      img.className = "insp-thumb";
+      const reader = new FileReader();
+      reader.onload = e => { img.src = e.target.result; };
+      reader.readAsDataURL(f);
+      previews.appendChild(img);
+    });
+  });
+
+  // Generate New Version button
   el("regenBtn")?.addEventListener("click", async () => {
     const regenBtn = el("regenBtn");
     const regenBrief = el("regenBriefInput")?.value?.trim();
+    const newFiles = Array.from(dom.regenInspirationInput?.files || []);
+
+    // Apply new brief to global brief field (used by onGenerate)
     if (regenBrief && dom.globalBrief) dom.globalBrief.value = regenBrief;
-    
-    // Add newly uploaded inspiration images
-    const regenInput = el("regenInspirationInput");
-    if (regenInput && regenInput.files.length > 0) {
-      if (!appState.inspirationFiles) appState.inspirationFiles = [];
-      const newFiles = Array.from(regenInput.files);
-      appState.inspirationFiles.push(...newFiles);
-      
-      const imagesPayload = [];
-      for (const f of newFiles) {
-        let base64 = await readDataUrl(f);
-        base64 = base64.split(",")[1];
-        imagesPayload.push({
-          fileName: f.name,
-          mimeType: f.type,
-          base64
-        });
-      }
-      saveToDb("/api/project/save-inspiration", {
-        projectId: appState.projectId,
-        images: imagesPayload
-      });
-      regenInput.value = ""; // clear
+
+    // If new inspiration files uploaded, replace current inspiration
+    if (newFiles.length > 0) {
+      appState.inspirationFiles = newFiles;
+      appState.storedInspirationUrls = []; // clear stored so new files take precedence
     }
 
-    if (regenBtn) { regenBtn.disabled = true; regenBtn.textContent = "Regenerating…"; }
-    dom.statusBox.textContent = "Preparing regeneration…";
+    if (regenBtn) { regenBtn.disabled = true; regenBtn.textContent = "Generating new version…"; }
     el("resultsScroll")?.scrollTo({ top: 0, behavior: "smooth" });
     await onGenerate();
-    if (regenBtn) { regenBtn.disabled = false; regenBtn.textContent = "↺ Regenerate All Renders"; }
+    if (regenBtn) { regenBtn.disabled = false; regenBtn.textContent = "✦ Generate New Version"; }
+    // Reset regen inputs after generation
+    if (dom.regenInspirationInput) dom.regenInspirationInput.value = "";
+    if (dom.regenInspirationPreviews) dom.regenInspirationPreviews.innerHTML = "";
   });
   dom.downloadScene.addEventListener("click", () => {
     if (latestArtifacts) {
@@ -1563,15 +1738,38 @@ async function onGenerate() {
   dom.generateBtn.disabled = true;
   dom.generateBtn.textContent = "Generating…";
   dom.generateStatus.hidden = false;
-  dom.generateStatus.textContent = "Extracting styles + preparing renders…";
+  dom.generateStatus.textContent = "Preparing renders…";
   dom.statusBox.textContent = "Loading inspiration images…";
 
   try {
-    const inspirationDataUrls = await Promise.all(
-      appState.inspirationFiles.map(f => readDataUrl(f))
-    );
-    _inspirationDataUrls = inspirationDataUrls; // cache for results view
-    showResultsView(); // populates inspiration strip, scrolls to top
+    // Resolve inspiration: from uploaded files or stored public URLs (for loaded projects)
+    const inspirationDataUrls = await getInspirationDataUrls();
+    _inspirationDataUrls = inspirationDataUrls;
+
+    // Create a new project version before generation starts
+    dom.statusBox.textContent = "Creating design version…";
+    appState.currentVersionId = null;
+    try {
+      let regenImages = null;
+      if (appState.inspirationFiles.length > 0) {
+        regenImages = await Promise.all(appState.inspirationFiles.map(async f => ({
+          base64: await readDataUrl(f),
+          mimeType: f.type || "image/jpeg",
+          fileName: f.name
+        })));
+      }
+      const vRes = await postJson("/api/project/create-version", {
+        projectId: appState.projectId,
+        designBrief: globalBrief,
+        regenInspirationImages: regenImages
+      });
+      appState.currentVersionId = vRes.version?.id || null;
+    } catch (e) {
+      console.warn("[versions] Failed to create version:", e.message);
+    }
+
+    showResultsView();
+    dom.roomResults.innerHTML = "";
     const floorPlanBase64 = dom.floorBgCanvas ? dom.floorBgCanvas.toDataURL("image/png") : "";
 
     const roomGroups = {};
@@ -1627,22 +1825,41 @@ async function onGenerate() {
     dom.downloadScene.disabled = false;
     dom.downloadBoq.disabled = false;
     dom.generateStatus.textContent = "✓ Generation complete";
-    advancePhase(5);
-    showResultsView();
     dom.statusBox.textContent = "";
 
-    // Persist furniture BOQ items (generated) and all placements to Supabase
+    // Persist furniture BOQ (version-specific) and placements
     const furnitureBoq = finalBoq.filter(b =>
       b.category === "Modular furniture" || b.category === "Loose furniture"
     );
     saveToDb("/api/project/save-boq", {
       projectId: appState.projectId,
-      boqItems: furnitureBoq
+      boqItems: furnitureBoq,
+      versionId: appState.currentVersionId || null
     });
     saveToDb("/api/project/save-placements", {
       projectId: appState.projectId,
       placements: planner?.furniturePlacements || []
     });
+
+    // Refresh version tabs so the new version appears
+    try {
+      const freshData = await fetch(`/api/project/versions?id=${appState.projectId}`).then(r => r.json());
+      if (freshData.versions) {
+        _projectBoqItems = appState.globalBoq || [];
+        renderVersionsUI(freshData.versions, _activeCameraPins, freshData.versions.length - 1);
+        // Populate inspiration for the newly rendered version using current _inspirationDataUrls
+        const latestVer = freshData.versions[freshData.versions.length - 1];
+        if (latestVer) {
+          // Merge in-memory inspiration URLs (data URLs from current session)
+          latestVer.inspirationUrls = _inspirationDataUrls.length
+            ? _inspirationDataUrls
+            : latestVer.inspirationUrls;
+          showVersion(latestVer);
+        }
+      }
+    } catch (e) {
+      console.warn("[versions] Failed to refresh version tabs:", e.message);
+    }
 
   } catch (err) {
     dom.generateStatus.textContent = `⚠ ${err.message}`;
@@ -1702,7 +1919,7 @@ async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64) {
 
     renders.push({ name: src.photoDataUrl ? `Photo ${i + 1}` : `Generated ${i + 1}`, dataUrl: finalDataUrl, source: "openai" });
 
-    // Persist render image to Supabase
+    // Persist render image to Supabase (link to current version)
     saveToDb("/api/project/save-render", {
       projectId: appState.projectId,
       pinClientId: src.pinId || null,
@@ -1710,7 +1927,8 @@ async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64) {
       dataUrl: finalDataUrl,
       modelUsed: "gpt-image-1.5",
       furnitureList: res.furnitureList || [],
-      generationType: src.photoDataUrl ? "edit" : "generate"
+      generationType: src.photoDataUrl ? "edit" : "generate",
+      versionId: appState.currentVersionId || null
     });
 
     // Accumulate the generated or floor-plan placements into the global BOQ
@@ -2086,14 +2304,18 @@ async function loadProject(id) {
 
     const proj = data.project;
 
-    // Reset state for this project
+    // Reset app state for this project
     appState.projectId = id;
     appState.floorFile = null;
     appState.inspirationFiles = [];
+    appState.storedInspirationUrls = [];
     appState.detectedRooms = null;
     appState.confirmedRooms = null;
     appState.globalBoq = [];
-    appState.existingRendersData = null;
+    appState.currentVersionId = null;
+    _allVersions = [];
+    _activeCameraPins = [];
+    _projectBoqItems = [];
     planner = null;
     roomEditor = null;
     latestArtifacts = null;
@@ -2106,13 +2328,9 @@ async function loadProject(id) {
       notes: proj.notes || ""
     };
     restoreContextForm(appState.context);
-
-    // Restore project name in header
     el("projectNameInput").value = proj.name || "";
-
     hideProjectPicker();
 
-    // Nothing persisted beyond context → go to phase 1
     if (!data.floorPlan?.url) {
       advancePhase(1);
       return;
@@ -2133,13 +2351,20 @@ async function loadProject(id) {
     dom.canvasPlaceholder.hidden = true;
     dom.canvasWrap.hidden = false;
 
-    // Restore rooms
+    // Restore rooms and project-level BOQ (floor plan analysis)
     const rooms = (data.rooms || []).map(dbRoomToAppRoom);
     appState.detectedRooms = rooms;
     appState.confirmedRooms = rooms;
-    appState.globalBoq = (data.boqItems || [])
-      .filter(b => b.source === "floor_plan_analysis")
-      .map(({ category, item, qty, unit, rate, amount }) => ({ category, item, qty, unit, rate, amount }));
+    appState.globalBoq = (data.boqItems || []).map(
+      ({ category, item, qty, unit, rate, amount }) => ({ category, item, qty, unit, rate, amount })
+    );
+    _projectBoqItems = appState.globalBoq;
+
+    // Store project-level inspiration URLs (for reuse when regenerating)
+    appState.storedInspirationUrls = (data.inspirationImages || []).map(i => i.url).filter(Boolean);
+
+    // Store camera pins (DB format with photo_url) for render display
+    _activeCameraPins = data.cameraPins || [];
 
     // Init RoomEditor
     roomEditor = new RoomEditor(dom.roomEditorCanvas, bgCanvas, {
@@ -2154,60 +2379,9 @@ async function loadProject(id) {
     dom.analysisSummaryText.textContent = proj.summary || "";
     dom.analysisSummaryWrap.hidden = !proj.summary;
 
-    // Group existing renders and boq INDEPENDENT of camera pins
-    if (data.renders && data.renders.length > 0) {
-      console.log("Loading existing renders from DB:", data.renders.length);
-      // Build mock results view for history
-      appState.existingRendersData = data.renders;
-      const btn = el("viewExistingRendersBtn");
-      if (btn) btn.hidden = false;
-      dom.downloadScene.disabled = false;
-      dom.downloadBoq.disabled = false;
-      dom.generateStatus.textContent = `✓ Loaded ${data.renders.length} renders`;
-      dom.generateStatus.hidden = false;
-
-      dom.roomResults.innerHTML = "";
-      
-      // Group multiple versions by room_label
-      const viewRendersByRoom = {};
-      for (const render of data.renders) {
-        const mLabel = render.room_label || "Unknown Room";
-        if (!viewRendersByRoom[mLabel]) viewRendersByRoom[mLabel] = [];
-        viewRendersByRoom[mLabel].push(render);
-      }
-      
-      for (const [rLabel, rList] of Object.entries(viewRendersByRoom)) {
-        console.log("Drawing room:", rLabel, "with renders:", rList.length);
-        // Find matching room to get dims
-        const roomObj = rooms.find(r => r.label === rLabel || r.name === rLabel) || { width_m: 0, length_m: 0 };
-        const result = {
-          room: { name: rLabel, widthM: roomObj.width_m, lengthM: roomObj.length_m },
-          renders: rList.map(item => ({ dataUrl: item.url })),
-          sourcePhotos: [] // Don't have original photo mapping easily, skipping BEFORE cell
-        };
-        drawRoomResult(result);
-      }
-      
-      // Also populate existing Inspiration Images to appState if we regenerated
-      if (data.inspirationImages && data.inspirationImages.length) {
-        appState.inspirationFiles = data.inspirationImages.map(img => ({
-           isExisting: true,
-           url: img.url,
-           // Mime type and name mock
-           type: 'image/jpeg',
-           name: img.file_name
-        }));
-        _inspirationDataUrls = appState.inspirationFiles.map(img => img.url);
-      }
-    } else {
-      const btn = el("viewExistingRendersBtn");
-      if (btn) btn.hidden = true;
-    }
-    
-    drawBoq(appState.globalBoq);
     advancePhase(2);
 
-    // If project has camera pins, restore planner and advance to phase 3
+    // Restore planner and pins if camera pins exist
     if (data.cameraPins && data.cameraPins.length > 0) {
       dom.roomEditorCanvas.hidden = true;
       dom.plannerCanvas.hidden = false;
@@ -2221,7 +2395,6 @@ async function loadProject(id) {
       planner.setFloorPlanImage(bgCanvas);
       planner.setDetectedRooms(rooms);
 
-      // Restore furniture placements
       planner.furniturePlacements = (data.furniturePlacements || []).map(p => ({
         id: p.client_id || generateUUID(),
         moduleId: p.module_id || "custom",
@@ -2237,7 +2410,6 @@ async function loadProject(id) {
         source: p.source || "manual"
       }));
 
-      // Restore camera pins (photos loaded async below)
       planner.cameraPins = data.cameraPins.map(p => ({
         id: p.client_id,
         xM: p.x_m || 0, yM: p.y_m || 0,
@@ -2249,7 +2421,7 @@ async function loadProject(id) {
         photoDataUrl: null
       }));
 
-      // Load pin photos in background
+      // Load pin photos in background (for editing; render display uses photo_url from DB)
       for (const dbPin of data.cameraPins) {
         if (!dbPin.photo_url) continue;
         loadUrlToDataUrl(dbPin.photo_url).then(dataUrl => {
@@ -2262,9 +2434,21 @@ async function loadProject(id) {
       planner.render();
       refreshPinsList();
       if (dom.chatPanel) dom.chatPanel.hidden = false;
-
       if (proj.global_brief) dom.globalBrief.value = proj.global_brief;
 
+      // Advance to phase 4 (generate panel) so all phase pills are enabled
+      advancePhase(4);
+
+      // If the project has saved versions with renders, show results view
+      const versions = data.versions || [];
+      const hasRenders = versions.some(v => v.renders && v.renders.length > 0);
+      if (versions.length > 0 && hasRenders) {
+        showResultsView();
+        renderVersionsUI(versions, data.cameraPins);
+        // Show the latest version
+        const latest = versions[versions.length - 1];
+        showVersion(latest);
+      }
     }
 
   } catch (err) {

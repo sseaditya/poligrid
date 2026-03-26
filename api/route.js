@@ -48,6 +48,9 @@ module.exports = async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/project/load") {
       return sendJson(res, 200, await projectLoad(url.searchParams.get("id")));
     }
+    if (req.method === "GET" && url.pathname === "/api/project/versions") {
+      return sendJson(res, 200, await projectLoadVersions(url.searchParams.get("id")));
+    }
     if (req.method === "POST" && url.pathname.startsWith("/api/project/")) {
       const action = url.pathname.slice("/api/project/".length);
       return sendJson(res, 200, await handleProjectAction(action, await readJson(req)));
@@ -1164,8 +1167,69 @@ async function handleProjectAction(action, body) {
     case "save-scene":       return projectSaveScene(body);
     case "rename":           return projectRename(body);
     case "save-brief":       return projectSaveBrief(body);
+    case "create-version":   return projectCreateVersion(body);
     default: throw httpError(404, "Unknown project action: " + action);
   }
+}
+
+async function projectCreateVersion(body) {
+  const { projectId, designBrief, regenInspirationImages } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+  const sb = db.getClient();
+  const { data: existing } = await sb
+    .from("project_versions").select("version_number")
+    .eq("project_id", projectId).order("version_number", { ascending: false }).limit(1);
+  const nextNum = existing?.length ? existing[0].version_number + 1 : 1;
+  let regenInspirationPaths = null;
+  if (Array.isArray(regenInspirationImages) && regenInspirationImages.length > 0) {
+    const paths = [];
+    for (let i = 0; i < regenInspirationImages.length; i++) {
+      const img = regenInspirationImages[i];
+      if (!img.base64) continue;
+      const ext = (img.mimeType || "").includes("png") ? "png" : "jpg";
+      const storagePath = await db.uploadBase64(
+        "poligrid-inspiration",
+        `${projectId}/v${nextNum}_insp_${Date.now()}_${i}.${ext}`,
+        img.base64, img.mimeType || "image/jpeg"
+      );
+      if (storagePath) paths.push(storagePath);
+    }
+    if (paths.length) regenInspirationPaths = paths;
+  }
+  const { data, error } = await sb.from("project_versions")
+    .insert({ project_id: projectId, version_number: nextNum, design_brief: designBrief || null, regen_inspiration_paths: regenInspirationPaths })
+    .select().single();
+  if (error) throw httpError(500, "Failed to create version: " + error.message);
+  return { version: data };
+}
+
+async function projectLoadVersions(projectId) {
+  if (!projectId) throw httpError(400, "Missing projectId");
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const pubUrl = (bucket, storagePath) =>
+    storagePath ? `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}` : null;
+  const [{ data: versions }, { data: insps }] = await Promise.all([
+    sb.from("project_versions").select("*").eq("project_id", projectId).order("version_number", { ascending: true }),
+    sb.from("inspiration_images").select("*").eq("project_id", projectId).order("sort_order", { ascending: true })
+  ]);
+  const versionsWithData = await Promise.all((versions || []).map(async v => {
+    const [{ data: renders }, { data: boq }] = await Promise.all([
+      sb.from("renders").select("*").eq("version_id", v.id).order("created_at", { ascending: true }),
+      sb.from("boq_items").select("*").eq("version_id", v.id)
+    ]);
+    const inspPaths = v.regen_inspiration_paths;
+    const inspUrls = inspPaths
+      ? inspPaths.map(p => pubUrl("poligrid-inspiration", p))
+      : (insps || []).map(i => pubUrl("poligrid-inspiration", i.storage_path));
+    return {
+      ...v,
+      renders: (renders || []).map(r => ({ ...r, url: pubUrl("poligrid-renders", r.storage_path) })),
+      boqItems: boq || [],
+      inspirationUrls: inspUrls.filter(Boolean)
+    };
+  }));
+  return { versions: versionsWithData };
 }
 
 async function projectSaveAnalysis(body) {
@@ -1318,7 +1382,7 @@ async function projectSavePin(body) {
 }
 
 async function projectSaveRender(body) {
-  const { projectId, pinClientId, roomLabel, dataUrl, modelUsed, furnitureList, generationType } = body;
+  const { projectId, pinClientId, roomLabel, dataUrl, modelUsed, furnitureList, generationType, versionId } = body;
   if (!projectId) throw httpError(400, "Missing projectId");
 
   const ts = Date.now();
@@ -1337,7 +1401,8 @@ async function projectSaveRender(body) {
     storage_path: storagePath,
     model_used: modelUsed || null,
     furniture_list: furnitureList || null,
-    generation_type: generationType || "generate"
+    generation_type: generationType || "generate",
+    version_id: versionId || null
   });
 
   return { ok: true };
@@ -1370,8 +1435,28 @@ async function projectSavePlacements(body) {
 }
 
 async function projectSaveBoq(body) {
-  const { projectId, boqItems } = body;
+  const { projectId, boqItems, versionId } = body;
   if (!projectId) throw httpError(400, "Missing projectId");
+  const sb = db.getClient();
+
+  if (versionId) {
+    const rows = (boqItems || []).map(b => ({
+      project_id: projectId,
+      source: "furniture_generated",
+      version_id: versionId,
+      category: b.category,
+      item: b.item,
+      qty: b.qty,
+      unit: b.unit,
+      rate: b.rate,
+      amount: b.amount
+    }));
+    if (rows.length) {
+      const { error } = await sb.from("boq_items").insert(rows);
+      if (error) console.error("[DB] Insert version BOQ failed:", error.message);
+    }
+    return { ok: true };
+  }
 
   await db.replaceRows(
     "boq_items",
@@ -1455,21 +1540,38 @@ async function projectLoad(id) {
     { data: cameraPins },
     { data: furniturePlacements },
     { data: boqItems },
-    { data: renders },
-    { data: inspirationImages }
+    { data: inspirationImages },
+    { data: versions }
   ] = await Promise.all([
     sb.from("projects").select("*").eq("id", id).single(),
     sb.from("floor_plans").select("*").eq("project_id", id).order("created_at", { ascending: false }).limit(1),
     sb.from("rooms").select("*").eq("project_id", id),
     sb.from("camera_pins").select("*").eq("project_id", id),
     sb.from("furniture_placements").select("*").eq("project_id", id),
-    sb.from("boq_items").select("*").eq("project_id", id),
-    sb.from("renders").select("*").eq("project_id", id).order("created_at", { ascending: false }),
-    sb.from("inspiration_images").select("*").eq("project_id", id).order("sort_order", { ascending: true })
+    sb.from("boq_items").select("*").eq("project_id", id).eq("source", "floor_plan_analysis"),
+    sb.from("inspiration_images").select("*").eq("project_id", id).order("sort_order", { ascending: true }),
+    sb.from("project_versions").select("*").eq("project_id", id).order("version_number", { ascending: true })
   ]);
 
   if (!project) throw httpError(404, "Project not found");
   const fp = fps && fps[0] ? { ...fps[0], url: pubUrl("poligrid-floor-plans", fps[0].storage_path) } : null;
+
+  const versionsWithData = await Promise.all((versions || []).map(async v => {
+    const [{ data: renders }, { data: boq }] = await Promise.all([
+      sb.from("renders").select("*").eq("version_id", v.id).order("created_at", { ascending: true }),
+      sb.from("boq_items").select("*").eq("version_id", v.id)
+    ]);
+    const inspPaths = v.regen_inspiration_paths;
+    const inspUrls = inspPaths
+      ? inspPaths.map(p => pubUrl("poligrid-inspiration", p))
+      : (inspirationImages || []).map(i => pubUrl("poligrid-inspiration", i.storage_path));
+    return {
+      ...v,
+      renders: (renders || []).map(r => ({ ...r, url: pubUrl("poligrid-renders", r.storage_path) })),
+      boqItems: boq || [],
+      inspirationUrls: inspUrls.filter(Boolean)
+    };
+  }));
 
   return {
     project,
@@ -1481,14 +1583,11 @@ async function projectLoad(id) {
     })),
     furniturePlacements: furniturePlacements || [],
     boqItems: boqItems || [],
-    renders: (renders || []).map(r => ({
-      ...r,
-      url: r.storage_path ? pubUrl("poligrid-renders", r.storage_path) : (r.file_name ? pubUrl("poligrid-renders", `${id}/${r.file_name}`) : null)
-    })),
     inspirationImages: (inspirationImages || []).map(i => ({
       ...i,
       url: pubUrl("poligrid-inspiration", i.storage_path)
-    }))
+    })),
+    versions: versionsWithData
   };
 }
 

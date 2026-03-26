@@ -271,40 +271,59 @@
         <!-- Generation status bar -->
         <div id="statusBox" class="results-status-box"></div>
 
-        <!-- Inspiration references -->
-        <div id="resultsInspiration" class="results-inspiration-section" hidden>
-          <p class="results-label">Inspiration References</p>
-          <div id="resultsInspirationStrip" class="inspiration-strip"></div>
+        <!-- Version tabs (visible when project has ≥1 version) -->
+        <div class="version-tabs-bar" id="versionTabsBar" hidden>
+          <span class="results-label version-tabs-label">Versions</span>
+          <div class="version-tabs" id="versionTabs"></div>
         </div>
 
-        <!-- Room render cards (populated by drawRoomResult) -->
-        <div id="roomResults" class="room-results-list"></div>
+        <!-- Active version content -->
+        <div id="versionContent">
 
-        <!-- BOQ section -->
-        <div class="results-boq-section">
-          <h2 class="results-section-heading">Bill of Quantities</h2>
-          <div id="boqAccordionContainer" class="boq-accordion-container"></div>
-          <div class="boq-grand-total-row">
-            <span class="boq-total-label">Grand Total</span>
-            <span class="boq-total-amount" id="grandTotal">—</span>
+          <!-- Design brief for this version -->
+          <div id="resultsBriefSection" class="results-brief-section" hidden>
+            <p class="results-label">Design Brief</p>
+            <p id="resultsBriefText" class="results-brief-text"></p>
           </div>
-        </div>
 
-        <!-- Regenerate section -->
+          <!-- Inspiration for this version -->
+          <div id="resultsInspiration" class="results-inspiration-section" hidden>
+            <p class="results-label">Inspiration References</p>
+            <div id="resultsInspirationStrip" class="inspiration-strip"></div>
+          </div>
+
+          <!-- Room render cards -->
+          <div id="roomResults" class="room-results-list"></div>
+
+          <!-- BOQ section -->
+          <div class="results-boq-section">
+            <h2 class="results-section-heading">Bill of Quantities</h2>
+            <div id="boqAccordionContainer" class="boq-accordion-container"></div>
+            <div class="boq-grand-total-row">
+              <span class="boq-total-label">Grand Total</span>
+              <span class="boq-total-amount" id="grandTotal">—</span>
+            </div>
+          </div>
+
+        </div><!-- /versionContent -->
+
+        <!-- Generate New Version section -->
         <div class="results-regen-section" id="regenerateSection" hidden>
           <div class="regen-section-inner">
-            <h2 class="results-section-heading">Tweak &amp; Regenerate</h2>
-            <p class="hint-text">Adjust your brief or style preferences and regenerate all renders.</p>
+            <h2 class="results-section-heading">Generate New Version</h2>
+            <p class="hint-text">Upload fresh inspiration and / or change the brief. Floor plan, rooms, and camera pins are shared across all versions.</p>
             <div class="regen-form">
               <label class="field-label">
-                Modified design brief
-                <textarea id="regenBriefInput" rows="3" placeholder="e.g. Contemporary minimal, warm oak tones, natural light…"></textarea>
-              </label>
-              <label class="field-label" style="margin-top: 12px;">
-                Add new inspiration images
+                New inspiration images
+                <span class="field-hint">Leave empty to reuse current version's inspiration</span>
                 <input type="file" id="regenInspirationInput" accept="image/*" multiple />
               </label>
-              <button class="primary-btn regen-submit-btn" id="regenBtn" style="margin-top: 12px;">↺ Regenerate All Renders</button>
+              <div id="regenInspirationPreviews" class="insp-previews"></div>
+              <label class="field-label">
+                Design brief
+                <textarea id="regenBriefInput" rows="4" placeholder="e.g. Contemporary minimal, warm oak tones, natural light…"></textarea>
+              </label>
+              <button class="primary-btn regen-submit-btn" id="regenBtn">✦ Generate New Version</button>
             </div>
             <div id="regenStatus" class="status-chip" hidden></div>
           </div>
