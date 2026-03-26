@@ -2476,6 +2476,19 @@ async function loadProject(id) {
     // Store project-level inspiration URLs (for reuse when regenerating)
     appState.storedInspirationUrls = (data.inspirationImages || []).map(i => i.url).filter(Boolean);
 
+    // Restore inspiration thumbnails in the phase 1 UI
+    if (appState.storedInspirationUrls.length > 0) {
+      dom.inspirationNames.textContent = `${appState.storedInspirationUrls.length} image(s) saved`;
+      dom.inspirationPreviews.innerHTML = "";
+      appState.storedInspirationUrls.forEach(url => {
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "Inspiration";
+        img.className = "insp-thumb";
+        dom.inspirationPreviews.appendChild(img);
+      });
+    }
+
     // Store camera pins (DB format with photo_url) for render display
     _activeCameraPins = data.cameraPins || [];
 
