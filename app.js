@@ -1287,22 +1287,40 @@ async function onAnalyzePlan() {
 
     dom.analysisChip.textContent = "Analysing with AI…";
 
-    // Run analysis
+    // Run analysis (rooms + dimensions)
     const analysis = await PA.analyzeFloorPlan(bgCanvas, appState.context);
     appState.detectedRooms = analysis.rooms || [];
-    appState.globalBoq = analysis.globalBoq || [];
-    console.log(`[Poligrid] Floor plan analysis complete: ${appState.detectedRooms.length} rooms, ${appState.globalBoq.length} BOQ items`);
+    console.log(`[Poligrid] Floor plan analysis complete: ${appState.detectedRooms.length} rooms`);
 
-    // Persist floor plan image + analysis to Supabase
+    // Generate structural pricing as a separate, dedicated call
+    dom.analysisChip.textContent = "Generating structural pricing…";
+    let globalBoq = analysis.globalBoq || []; // fallback to whatever analysis returned
+    try {
+      const boqResult = await postJson("/api/project/generate-boq", {
+        floorPlanBase64: bgCanvas.toDataURL("image/png"),
+        rooms: appState.detectedRooms,
+        context: { ...appState.context, totalAreaM2: analysis.totalAreaM2 }
+      });
+      if (boqResult.globalBoq && boqResult.globalBoq.length > 0) {
+        globalBoq = boqResult.globalBoq;
+      }
+    } catch (e) {
+      console.warn("[Poligrid] Structural BOQ generation failed, using analysis fallback:", e.message);
+    }
+    appState.globalBoq = globalBoq;
+    _projectBoqItems = globalBoq;
+    console.log(`[Poligrid] Structural BOQ: ${globalBoq.length} items`);
+
+    // Persist floor plan image + analysis + structural BOQ to Supabase
     saveToDb("/api/project/save-analysis", {
       projectId: appState.projectId,
       floorPlanBase64: bgCanvas.toDataURL("image/png"),
       fileName: appState.floorFile?.name,
-      analysis,
+      analysis: { ...analysis, globalBoq },
       context: appState.context
     });
 
-    dom.analysisChip.textContent = `✓ ${analysis.rooms.length} room(s) · ${analysis.bhkType || ""} · ${analysis.totalAreaM2 || "?"}m²`;
+    dom.analysisChip.textContent = `✓ ${analysis.rooms.length} room(s) · ${analysis.bhkType || ""} · ${analysis.totalAreaM2 || "?"}m² · ${globalBoq.length} BOQ items`;
     dom.analysisSummaryText.textContent = analysis.summary || "";
     dom.analysisSummaryWrap.hidden = false;
 
@@ -2427,13 +2445,14 @@ async function renderPdfFirstPage(file, canvas) {
 // ─── Utilities ─────────────────────────────────────────────────────────────────
 
 const _STEP_LABELS = {
-  '/api/analyze/floorplan':           'Floor Plan Analysis + BOQ',
-  '/api/furnish-room':                'Furnish Room Pipeline',
-  '/api/render/openai':               'Image Render',
-  '/api/chat/placement':              'Chat Assistant',
-  '/api/style/extract':               'Style Extraction',
-  '/api/analyze/room-image':          'Room Image Match',
-  '/api/furniture/autoplace':         'Furniture Auto-Place',
+  '/api/analyze/floorplan':             'Floor Plan Analysis',
+  '/api/project/generate-boq':          'Structural Pricing (BOQ)',
+  '/api/furnish-room':                  'Furnish Room Pipeline',
+  '/api/render/openai':                 'Image Render',
+  '/api/chat/placement':                'Chat Assistant',
+  '/api/style/extract':                 'Style Extraction',
+  '/api/analyze/room-image':            'Room Image Match',
+  '/api/furniture/autoplace':           'Furniture Auto-Place',
   '/api/inspire/extract-furnish-style': 'Inspiration Style (once)',
 };
 

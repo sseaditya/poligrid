@@ -47,6 +47,12 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, result);
     }
 
+    if (req.method === "POST" && url.pathname === "/api/project/generate-boq") {
+      const body = await readJson(req);
+      const result = await generateStructuralBoqWithOpenAi(body);
+      return sendJson(res, 200, result);
+    }
+
     if (req.method === "POST" && url.pathname === "/api/analyze/floorplan") {
       const body = await readJson(req);
       const result = await analyzeFloorPlanWithOpenAi(body);
@@ -407,7 +413,7 @@ async function analyzeFloorPlanWithOpenAi(body) {
     throw httpError(400, "Missing imageBase64 for floor plan analysis.");
   }
 
-  console.log(`[OpenAI] analyzeFloorPlan → model=${model} imageSize=${Math.round(imageBase64.length/1024)}KB`);
+  console.log(`[OpenAI] analyzeFloorPlan → model=${model} imageSize=${Math.round(imageBase64.length/1024)}KB (rooms+dimensions only, BOQ is separate call)`);
 
   const isCommercial = (body.context?.propertyType || "").toLowerCase().includes("commercial");
 
@@ -459,27 +465,6 @@ async function analyzeFloorPlanWithOpenAi(body) {
     "  - bhkType: e.g. '2BHK', '3BHK', 'Small Office', 'Open Plan Office'",
     "  - orientation: compass orientation if north arrow visible, else 'unknown'",
     "  - summary: 1-2 sentence description of the plan",
-    "  - globalBoq: comprehensive bill of quantities for the ENTIRE project — STRUCTURAL AND INFRASTRUCTURE ONLY. CRITICAL RULES:",
-    "    1. NEVER return an empty array. Every project needs all 6 categories below.",
-    "    2. Do NOT include modular furniture or loose furniture — those are handled separately in the render phase.",
-    "    3. Use Hyderabad (India) premium market rates in INR. Derive quantities from totalAreaM2 and room counts.",
-    "    4. Be realistic — estimate generously based on the floor plan size and room types.",
-    "    CATEGORIES (use EXACTLY these 6 strings):",
-    "      'Civil work'      — demolition (if renovation), partition walls, masonry, structural changes, waterproofing for wet areas",
-    "                          Rates: tile/stone demolition ₹40-80/sqft, new partition wall ₹800-1400/rft, waterproofing ₹120-200/sqft wet area",
-    "      'Plumbing'        — CP fittings, sanitary ware, supply/drainage pipes. Estimate: ₹45,000-70,000 per bathroom, ₹30,000-50,000 for kitchen",
-    "      'Electrical'      — wiring, conduits, switches, distribution board, MCBs, earthing. Estimate: ₹1,800-2,800 per sqm of total area",
-    "      'Faux ceiling'    — gypsum board false ceiling with coves and lighting provision. Rate: ₹95-140/sqft. Estimate 60-80% of floor area has false ceiling.",
-    "      'Flooring'        — vitrified tiles, wood, or stone. Living/dining ₹150-220/sqft, bedrooms ₹130-180/sqft, kitchen/bath ₹110-160/sqft",
-    "      'Doors and windows' — count doors and windows from plan. Internal flush door ₹22,000-32,000, main door ₹55,000-90,000, UPVC window ₹900-1,400/sqft",
-    "      'Painting'        — premium emulsion interior. Wall area ≈ 2.5× floor area + ceiling area. Rate ₹35-55/sqft",
-    "    For each item return:",
-    "      - category: EXACTLY one of the 6 strings above",
-    "      - item: specific descriptive name e.g. 'Vitrified tile flooring (800×800mm) — Living & Dining', 'UPVC sliding window 4×4ft — Bedroom', 'Gypsum board false ceiling with cove — Living Room'",
-    "      - qty: numeric quantity",
-    "      - unit: 'sqft', 'sqm', 'pcs', 'rft', 'points', 'lump sum'",
-    "      - rate: Hyderabad premium INR rate per unit (a single number)",
-    "      - amount: qty × rate",
     "",
     "Return STRICT JSON only (no markdown, no explanation):",
     "{",
@@ -495,9 +480,6 @@ async function analyzeFloorPlanWithOpenAi(body) {
     "        { \"label\": string, \"type\": string, \"xPct\": number, \"yPct\": number, \"wPct\": number, \"dPct\": number, \"rotationDeg\": number }",
     "      ]",
     "    }",
-    "  ],",
-    "  \"globalBoq\": [",
-    "    { \"category\": string, \"item\": string, \"qty\": number, \"unit\": string, \"rate\": number, \"amount\": number }",
     "  ],",
     "  \"totalAreaM2\": number,",
     "  \"bhkType\": string,",
@@ -543,11 +525,100 @@ async function analyzeFloorPlanWithOpenAi(body) {
     throw httpError(502, "Floor plan analysis returned unexpected output.");
   }
 
-  console.log(`[OpenAI] analyzeFloorPlan ✓ rooms=${json.rooms?.length ?? 0} boqItems=${json.globalBoq?.length ?? 0} area=${json.totalAreaM2 ?? "?"}m²`);
+  console.log(`[OpenAI] analyzeFloorPlan ✓ rooms=${json.rooms?.length ?? 0} area=${json.totalAreaM2 ?? "?"}m²`);
   return {
     model,
     analysis: json,
     _debug: [{ step: "Floor Plan Analysis", payload, response: parsed }]
+  };
+}
+
+async function generateStructuralBoqWithOpenAi(body) {
+  const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
+  const model = String(body.model || DEFAULT_OPENAI_VISION_MODEL).trim();
+  const floorPlanBase64 = String(body.floorPlanBase64 || "").trim();
+  const rooms = Array.isArray(body.rooms) ? body.rooms : [];
+  const ctx = body.context || {};
+
+  const totalAreaM2 = ctx.totalAreaM2 || rooms.reduce((s, r) => s + ((r.widthM || 0) * (r.lengthM || 0)), 0);
+  const bathroomCount = rooms.filter(r => r.roomType === "bathroom").length;
+  const kitchenCount  = rooms.filter(r => r.roomType === "kitchen").length;
+  const roomSummary = rooms.map(r =>
+    `  - ${r.name || r.label} (${r.roomType}): ${r.widthM || "?"}m × ${r.lengthM || "?"}m` +
+    (r.walls ? `, doors=${r.walls.flatMap(w => w.openings || []).filter(o => o.type === "door").length}` +
+    `, windows=${r.walls.flatMap(w => w.openings || []).filter(o => o.type === "window").length}` : "")
+  ).join("\n");
+
+  console.log(`[OpenAI] generateStructuralBoq → rooms=${rooms.length} area=${totalAreaM2}m² bathrooms=${bathroomCount}`);
+
+  const prompt = [
+    "You are an expert interior design project estimator specialising in Indian residential and commercial interiors.",
+    "Generate a COMPREHENSIVE structural Bill of Quantities (BOQ) for the project described below.",
+    "Use HYDERABAD PREMIUM MARKET RATES (INR). Be generous and realistic — this is a premium interior project.",
+    "",
+    `Project: ${ctx.propertyType || "Apartment"}, ${ctx.bhk || ""}, total area ≈ ${totalAreaM2.toFixed(1)} m² (${(totalAreaM2 * 10.764).toFixed(0)} sqft)`,
+    `Rooms:\n${roomSummary}`,
+    ctx.notes ? `Client notes: ${ctx.notes}` : "",
+    "",
+    "Return STRICT JSON only — a single object with a \"globalBoq\" array.",
+    "Include ALL 7 categories with MULTIPLE line items each (be detailed, not lumped):",
+    "",
+    "'Civil work'        — partition walls (rft × rate), waterproofing for bathrooms/kitchen/balcony (sqft × rate), any masonry or structural work",
+    "                      Rates: partition wall ₹900-1,400/rft, waterproofing ₹130-200/sqft",
+    "'Plumbing'          — per room: CP fittings (EWC, wash basin, shower, bathtub), supply pipes, drainage. Separate line per bathroom/kitchen.",
+    "                      Rates: per bathroom ₹50,000-75,000 lump sum, kitchen plumbing ₹35,000-55,000 lump sum, balcony point ₹8,000-12,000",
+    "'Electrical'        — DB/MCB panel, wiring (light + power points per room), earthing, switches+sockets. Separate line per room.",
+    "                      Rates: DB + MCBs ₹25,000-40,000, per room wiring+points ₹8,000-18,000 depending on room size",
+    "'Faux ceiling'      — gypsum board false ceiling with cove lighting per room (living, dining, master bed, kitchen). Separate line per room.",
+    "                      Rates: ₹100-145/sqft. Estimate 60-80% of each room has false ceiling.",
+    "'Flooring'          — vitrified tiles or wood finish per room. Separate line per room.",
+    "                      Rates: living/dining ₹160-220/sqft, bedrooms ₹135-185/sqft, kitchen/bath ₹115-165/sqft",
+    "'Doors and windows' — count from room data. Main entrance door, internal flush doors, bathroom doors, UPVC windows per room.",
+    "                      Rates: main door ₹60,000-95,000, internal flush door ₹24,000-34,000, bathroom door ₹18,000-26,000, UPVC window ₹950-1,450/sqft",
+    "'Painting'          — premium emulsion for walls + ceiling per room. Wall area ≈ 2.5× floor area per room + ceiling area.",
+    "                      Rates: ₹38-58/sqft (walls+ceiling combined)",
+    "",
+    "For each item: { \"category\": string, \"item\": string, \"qty\": number, \"unit\": string, \"rate\": number, \"amount\": number }",
+    "unit must be one of: 'sqft', 'sqm', 'pcs', 'rft', 'points', 'lump sum'",
+    "amount = qty × rate",
+    "NEVER return an empty globalBoq. Every project has all 7 categories.",
+    floorPlanBase64 ? "Use the floor plan image provided to accurately count doors, windows, and wet areas." : ""
+  ].filter(Boolean).join("\n");
+
+  const content = [{ type: "input_text", text: prompt }];
+  if (floorPlanBase64) {
+    content.push({
+      type: "input_image",
+      image_url: floorPlanBase64.startsWith("data:") ? floorPlanBase64 : `data:image/png;base64,${floorPlanBase64}`
+    });
+  }
+
+  const payload = {
+    model,
+    reasoning: { effort: "medium" },
+    max_output_tokens: 8000,
+    input: [{ role: "user", content }]
+  };
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const raw = await response.text();
+  if (!response.ok) throw httpError(response.status, extractApiError(raw));
+
+  const parsed = safeJson(raw);
+  const text = extractResponsesText(parsed);
+  const json = extractJsonFromText(text);
+  const globalBoq = json?.globalBoq || [];
+
+  console.log(`[OpenAI] generateStructuralBoq ✓ ${globalBoq.length} items across ${new Set(globalBoq.map(b => b.category)).size} categories`);
+
+  return {
+    globalBoq,
+    _debug: [{ step: "Structural BOQ Generation", payload, response: parsed }]
   };
 }
 
