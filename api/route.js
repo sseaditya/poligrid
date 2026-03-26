@@ -42,6 +42,9 @@ module.exports = async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/chat/placement") {
       return sendJson(res, 200, await chatPlacementWithOpenAi(await readJson(req)));
     }
+    if (req.method === "POST" && url.pathname === "/api/inspire/extract-furnish-style") {
+      return sendJson(res, 200, await extractFurnishStyleGuidance(await readJson(req)));
+    }
     if (req.method === "GET" && url.pathname === "/api/project/list") {
       return sendJson(res, 200, await projectList());
     }
@@ -148,15 +151,15 @@ async function furnishRoomWithOpenAi(body) {
 
   const _debug = [];
 
-  // STEP 1: Extract Style from Inspiration Images
-  let styleGuidance = "";
-  if (inspirationImages.length > 0) {
+  // STEP 1: Use precomputed style guidance (extracted once before the per-room loop)
+  // Fall back to a quick inline extraction only if nothing was precomputed.
+  let styleGuidance = String(body.precomputedStyleGuidance || "").trim();
+  if (!styleGuidance && inspirationImages.length > 0) {
     const stylePrompt = [
       "Describe the interior design style, color palette, materials, and overall mood shown in these inspiration images.",
       "Keep it strictly under 3 sentences, focusing only on actionable visual details."
     ].join("\n");
     const styleContent = [{ type: "input_text", text: stylePrompt }];
-    // Limit to 3 images to prevent payload size limits or proxy timeouts
     for (const inspBase64 of inspirationImages.slice(0, 3)) {
       styleContent.push({
         type: "input_image",
@@ -166,7 +169,7 @@ async function furnishRoomWithOpenAi(body) {
     try {
       const stylePayload = {
         model: visionModel,
-        reasoning: { effort: "medium" }, // Increased effort for better extraction
+        reasoning: { effort: "medium" },
         max_output_tokens: 500,
         input: [{ role: "user", content: styleContent }]
       };
@@ -177,7 +180,7 @@ async function furnishRoomWithOpenAi(body) {
       });
       const raw = await res.text();
       const parsed = safeJson(raw);
-      _debug.push({ step: "Vision Style Extraction", payload: stylePayload, response: parsed });
+      _debug.push({ step: "Vision Style Extraction (fallback)", payload: stylePayload, response: parsed });
       styleGuidance = extractResponsesText(parsed) || "";
     } catch (e) {
       console.warn("Style extraction failed:", e);
@@ -1149,6 +1152,147 @@ function extractResponsesText(response) {
   return "";
 }
 
+async function extractFurnishStyleGuidance(body) {
+  const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
+  const visionModel = String(body.visionModel || DEFAULT_OPENAI_VISION_MODEL).trim();
+  const inspirationImages = Array.isArray(body.inspirationBase64) ? body.inspirationBase64 : [];
+
+  if (inspirationImages.length === 0) return { styleGuidance: "" };
+
+  console.log(`[OpenAI] extractFurnishStyle → model=${visionModel} images=${inspirationImages.length}`);
+
+  const stylePrompt = [
+    "You are a senior interior designer. Analyze these inspiration images and extract HIGHLY SPECIFIC, ACTIONABLE design details that can guide a photorealistic render.",
+    "Structure your response in these exact sections:",
+    "COLOR PALETTE: List each color with descriptive names (e.g. 'warm ivory walls #F5F0E8', 'dark charcoal sofa fabric', 'aged brass hardware', 'off-white ceiling'). Be specific.",
+    "MATERIALS & FINISHES: Name exact materials (e.g. 'matte walnut veneer cabinetry', 'honed Carrara marble countertop', 'brushed brass fixtures', 'bouclé upholstery', 'wide-plank oak flooring', 'limewash walls'). List every material visible.",
+    "FURNITURE FORM LANGUAGE: Describe the silhouette and construction style (e.g. 'low-profile tight-back sofa on tapered legs', 'curved fluted cabinet fronts', 'minimalist floating shelves with no visible hardware', 'rattan accent chairs').",
+    "LIGHTING CHARACTER: Describe quality and sources (e.g. 'warm 2700K ambient light from concealed cove', 'pendant lights over dining table', 'natural light through sheer white linen curtains', 'soft bounce off white walls').",
+    "SPATIAL MOOD & ATMOSPHERE: One sentence describing the feel (e.g. 'quiet understated luxury with an earthy warmth', 'crisp Japandi minimalism', 'layered bohemian warmth').",
+    "DECORATIVE DETAILS: List specific decor items visible (e.g. 'large-format abstract canvas on wall', 'sculptural ceramic vases', 'woven jute rug', 'potted fiddle-leaf fig', 'stacked art books on coffee table').",
+    "Be exhaustive and precise — a render artist must be able to reproduce this style exactly from your description."
+  ].join("\n");
+
+  const styleContent = [{ type: "input_text", text: stylePrompt }];
+  for (const inspBase64 of inspirationImages.slice(0, 4)) {
+    styleContent.push({
+      type: "input_image",
+      image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:image/jpeg;base64,${inspBase64}`
+    });
+  }
+
+  try {
+    const res = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: visionModel,
+        reasoning: { effort: "high" },
+        max_output_tokens: 1800,
+        input: [{ role: "user", content: styleContent }]
+      })
+    });
+    const raw = await res.text();
+    const parsed = safeJson(raw);
+    const styleGuidance = extractResponsesText(parsed) || "";
+    console.log(`[OpenAI] extractFurnishStyle ✓ ${styleGuidance.length} chars`);
+    return {
+      styleGuidance,
+      _debug: [{ step: "Inspiration Style Extraction", payload: { model: visionModel, images: inspirationImages.length }, response: parsed }]
+    };
+  } catch (e) {
+    console.warn("[OpenAI] extractFurnishStyle ✗ failed:", e);
+    return { styleGuidance: "" };
+  }
+}
+
+async function generateStructuralBoqWithOpenAi(body) {
+  const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
+  const model = String(body.model || DEFAULT_OPENAI_VISION_MODEL).trim();
+  const floorPlanBase64 = String(body.floorPlanBase64 || "").trim();
+  const rooms = Array.isArray(body.rooms) ? body.rooms : [];
+  const ctx = body.context || {};
+
+  const totalAreaM2 = ctx.totalAreaM2 || rooms.reduce((s, r) => s + ((r.widthM || 0) * (r.lengthM || 0)), 0);
+  const roomSummary = rooms.map(r =>
+    `  - ${r.name || r.label} (${r.roomType}): ${r.widthM || "?"}m × ${r.lengthM || "?"}m` +
+    (r.walls ? `, doors=${r.walls.flatMap(w => w.openings || []).filter(o => o.type === "door").length}` +
+    `, windows=${r.walls.flatMap(w => w.openings || []).filter(o => o.type === "window").length}` : "")
+  ).join("\n");
+
+  console.log(`[OpenAI] generateStructuralBoq → rooms=${rooms.length} area=${totalAreaM2}m²`);
+
+  const prompt = [
+    "You are an expert interior design project estimator specialising in Indian residential and commercial interiors.",
+    "Generate a COMPREHENSIVE structural Bill of Quantities (BOQ) for the project described below.",
+    "Use HYDERABAD PREMIUM MARKET RATES (INR). Be generous and realistic — this is a premium interior project.",
+    "",
+    `Project: ${ctx.propertyType || "Apartment"}, ${ctx.bhk || ""}, total area ≈ ${totalAreaM2.toFixed(1)} m² (${(totalAreaM2 * 10.764).toFixed(0)} sqft)`,
+    `Rooms:\n${roomSummary}`,
+    ctx.notes ? `Client notes: ${ctx.notes}` : "",
+    "",
+    "Return STRICT JSON only — a single object with a \"globalBoq\" array.",
+    "Include ALL 7 categories with MULTIPLE line items each (be detailed, not lumped):",
+    "",
+    "'Civil work'        — partition walls (rft × rate), waterproofing for bathrooms/kitchen/balcony (sqft × rate), any masonry or structural work",
+    "                      Rates: partition wall ₹900-1,400/rft, waterproofing ₹130-200/sqft",
+    "'Plumbing'          — per room: CP fittings (EWC, wash basin, shower, bathtub), supply pipes, drainage. Separate line per bathroom/kitchen.",
+    "                      Rates: per bathroom ₹50,000-75,000 lump sum, kitchen plumbing ₹35,000-55,000 lump sum, balcony point ₹8,000-12,000",
+    "'Electrical'        — DB/MCB panel, wiring (light + power points per room), earthing, switches+sockets. Separate line per room.",
+    "                      Rates: DB + MCBs ₹25,000-40,000, per room wiring+points ₹8,000-18,000 depending on room size",
+    "'Faux ceiling'      — gypsum board false ceiling with cove lighting per room (living, dining, master bed, kitchen). Separate line per room.",
+    "                      Rates: ₹100-145/sqft. Estimate 60-80% of each room has false ceiling.",
+    "'Flooring'          — vitrified tiles or wood finish per room. Separate line per room.",
+    "                      Rates: living/dining ₹160-220/sqft, bedrooms ₹135-185/sqft, kitchen/bath ₹115-165/sqft",
+    "'Doors and windows' — count from room data. Main entrance door, internal flush doors, bathroom doors, UPVC windows per room.",
+    "                      Rates: main door ₹60,000-95,000, internal flush door ₹24,000-34,000, bathroom door ₹18,000-26,000, UPVC window ₹950-1,450/sqft",
+    "'Painting'          — premium emulsion for walls + ceiling per room. Wall area ≈ 2.5× floor area per room + ceiling area.",
+    "                      Rates: ₹38-58/sqft (walls+ceiling combined)",
+    "",
+    "For each item: { \"category\": string, \"item\": string, \"qty\": number, \"unit\": string, \"rate\": number, \"amount\": number }",
+    "unit must be one of: 'sqft', 'sqm', 'pcs', 'rft', 'points', 'lump sum'",
+    "amount = qty × rate",
+    "NEVER return an empty globalBoq. Every project has all 7 categories.",
+    floorPlanBase64 ? "Use the floor plan image provided to accurately count doors, windows, and wet areas." : ""
+  ].filter(Boolean).join("\n");
+
+  const content = [{ type: "input_text", text: prompt }];
+  if (floorPlanBase64) {
+    content.push({
+      type: "input_image",
+      image_url: floorPlanBase64.startsWith("data:") ? floorPlanBase64 : `data:image/png;base64,${floorPlanBase64}`
+    });
+  }
+
+  const payload = {
+    model,
+    reasoning: { effort: "medium" },
+    max_output_tokens: 8000,
+    input: [{ role: "user", content }]
+  };
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const raw = await response.text();
+  if (!response.ok) throw httpError(response.status, extractApiError(raw));
+
+  const parsed = safeJson(raw);
+  const text = extractResponsesText(parsed);
+  const json = extractJsonFromText(text);
+  const globalBoq = json?.globalBoq || [];
+
+  console.log(`[OpenAI] generateStructuralBoq ✓ ${globalBoq.length} items across ${new Set(globalBoq.map(b => b.category)).size} categories`);
+
+  return {
+    globalBoq,
+    _debug: [{ step: "Structural BOQ Generation", payload, response: parsed }]
+  };
+}
+
 function httpError(statusCode, message) {
   const error = new Error(message);
   error.statusCode = statusCode;
@@ -1168,12 +1312,13 @@ async function handleProjectAction(action, body) {
     case "rename":           return projectRename(body);
     case "save-brief":       return projectSaveBrief(body);
     case "create-version":   return projectCreateVersion(body);
+    case "generate-boq":     return generateStructuralBoqWithOpenAi(body);
     default: throw httpError(404, "Unknown project action: " + action);
   }
 }
 
 async function projectCreateVersion(body) {
-  const { projectId, designBrief, regenInspirationImages } = body;
+  const { projectId, designBrief, regenInspirationImages, regenExistingInspirationPaths } = body;
   if (!projectId) throw httpError(400, "Missing projectId");
   const sb = db.getClient();
   const { data: existing } = await sb
@@ -1182,6 +1327,7 @@ async function projectCreateVersion(body) {
   const nextNum = existing?.length ? existing[0].version_number + 1 : 1;
   let regenInspirationPaths = null;
   if (Array.isArray(regenInspirationImages) && regenInspirationImages.length > 0) {
+    // New files uploaded — upload them and store fresh paths
     const paths = [];
     for (let i = 0; i < regenInspirationImages.length; i++) {
       const img = regenInspirationImages[i];
@@ -1195,6 +1341,9 @@ async function projectCreateVersion(body) {
       if (storagePath) paths.push(storagePath);
     }
     if (paths.length) regenInspirationPaths = paths;
+  } else if (Array.isArray(regenExistingInspirationPaths) && regenExistingInspirationPaths.length > 0) {
+    // No new files — reuse the existing project-level storage paths so the version has an explicit reference
+    regenInspirationPaths = regenExistingInspirationPaths;
   }
   const { data, error } = await sb.from("project_versions")
     .insert({ project_id: projectId, version_number: nextNum, design_brief: designBrief || null, regen_inspiration_paths: regenInspirationPaths })
@@ -1215,8 +1364,8 @@ async function projectLoadVersions(projectId) {
   ]);
   const versionsWithData = await Promise.all((versions || []).map(async v => {
     const [{ data: renders }, { data: boq }] = await Promise.all([
-      sb.from("renders").select("*").eq("version_id", v.id).order("created_at", { ascending: true }),
-      sb.from("boq_items").select("*").eq("version_id", v.id)
+      sb.from("renders").select("*").eq("project_id", projectId).eq("version_id", v.id).order("created_at", { ascending: true }),
+      sb.from("boq_items").select("*").eq("project_id", projectId).eq("version_id", v.id)
     ]);
     const inspPaths = v.regen_inspiration_paths;
     const inspUrls = inspPaths
@@ -1263,7 +1412,7 @@ async function projectSaveAnalysis(body) {
       storage_path: storagePath,
       analysis_raw: analysis,
       analyzed_at: new Date().toISOString()
-    }).eq("id", existingFp.id);
+    }).eq("id", existingFp.id).eq("project_id", projectId);
     fpId = existingFp.id;
   } else {
     fpId = await db.insertRow("floor_plans", {
@@ -1344,15 +1493,11 @@ async function projectSaveInspiration(body) {
   // Ensure the project row exists before inserting child rows (FK constraint)
   await db.upsertProject(projectId, {});
 
-  // Get current max sort_order so new images append rather than collide
   const sb = db.getClient();
-  const { data: existing } = await sb
-    .from("inspiration_images")
-    .select("sort_order")
-    .eq("project_id", projectId)
-    .order("sort_order", { ascending: false })
-    .limit(1);
-  const offset = existing?.[0]?.sort_order != null ? existing[0].sort_order + 1 : 0;
+
+  // Replace all existing project-level inspiration images — prevents old images
+  // from bleeding into new versions via the fallback in projectLoadVersions.
+  await sb.from("inspiration_images").delete().eq("project_id", projectId);
 
   const rows = [];
   for (let i = 0; i < (images || []).length; i++) {
@@ -1369,7 +1514,7 @@ async function projectSaveInspiration(body) {
       project_id: projectId,
       file_name: img.fileName || `${i}.${ext}`,
       storage_path: storagePath,
-      sort_order: offset + i
+      sort_order: i
     });
   }
 
@@ -1588,8 +1733,8 @@ async function projectLoad(id) {
 
   const versionsWithData = await Promise.all((versions || []).map(async v => {
     const [{ data: renders }, { data: boq }] = await Promise.all([
-      sb.from("renders").select("*").eq("version_id", v.id).order("created_at", { ascending: true }),
-      sb.from("boq_items").select("*").eq("version_id", v.id)
+      sb.from("renders").select("*").eq("project_id", id).eq("version_id", v.id).order("created_at", { ascending: true }),
+      sb.from("boq_items").select("*").eq("project_id", id).eq("version_id", v.id)
     ]);
     const inspPaths = v.regen_inspiration_paths;
     const inspUrls = inspPaths

@@ -369,6 +369,7 @@ const appState = {
   floorFile: null,
   inspirationFiles: [],
   storedInspirationUrls: [], // Public URLs of inspiration images from DB (loaded project)
+  inspirationStoragePaths: [], // Storage paths of inspiration images (for version creation reference)
   context: {
     propertyType: "Apartment",
     bhk: "2BHK",
@@ -1185,6 +1186,7 @@ function init() {
     appState.floorFile = null;
     appState.inspirationFiles = [];
     appState.storedInspirationUrls = [];
+    appState.inspirationStoragePaths = [];
     appState.context = { propertyType: "Apartment", bhk: "2BHK", totalAreaM2: null, notes: "" };
     appState.detectedRooms = null;
     appState.confirmedRooms = null;
@@ -1193,6 +1195,7 @@ function init() {
     _allVersions = [];
     _activeCameraPins = [];
     _projectBoqItems = [];
+    _inspirationDataUrls = [];
 
     // Reset UI
     el("projectNameInput").value = "";
@@ -1224,6 +1227,10 @@ function init() {
     el("statusBox").textContent = "";
     el("versionTabsBar").hidden = true;
     el("versionTabs").innerHTML = "";
+    drawBoq([]);
+    el("resultsInspirationStrip") && (el("resultsInspirationStrip").innerHTML = "");
+    el("resultsInspiration") && (el("resultsInspiration").hidden = true);
+    el("resultsBriefSection") && (el("resultsBriefSection").hidden = true);
 
     hideProjectPicker();
     advancePhase(1);
@@ -1864,7 +1871,11 @@ async function onGenerate() {
       const vRes = await postJson("/api/project/create-version", {
         projectId: appState.projectId,
         designBrief: globalBrief,
-        regenInspirationImages: regenImages
+        regenInspirationImages: regenImages,
+        // When no new files, lock the current stored paths so the version always has an explicit reference
+        regenExistingInspirationPaths: !regenImages && appState.inspirationStoragePaths.length
+          ? appState.inspirationStoragePaths
+          : null
       });
       appState.currentVersionId = vRes.version?.id || null;
     } catch (e) {
@@ -2539,11 +2550,12 @@ async function loadProject(id) {
 
     const proj = data.project;
 
-    // Reset app state for this project
+    // Reset app state for this project — wipe ALL stale data before loading new project
     appState.projectId = id;
     appState.floorFile = null;
     appState.inspirationFiles = [];
     appState.storedInspirationUrls = [];
+    appState.inspirationStoragePaths = [];
     appState.detectedRooms = null;
     appState.confirmedRooms = null;
     appState.globalBoq = [];
@@ -2551,9 +2563,20 @@ async function loadProject(id) {
     _allVersions = [];
     _activeCameraPins = [];
     _projectBoqItems = [];
+    _inspirationDataUrls = [];
     planner = null;
     roomEditor = null;
     latestArtifacts = null;
+
+    // Clear results UI so no old project data is ever visible
+    hideResultsView();
+    el("roomResults").innerHTML = "";
+    el("versionTabsBar").hidden = true;
+    el("versionTabs").innerHTML = "";
+    drawBoq([]);
+    el("resultsInspirationStrip") && (el("resultsInspirationStrip").innerHTML = "");
+    el("resultsInspiration") && (el("resultsInspiration").hidden = true);
+    el("resultsBriefSection") && (el("resultsBriefSection").hidden = true);
 
     // Restore context
     appState.context = {
@@ -2595,8 +2618,9 @@ async function loadProject(id) {
     );
     _projectBoqItems = appState.globalBoq;
 
-    // Store project-level inspiration URLs (for reuse when regenerating)
+    // Store project-level inspiration URLs and storage paths (for reuse when regenerating)
     appState.storedInspirationUrls = (data.inspirationImages || []).map(i => i.url).filter(Boolean);
+    appState.inspirationStoragePaths = (data.inspirationImages || []).map(i => i.storage_path).filter(Boolean);
 
     // Restore inspiration thumbnails in the phase 1 UI
     if (appState.storedInspirationUrls.length > 0) {
