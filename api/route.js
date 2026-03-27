@@ -2,6 +2,7 @@
 // Vercel serverless entry point — handles all /api/* requests.
 // All AI handler functions are appended below from the shared logic.
 
+const zlib = require("zlib");
 const db = require("../db.js");
 
 const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1.5";
@@ -95,7 +96,17 @@ async function renderWithOpenAi(body) {
     form.append("model", model);
     form.append("prompt", prompt.slice(0, 4000));
     form.append("quality", "low");
-    form.append("image", new Blob([imageBuffer], { type: mimeType }), "room_input.png");
+    // Use image[] to support multiple reference images (gpt-image-1 supports up to 16)
+    form.append("image[]", new Blob([imageBuffer], { type: mimeType }), "room_3d_reference.png");
+
+    // Additional reference images (e.g. annotated floor plan with camera pin)
+    const additionalImages = Array.isArray(body.additionalImages) ? body.additionalImages : [];
+    for (let i = 0; i < additionalImages.length; i++) {
+      const ai = additionalImages[i];
+      if (!ai || !ai.base64) continue;
+      const buf = Buffer.from(ai.base64, "base64");
+      form.append("image[]", new Blob([buf], { type: ai.mimeType || "image/png" }), ai.name || `ref_${i}.png`);
+    }
 
     headers = { Authorization: `Bearer ${apiKey}` };
     payload = form;
@@ -148,72 +159,78 @@ async function furnishRoomWithOpenAi(body) {
   const emptyRoomBase64 = String(body.emptyRoomBase64 || "").trim();
   const mimeType = String(body.mimeType || "image/jpeg").trim();
   const inspirationImages = Array.isArray(body.inspirationBase64) ? body.inspirationBase64 : [];
+  const roomLabel = body.roomContext?.roomType || "unknown";
+
+  console.log(`[OpenAI] furnishRoom START room=${roomLabel} hasPhoto=${!!emptyRoomBase64} inspirationImages=${inspirationImages.length} precomputedStyle=${!!body.precomputedStyleGuidance}`);
 
   const _debug = [];
 
-  // STEP 1: Use precomputed style guidance (extracted once before the per-room loop)
-  // Fall back to a quick inline extraction only if nothing was precomputed.
+  // STEP 1: Extract Style from Inspiration Images (skip if pre-computed by caller)
   let styleGuidance = String(body.precomputedStyleGuidance || "").trim();
   if (!styleGuidance && inspirationImages.length > 0) {
-    const stylePrompt = [
-      "Describe the interior design style, color palette, materials, and overall mood shown in these inspiration images.",
-      "Keep it strictly under 3 sentences, focusing only on actionable visual details."
-    ].join("\n");
-    const styleContent = [{ type: "input_text", text: stylePrompt }];
-    for (const inspBase64 of inspirationImages.slice(0, 3)) {
-      styleContent.push({
-        type: "input_image",
-        image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:${mimeType};base64,${inspBase64}`
-      });
-    }
-    try {
-      const stylePayload = {
-        model: visionModel,
-        reasoning: { effort: "medium" },
-        max_output_tokens: 500,
-        input: [{ role: "user", content: styleContent }]
-      };
-      const res = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify(stylePayload)
-      });
-      const raw = await res.text();
-      const parsed = safeJson(raw);
-      _debug.push({ step: "Vision Style Extraction (fallback)", payload: stylePayload, response: parsed });
-      styleGuidance = extractResponsesText(parsed) || "";
-    } catch (e) {
-      console.warn("Style extraction failed:", e);
-    }
+    console.log(`[OpenAI] furnishRoom STEP1 → extracting style from ${inspirationImages.length} images (inline, not pre-computed)`);
+    const extracted = await extractFurnishStyleGuidance({ inspirationBase64: inspirationImages, visionModel });
+    styleGuidance = extracted.styleGuidance;
+    console.log(`[OpenAI] furnishRoom STEP1 ✓ styleGuidance ${styleGuidance.length} chars`);
+    _debug.push({ step: "Vision Style Extraction (inline)", styleGuidance });
+  } else if (styleGuidance) {
+    console.log(`[OpenAI] furnishRoom STEP1 skipped (pre-computed ${styleGuidance.length} chars)`);
   }
 
   // STEP 2: Vision Planning (Decide what furniture to place)
   const providedPlacements = Array.isArray(body.placements) ? body.placements : null;
   let placements = providedPlacements;
-  
+
   const floorPlanBase64 = String(body.floorPlanBase64 || "").trim();
   const cam = body.cameraContext || {};
-  const cameraPositionText = `Camera is located at X:${cam.xM || 0}m, Y:${cam.yM || 0}m relative to the room origin, facing angle ${cam.angleDeg || 0}° with a ${cam.fovDeg || 60}° Field of View.`;
+  const camXFt = mToFtIn(cam.xM || 0);
+  const camYFt = mToFtIn(cam.yM || 0);
+  const cameraPositionText = `Camera is located at X:${camXFt}, Y:${camYFt} from room origin, facing ${cam.angleDeg || 0}° with a ${cam.fovDeg || 60}° Field of View. The camera diagram image shows the exact pin location and viewing cone on the floor plan.`;
 
   if (!placements || placements.length === 0) {
     if (!emptyRoomBase64) {
-      throw httpError(400, "Missing empty room photo for Vision Planning. Please provide a photo or floor plan placements.");
+      throw httpError(400, "Missing empty room photo for Vision Planning.");
     }
+    const roomCtxForPlan = body.roomContext || {};
+    const roomSizeText = (roomCtxForPlan.widthM && roomCtxForPlan.lengthM)
+      ? `${mToFtIn(roomCtxForPlan.widthM)} wide × ${mToFtIn(roomCtxForPlan.lengthM)} long`
+      : "unknown size";
+    // Describe camera FOV sectors for spatial awareness
+    const fovDeg = cam.fovDeg || 60;
+    const halfFov = fovDeg / 2;
+    const facingAngle = cam.angleDeg || 0;
+    const leftEdge = ((facingAngle - halfFov) + 360) % 360;
+    const rightEdge = (facingAngle + halfFov) % 360;
     const planningPrompt = [
-      "You are an expert interior designer. You have been given a photo of an empty room.",
-      floorPlanBase64 ? "You have also been given the top-down floor plan image for spatial context." : "",
-      body.brief ? `CRITICAL CONTEXT: The user requested the following Design Brief/Room Type: "${body.brief}". Prioritize furnishing it matching this exact purpose.` : "",
-      styleGuidance ? `STYLE CONTEXT: Use the following extracted style guidance to determine appropriate furniture choices:\n"${styleGuidance}"` : "",
-      `CAMERA POSITIONS: ${cameraPositionText}. Use this to understand what parts of the room are currently visible in the provided empty room photo before deciding furniture placement.`,
-      "Based on the room's geometry, requested brief, and the implied style, generate a complete list of furniture necessary to furnish this room.",
-      "Return strict JSON with a `placements` array, where each item has:",
-      "  - label: e.g., '3-Seater Sofa'",
-      "  - type: 'seating', 'table', 'cabinet', 'bed', 'decor', or 'custom'",
-      "  - wM: approx width in meters",
-      "  - dM: approx depth in meters",
-      "  - hM: approx height in meters",
-      "Return nothing but JSON."
+      "You are a senior interior designer. Plan a COMPLETE furniture scheme for the entire room — not just what's visible in the photo.",
+      `ROOM: ${roomCtxForPlan.roomType || 'residential'}, ${roomSizeText}`,
+      roomCtxForPlan.archNotes ? `ARCHITECTURAL NOTES: ${roomCtxForPlan.archNotes}` : "",
+      `CAMERA REFERENCE (for spatial context only): pin at (${camXFt}, ${camYFt}), facing ${facingAngle}°, FOV ${fovDeg}° (viewing cone from ${leftEdge.toFixed(0)}° to ${rightEdge.toFixed(0)}°). The camera diagram image shows this pin on the floor plan. Use this to understand what the 3D photo shows, but plan furniture for the ENTIRE room — the list must cover everything, not just visible items.`,
+      floorPlanBase64 ? "The floor plan and camera diagram are provided — use them to understand all walls, zones, room boundaries, and the camera viewpoint." : "",
+      body.brief ? `DESIGN BRIEF: "${body.brief}"` : "",
+      styleGuidance
+        ? [
+          "STYLE DIRECTIVE — This is the most critical instruction. Every item MUST reflect this extracted style:",
+          styleGuidance,
+          "Name each item with its material/finish explicitly (e.g. 'Walnut-veneer Full-Height Wardrobe', 'Bouclé 3-Seater Sofa on brass legs', 'Fluted oak TV unit'). The label should be descriptive enough to price it."
+        ].join("\n")
+        : "",
+      "Return STRICT JSON only — a 'placements' array covering ALL furniture for this room type. Each item:",
+      "  label: specific descriptive name with material and finish (e.g. 'Matte walnut 3-door full-height wardrobe', 'Marble-top 6-seater dining table', 'Linen-upholstered queen bed with padded headboard')",
+      "  type: exactly one of 'seating'|'table'|'cabinet'|'bed'|'decor'|'custom'",
+      "  category: either 'Modular furniture' (built-in/fitted: wardrobes, kitchen cabinets, TV units, study units, shoe racks) or 'Loose furniture' (free-standing: sofas, beds, dining tables, chairs, decor)",
+      "  wFt: realistic width in decimal feet (e.g. 7.0 for a 3-seater sofa, 6.5 for a queen bed, 8.0 for a full-height wardrobe)",
+      "  dFt: depth in decimal feet (e.g. 3.0 for sofa, 6.5 for queen bed, 2.0 for wardrobe)",
+      "  hFt: height in decimal feet (e.g. 3.0 for sofa, 4.0 for bed with headboard, 7.5 for full-height wardrobe)",
+      "  rateINR: your best estimate of the Hyderabad premium market price in INR for this specific item (one unit, supply + install). Be realistic — e.g. a full-height sliding wardrobe ₹95,000, a 3-seater sofa ₹70,000-85,000, a queen bed ₹55,000-70,000, kitchen cabinets ₹45,000-65,000 per unit.",
+      "Return NOTHING but valid JSON."
     ].filter(Boolean).join("\n");
+
+    // Generate camera annotation PNG (bird's-eye diagram showing pin + FOV cone)
+    const camAnnotationBase64 = createCameraAnnotationPng(
+      roomCtxForPlan.widthM || 5, roomCtxForPlan.lengthM || 5,
+      cam.xM || 0, cam.yM || 0, cam.angleDeg || 0, cam.fovDeg || 60
+    );
 
     const contentArray = [
       { type: "input_text", text: planningPrompt },
@@ -227,13 +244,25 @@ async function furnishRoomWithOpenAi(body) {
       });
     }
 
+    // Always include camera FOV diagram so AI knows exactly where the camera looks from
+    contentArray.push({
+      type: "input_image",
+      image_url: `data:image/png;base64,${camAnnotationBase64}`
+    });
+
+    // Include inspiration images in planning so AI picks style-matching furniture
+    for (const inspBase64 of inspirationImages.slice(0, 2)) {
+      contentArray.push({
+        type: "input_image",
+        image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:image/jpeg;base64,${inspBase64}`
+      });
+    }
+
     const payload = {
       model: visionModel,
       reasoning: { effort: "medium" },
       max_output_tokens: 4000,
-      input: [
-        { role: "user", content: contentArray }
-      ]
+      input: [{ role: "user", content: contentArray }]
     };
 
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -244,77 +273,134 @@ async function furnishRoomWithOpenAi(body) {
 
     const raw = await response.text();
     if (!response.ok) throw httpError(response.status, extractApiError(raw));
-    
+
     const parsed = safeJson(raw);
     _debug.push({ step: "Vision Room Planning", payload: payload, response: parsed });
     const jsonOutput = extractJsonFromText(extractResponsesText(parsed));
-    placements = jsonOutput?.placements || [];
+    placements = (jsonOutput?.placements || []).map(p => {
+      // AI always returns feet (wFt/dFt/hFt). Compute meters server-side so
+      // all downstream code (deterministicPack, furnitureStr, BOQ) uses consistent wM/dM/hM.
+      const wFt = parseFloat(p.wFt) || 0;
+      const dFt = parseFloat(p.dFt) || 0;
+      const hFt = parseFloat(p.hFt) || 0;
+      return {
+        ...p,
+        wFt: wFt || p.wFt,
+        dFt: dFt || p.dFt,
+        hFt: hFt || p.hFt,
+        wM: wFt ? parseFloat((wFt * 0.3048).toFixed(3)) : (parseFloat(p.wM) || 1.2),
+        dM: dFt ? parseFloat((dFt * 0.3048).toFixed(3)) : (parseFloat(p.dM) || 0.6),
+        hM: hFt ? parseFloat((hFt * 0.3048).toFixed(3)) : (parseFloat(p.hM) || 0.9)
+      };
+    });
+    console.log(`[OpenAI] furnishRoom STEP2 ✓ placements=${placements.length}`);
+  } else {
+    console.log(`[OpenAI] furnishRoom STEP2 skipped (${placements?.length ?? 0} pre-provided placements)`);
   }
 
   // STEP 3: Render Generation (DALL-E)
-  const furnitureStr = placements.map(p => `- ${p.label} (${p.wM}x${p.dM}m, height ${p.hM || 0.9}m)`).join("\n");
   const roomCtx = body.roomContext || {};
+  // wM/dM/hM are always in meters here (either server-converted from wFt, or pre-provided in meters)
+  const furnitureStr = placements.map(p =>
+    `- ${p.label} (${mToFtIn(p.wM || 1.2)} wide × ${mToFtIn(p.dM || 0.6)} deep × ${mToFtIn(p.hM || 0.9)} tall)`
+  ).join("\n");
+
   const roomDimsText = (roomCtx.widthM && roomCtx.lengthM)
-    ? `Room dimensions: ${roomCtx.widthM}m wide × ${roomCtx.lengthM}m long × 2.85m ceiling height.`
+    ? `Room: ${mToFtIn(roomCtx.widthM)} wide × ${mToFtIn(roomCtx.lengthM)} long × 9'-4" ceiling height.`
     : '';
 
-  // Describe wall openings so the AI knows where doors/windows are
   const wallLines = Array.isArray(roomCtx.walls) && roomCtx.walls.length
     ? roomCtx.walls.map(w => {
-        const openings = (w.openings || []).map(o => `${o.type} (${o.widthM || 0.9}m wide)`).join(', ');
-        return `${w.side} wall: ${w.isExterior ? 'exterior' : 'interior'}${openings ? ' — ' + openings : ' — solid'}`;
-      }).join('; ')
+      const openings = (w.openings || []).map(o => `${o.type} (${mToFtIn(o.widthM || 0.9)} wide)`).join(', ');
+      return `${w.side}: ${w.isExterior ? 'exterior' : 'interior'}${openings ? ' — ' + openings : ''}`;
+    }).join(' | ')
     : '';
 
-  const fovDeg = cam.fovDeg || 60;
-  const angleDeg = cam.angleDeg != null ? cam.angleDeg : 0;
-  // Convert numeric angle to compass description (0°=North, clockwise)
-  const compassDirs = ["North","NNE","NE","ENE","East","ESE","SE","SSE","South","SSW","SW","WSW","West","WNW","NW","NNW"];
-  const compassFacing = compassDirs[Math.round(((angleDeg % 360) + 360) % 360 / 22.5) % 16];
-  // Determine which walls are in view based on facing angle + FOV
-  const halfFov = fovDeg / 2;
-  const visibleWalls = [];
-  const cardinals = [["North wall",0],["East wall",90],["South wall",180],["West wall",270]];
-  for (const [wallName, wallAngle] of cardinals) {
-    let diff = Math.abs(((wallAngle - angleDeg) % 360 + 360) % 360);
-    if (diff > 180) diff = 360 - diff;
-    if (diff <= halfFov + 45) visibleWalls.push(wallName);
-  }
-  const cameraViewText = [
-    `CRITICAL CAMERA CONSTRAINTS — MUST BE FOLLOWED EXACTLY:`,
-    `  • Camera is at position X:${cam.xM != null ? cam.xM : 0}m, Y:${cam.yM != null ? cam.yM : 0}m in the room, facing ${compassFacing} (${angleDeg}°).`,
-    `  • Field of View: ${fovDeg}°. Only what falls within this cone from the camera position is visible.`,
-    `  • Walls visible in this shot: ${visibleWalls.join(", ")}. These walls MUST appear as solid boundaries in the render.`,
-    `  • DO NOT omit walls that are in the camera's view — every visible wall must be rendered with its correct surface.`,
-    `  • Door and window openings on visible walls MUST be faithfully rendered — do NOT block or fill them with furniture.`,
-    `  • Maintain correct one-point or two-point perspective for this camera direction. Vanishing points must match ${compassFacing}-facing view.`,
-    `  • Furniture must sit on the floor, against the correct walls, with proper clearance gaps between pieces and walls.`,
-  ].join("\n");
+  // Generate camera annotation for the render step as well
+  const renderCamAnnotationBase64 = createCameraAnnotationPng(
+    roomCtx.widthM || 5, roomCtx.lengthM || 5,
+    cam.xM || 0, cam.yM || 0, cam.angleDeg || 0, cam.fovDeg || 60
+  );
 
-  const renderPrompt = [
-    "Photorealistic architectural interior render.",
-    cameraViewText,
-    roomDimsText,
-    wallLines ? `WALL LAYOUT: ${wallLines}. These walls, doors, and windows ARE REAL — render them faithfully.` : "",
-    `FURNITURE TO PLACE (must fit within room; respect clearances between pieces and walls):\n${furnitureStr}`,
-    emptyRoomBase64
-      ? "Maintain the EXACT architectural geometry, perspective, lighting, wall positions, and camera angle of the provided empty room photo. Do not alter any architectural element."
-      : `Room type: ${roomCtx.roomType || 'residential'}. Generate a realistic perspective view from the specified camera angle.`,
-    roomCtx.archNotes ? `Architectural notes: ${roomCtx.archNotes}` : "",
-    body.brief ? `Design Brief: ${body.brief}` : "Apply a modern, clean Indian residential style.",
-    styleGuidance ? `STYLE — apply this throughout (materials, colours, mood):\n${styleGuidance}` : "",
-  ].filter(Boolean).join("\n");
+  // Build additional reference images: annotated floor plan + camera diagram
+  const renderAdditionalImages = [];
+  if (floorPlanBase64) {
+    const fpRaw = floorPlanBase64.includes("base64,") ? floorPlanBase64.split("base64,")[1] : floorPlanBase64;
+    renderAdditionalImages.push({ base64: fpRaw, mimeType: "image/png", name: "floor_plan.png" });
+  }
+  renderAdditionalImages.push({ base64: renderCamAnnotationBase64, mimeType: "image/png", name: "camera_fov_diagram.png" });
+
+  let renderPrompt;
+
+  if (emptyRoomBase64) {
+    // ── IMAGE-TO-IMAGE: preserve structure exactly, apply style + add furniture ──
+    renderPrompt = [
+      "INTERIOR DESIGN RENDER — you are editing the REFERENCE PHOTOGRAPH provided as the first image.",
+      "═══ CRITICAL SPATIAL INTEGRITY RULES — MUST NOT CHANGE ═══",
+      "• Every wall surface visible in the photo: exact same position, shape, and perspective — DO NOT move, warp, or replace any wall",
+      "• All architectural elements: every door (exact position, size, swing direction), every window (exact position, size, mullion pattern) — UNCHANGED",
+      "• Camera viewpoint: identical perspective angle, focal length, vanishing points, horizon line, and spatial distortion as the reference photo — DO NOT re-angle or zoom",
+      "• Ceiling height and room proportions: UNCHANGED — do not raise, lower, or stretch the space",
+      "• Floor plane: same perspective, same level — furniture must sit on THIS floor, not a redrawn one",
+      "═══ PERMITTED CHANGES — apply style to surfaces ═══",
+      "• Wall paint / finish: update colour and texture to match the style guide",
+      "• Floor finish: replace with style-appropriate material (tile, wood, stone)",
+      "• Ceiling finish and cove/recessed lighting: update per style",
+      "• Lighting mood: warm or cool as directed",
+      "═══ PRIMARY TASK — place furniture ═══",
+      "Place every furniture item listed below into the room photograph. Requirements:",
+      "- Each piece must sit flush on the EXISTING floor plane with correct perspective foreshortening from the reference camera angle",
+      "- Scale each item accurately against the room dimensions stated below",
+      "- Cast realistic shadows from the existing light sources",
+      "- No floating, no clipping into walls, no blocking exit doors",
+      roomDimsText,
+      wallLines ? `ARCHITECTURE: ${wallLines}. Never block doors or interrupt window light paths.` : "",
+      `FURNITURE:\n${furnitureStr}`,
+      body.brief ? `DESIGN BRIEF: ${body.brief}` : "",
+      styleGuidance
+        ? ["STYLE GUIDE — apply to all surfaces AND furniture:", styleGuidance].join("\n")
+        : "",
+      `CAMERA REFERENCE: ${cameraPositionText}`,
+      floorPlanBase64
+        ? "Additional reference images provided: floor plan and camera FOV diagram. Use these only to verify spatial relationships — do NOT alter the photographic viewpoint."
+        : "A camera FOV diagram is provided as a reference image. Use it only to verify spatial relationships — do NOT alter the photographic viewpoint."
+    ].filter(Boolean).join("\n");
+  } else {
+    // ── TEXT-TO-IMAGE: generate full room render ──────────────────────────────
+    renderPrompt = [
+      "Photorealistic interior design photograph, professional architectural photography quality, shot on full-frame camera.",
+      roomDimsText,
+      wallLines ? `ROOM LAYOUT — walls: ${wallLines}. Do NOT block doors or windows with furniture.` : "",
+      `ROOM TYPE: ${roomCtx.roomType || 'residential living space'}`,
+      roomCtx.archNotes ? `ARCHITECTURAL NOTES: ${roomCtx.archNotes}` : "",
+      `FURNITURE (place all items; respect room scale and ensure natural circulation paths):\n${furnitureStr}`,
+      body.brief ? `DESIGN BRIEF: ${body.brief}` : "Modern Indian residential interior, warm and liveable.",
+      styleGuidance
+        ? [
+          "COMPREHENSIVE STYLE GUIDE — apply every detail below faithfully:",
+          styleGuidance,
+          "Match colors, materials, finishes, lighting mood, and decorative elements from the style guide exactly."
+        ].join("\n")
+        : "",
+      `CAMERA: ${cameraPositionText}`,
+      "The floor plan image and camera diagram show the viewing position. Compose the shot from the exact camera pin location and angle indicated."
+    ].filter(Boolean).join("\n");
+  }
+
+  console.log(`[OpenAI] furnishRoom STEP3 → render model=${body.renderModel || "gpt-image-1.5"} mode=${emptyRoomBase64 ? "image-edit" : "text-to-image"} promptLen=${renderPrompt.length}`);
 
   const renderResult = await renderWithOpenAi({
     model: body.renderModel || "gpt-image-1.5",
     prompt: renderPrompt,
     imageBase64: emptyRoomBase64,
-    mimeType: mimeType
+    mimeType: mimeType,
+    additionalImages: emptyRoomBase64 ? renderAdditionalImages : []
   });
 
   if (renderResult._debug) _debug.push(...renderResult._debug);
+  console.log(`[OpenAI] furnishRoom STEP3 ✓ render complete`);
 
-  return { 
+  return {
     dataUrl: renderResult.dataUrl,
     furnitureList: placements,
     _debug
@@ -372,7 +458,7 @@ async function analyzeFloorPlanWithOpenAi(body) {
     "Context provided by user:",
     `- Property Type: ${body.context?.propertyType || "unspecified"}`,
     `- Configuration/Space Type: ${body.context?.bhk || "unspecified"}`,
-    `- Total Area: ${body.context?.totalAreaM2 ? body.context.totalAreaM2 + " sqm" : "unspecified"}`,
+    `- Total Area: ${body.context?.totalAreaM2 ? m2ToSqft(body.context.totalAreaM2) + " sqft" : "unspecified"}`,
     `- Additional Notes/Brief: ${body.context?.notes || "none"}`,
     "CRITICAL: Pay close attention to the Additional Notes/Brief as it contains literal descriptions of the rooms from the user.",
     "",
@@ -1376,6 +1462,145 @@ async function generateStructuralBoqWithOpenAi(body) {
     globalBoq,
     _debug: [{ step: "Structural BOQ Generation", payload, response: parsed }]
   };
+}
+
+function mToFtIn(m) {
+  const totalInches = (parseFloat(m) || 0) * 39.3701;
+  const feet = Math.floor(totalInches / 12);
+  const inches = Math.round(totalInches % 12);
+  if (inches >= 12) return `${feet + 1}'-0"`;
+  return `${feet}'-${inches}"`;
+}
+
+function m2ToSqft(m2) {
+  return `${Math.round((parseFloat(m2) || 0) * 10.764)} sqft`;
+}
+
+// ─── Minimal pure-JS PNG encoder (no native dependencies) ────────────────────
+const _CRC32_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c;
+  }
+  return t;
+})();
+
+function _crc32(buf) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) crc = _CRC32_TABLE[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function _u32be(n) { return [(n >>> 24) & 0xFF, (n >>> 16) & 0xFF, (n >>> 8) & 0xFF, n & 0xFF]; }
+
+function _makePngChunk(type, data) {
+  const tb = Buffer.from(type, "ascii");
+  const crcSrc = Buffer.concat([tb, data]);
+  return Buffer.concat([Buffer.from(_u32be(data.length)), tb, data, Buffer.from(_u32be(_crc32(crcSrc)))]);
+}
+
+function _encodePng(pixels, w, h) {
+  const PNG_SIG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = _makePngChunk("IHDR", Buffer.from([..._u32be(w), ..._u32be(h), 8, 6, 0, 0, 0]));
+  const scanlines = Buffer.alloc(h * (1 + w * 4));
+  for (let y = 0; y < h; y++) {
+    const row = y * (1 + w * 4);
+    scanlines[row] = 0;
+    pixels.copy(scanlines, row + 1, y * w * 4, (y + 1) * w * 4);
+  }
+  const idat = _makePngChunk("IDAT", zlib.deflateSync(scanlines, { level: 1 }));
+  const iend = _makePngChunk("IEND", Buffer.alloc(0));
+  return Buffer.concat([PNG_SIG, ihdr, idat, iend]);
+}
+
+/**
+ * Create a bird's-eye camera-position diagram as a base64 PNG.
+ * Shows room boundary, camera dot (red), and FOV cone (blue).
+ */
+function createCameraAnnotationPng(roomWidthM, roomLengthM, camXM, camYM, angleDeg, fovDeg) {
+  const W = 220, H = 220;
+  const pix = Buffer.alloc(W * H * 4, 255); // white, opaque
+
+  function sp(x, y, r, g, b) {
+    x = Math.round(x); y = Math.round(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    const i = (y * W + x) * 4;
+    pix[i] = r; pix[i + 1] = g; pix[i + 2] = b; pix[i + 3] = 255;
+  }
+
+  function line(x0, y0, x1, y1, r, g, b, thickness = 1) {
+    x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+    const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    for (let i = 0; i < 1000; i++) {
+      for (let t = -Math.floor(thickness / 2); t <= Math.floor(thickness / 2); t++) {
+        if (dx > dy) sp(x0, y0 + t, r, g, b); else sp(x0 + t, y0, r, g, b);
+      }
+      sp(x0, y0, r, g, b);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x0 += sx; }
+      if (e2 < dx) { err += dx; y0 += sy; }
+    }
+  }
+
+  function fillRect(x0, y0, x1, y1, r, g, b) {
+    for (let y = Math.max(0, y0); y <= Math.min(H - 1, y1); y++)
+      for (let x = Math.max(0, x0); x <= Math.min(W - 1, x1); x++)
+        sp(x, y, r, g, b);
+  }
+
+  function fillCircle(cx, cy, radius, r, g, b) {
+    for (let dy = -radius; dy <= radius; dy++)
+      for (let dx = -radius; dx <= radius; dx++)
+        if (dx * dx + dy * dy <= radius * radius) sp(cx + dx, cy + dy, r, g, b);
+  }
+
+  const pad = 20;
+  const rw = W - pad * 2;
+  const rh = H - pad * 2;
+
+  fillRect(pad, pad, pad + rw, pad + rh, 240, 240, 240);
+
+  for (let t = 0; t < 2; t++) {
+    for (let x = pad - t; x <= pad + rw + t; x++) { sp(x, pad - t, 80, 80, 80); sp(x, pad + rh + t, 80, 80, 80); }
+    for (let y = pad - t; y <= pad + rh + t; y++) { sp(pad - t, y, 80, 80, 80); sp(pad + rw + t, y, 80, 80, 80); }
+  }
+
+  const fracX = roomWidthM ? Math.min(Math.max(camXM / roomWidthM, 0.05), 0.95) : 0.5;
+  const fracY = roomLengthM ? Math.min(Math.max(camYM / roomLengthM, 0.05), 0.95) : 0.5;
+  const cx = Math.round(pad + fracX * rw);
+  const cy = Math.round(pad + fracY * rh);
+
+  const coneLen = Math.min(rw, rh) * 0.45;
+  const halfFov = ((fovDeg || 60) / 2) * Math.PI / 180;
+  const baseAngle = ((angleDeg || 0) - 90) * Math.PI / 180;
+  const la = baseAngle - halfFov;
+  const ra = baseAngle + halfFov;
+  const ex1 = cx + Math.cos(la) * coneLen;
+  const ey1 = cy + Math.sin(la) * coneLen;
+  const ex2 = cx + Math.cos(ra) * coneLen;
+  const ey2 = cy + Math.sin(ra) * coneLen;
+
+  const steps = 30;
+  for (let s = 0; s <= steps; s++) {
+    const a = la + (ra - la) * (s / steps);
+    for (let d = 0; d <= coneLen; d += 1.5) {
+      sp(Math.round(cx + Math.cos(a) * d), Math.round(cy + Math.sin(a) * d), 180, 210, 240);
+    }
+  }
+
+  line(cx, cy, ex1, ey1, 0, 80, 180, 2);
+  line(cx, cy, ex2, ey2, 0, 80, 180, 2);
+  line(ex1, ey1, ex2, ey2, 0, 80, 180, 1);
+
+  fillCircle(cx, cy, 7, 210, 30, 30);
+  fillCircle(cx, cy, 4, 255, 80, 80);
+
+  return _encodePng(pix, W, H).toString("base64");
 }
 
 function httpError(statusCode, message) {
