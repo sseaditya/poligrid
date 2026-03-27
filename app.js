@@ -1217,7 +1217,8 @@ function init() {
     dom.canvasWrap.hidden = true;
     dom.canvasPlaceholder.hidden = false;
     if (roomEditor) roomEditor.setRooms([], 0, 0);
-    if (planner) { planner.furniturePlacements = []; planner.render?.(); }
+    if (planner) { planner.furniturePlacements = []; planner.cameraPins = []; planner.detectedRooms = []; planner.render?.(); }
+    planner = null;
     const bgCtx = dom.floorBgCanvas?.getContext("2d");
     if (bgCtx) bgCtx.clearRect(0, 0, dom.floorBgCanvas.width, dom.floorBgCanvas.height);
 
