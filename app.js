@@ -363,6 +363,7 @@ let roomEditor = null;
 let activePinId = null;
 let latestArtifacts = null;
 let _editBoqData = []; // Working copy of BOQ being edited in the edit panel
+let _pinSaveTimer = null; // Debounce timer for angle-drag saves
 let _inspirationDataUrls = [];
 
 const appState = {
@@ -1542,6 +1543,9 @@ function onSceneChange(state) {
   refreshPinsList();
   const hasPins = state.cameraPins && state.cameraPins.length > 0;
   dom.generateBtn.disabled = !hasPins;
+  // Debounce-save all pins so angle drags (and position drags) are persisted
+  clearTimeout(_pinSaveTimer);
+  _pinSaveTimer = setTimeout(saveAllPins, 800);
   dom.downloadScene.disabled = false;
   
   if (state.selected?.type === "furniture") {
@@ -1718,6 +1722,23 @@ function openPinPopover(pin) {
   dom.pinPopover.hidden = false;
 }
 
+function saveAllPins() {
+  if (!planner || !appState.projectId) return;
+  for (const pin of planner.cameraPins) {
+    saveToDb("/api/project/save-pin", {
+      projectId: appState.projectId,
+      pin: {
+        clientId: pin.id,
+        xM: pin.xM, yM: pin.yM,
+        angleDeg: pin.angleDeg, fovDeg: pin.fovDeg,
+        roomLabel: pin.roomLabel, brief: pin.brief,
+        existingPhotoPath: pin.existingPhotoPath || null
+        // No photoDataUrl — server will preserve existing photo_storage_path
+      }
+    });
+  }
+}
+
 function onPinPhotoUpload() {
   if (!activePinId || !planner) return;
   const file = dom.pinPhotoInput.files?.[0];
@@ -1729,21 +1750,27 @@ function onPinPhotoUpload() {
     dom.pinPhotoPreview.innerHTML = `<img src="${e.target.result}" alt="Pin photo"/>`;
     refreshPinsList();
 
-    // Persist pin with photo to Supabase
+    // Persist pin with photo to Supabase and capture the stored path
     const pin = planner.cameraPins?.find(p => p.id === activePinId);
     if (pin) {
-      saveToDb("/api/project/save-pin", {
-        projectId: appState.projectId,
-        pin: {
-          clientId: pin.id,
-          xM: pin.xM, yM: pin.yM,
-          angleDeg: pin.angleDeg, fovDeg: pin.fovDeg,
-          roomLabel: pin.roomLabel, brief: pin.brief,
-          photoDataUrl: e.target.result,
-          photoMimeType: file.type || "image/jpeg",
-          photoFileName: file.name
-        }
-      });
+      fetch("/api/project/save-pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: appState.projectId,
+          pin: {
+            clientId: pin.id,
+            xM: pin.xM, yM: pin.yM,
+            angleDeg: pin.angleDeg, fovDeg: pin.fovDeg,
+            roomLabel: pin.roomLabel, brief: pin.brief,
+            photoDataUrl: e.target.result,
+            photoMimeType: file.type || "image/jpeg",
+            photoFileName: file.name
+          }
+        })
+      }).then(r => r.json()).then(data => {
+        if (data.photoStoragePath && pin) pin.existingPhotoPath = data.photoStoragePath;
+      }).catch(() => {});
     }
   };
   reader.readAsDataURL(file);
@@ -1771,7 +1798,8 @@ function onPinFieldChange() {
         roomLabel: pin.roomLabel, brief: pin.brief,
         photoDataUrl: pin.photoDataUrl || null,
         photoMimeType: pin.photoFile?.type || null,
-        photoFileName: pin.photoFile?.name || null
+        photoFileName: pin.photoFile?.name || null,
+        existingPhotoPath: pin.existingPhotoPath || null
       }
     });
   }
@@ -2881,7 +2909,8 @@ async function loadProject(id) {
         roomLabel: p.room_label || "",
         brief: p.brief || "",
         photoFile: null,
-        photoDataUrl: null
+        photoDataUrl: null,
+        existingPhotoPath: p.photo_storage_path || null
       }));
 
       // Load pin photos in background (for editing; render display uses photo_url from DB)

@@ -1984,7 +1984,7 @@ async function projectSavePin(body) {
     );
   }
 
-  await db.upsertPin(projectId, {
+  const pinRow = {
     project_id: projectId,
     client_id: pin.clientId,
     x_m: pin.xM,
@@ -1994,10 +1994,14 @@ async function projectSavePin(body) {
     room_label: pin.roomLabel,
     brief: pin.brief,
     photo_file_name: pin.photoFileName || null,
-    photo_storage_path: photoStoragePath || pin.existingPhotoPath || null
-  });
+  };
+  const resolvedPath = photoStoragePath || pin.existingPhotoPath || null;
+  if (resolvedPath !== null) {
+    pinRow.photo_storage_path = resolvedPath;
+  }
+  await db.upsertPin(projectId, pinRow);
 
-  return { ok: true };
+  return { ok: true, photoStoragePath: resolvedPath };
 }
 
 async function projectSaveRender(body) {
