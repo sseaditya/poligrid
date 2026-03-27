@@ -339,6 +339,7 @@ const dom = {
   placementSummary: el("placementSummary"),
   downloadScene: el("downloadScene"),
   downloadBoq: el("downloadBoq"),
+  downloadDeck: el("downloadDeckBtn"),
   // Version UI
   versionTabsBar: el("versionTabsBar"),
   versionTabs: el("versionTabs"),
@@ -526,6 +527,7 @@ function showVersion(version) {
   drawBoq(combinedBoq);
   if (combinedBoq.length > 0) {
     dom.downloadBoq.disabled = false;
+    if (dom.downloadDeck) dom.downloadDeck.disabled = false;
     latestArtifacts = buildArtifacts(planner?.getSceneState() || {}, combinedBoq);
     dom.downloadScene.disabled = false;
   }
@@ -1112,6 +1114,25 @@ function init() {
   });
   dom.downloadBoq.addEventListener("click", () => {
     if (latestArtifacts) downloadText("boq.csv", latestArtifacts.boq.csv, "text/csv");
+  });
+
+  dom.downloadDeck?.addEventListener("click", async () => {
+    if (!window.DeckGenerator) return;
+    try {
+      await window.DeckGenerator.generate({
+        appState,
+        allVersions: _allVersions,
+        activeCameraPins: _activeCameraPins,
+        projectBoqItems: _projectBoqItems,
+        projectName: el("projectNameInput")?.value?.trim() || "Interior Design Proposal",
+      });
+    } catch (e) {
+      console.error("[Deck] Generation failed:", e);
+      const msg = document.getElementById("deckProgressMsg");
+      if (msg) { msg.textContent = "PDF failed: " + e.message; setTimeout(() => { msg.textContent = ""; }, 6000); }
+      const btn = document.getElementById("downloadDeckBtn");
+      if (btn) btn.disabled = false;
+    }
   });
 
   // Debug panel — toggle collapse, clear, download
@@ -1851,12 +1872,6 @@ async function onGenerate() {
     const inspirationDataUrls = await getInspirationDataUrls();
     _inspirationDataUrls = inspirationDataUrls;
 
-    // Extract inspiration style guidance ONCE for all rooms
-    dom.statusBox.textContent = "Analysing inspiration style…";
-    console.log(`[Poligrid] extractInspirationStyle → POST /api/inspire/extract-furnish-style (${inspirationDataUrls.length} images)`);
-    const precomputedStyleGuidance = await extractInspirationStyle(inspirationDataUrls);
-    console.log(`[Poligrid] extractInspirationStyle ✓ ${precomputedStyleGuidance.length} chars`);
-
     // Create a new project version before generation starts
     dom.statusBox.textContent = "Creating design version…";
     appState.currentVersionId = null;
@@ -1885,6 +1900,12 @@ async function onGenerate() {
 
     showResultsView();
     dom.roomResults.innerHTML = "";
+
+    // Extract inspiration style AFTER results panel opens so it's visible in the logger
+    dom.statusBox.textContent = "Analysing inspiration style…";
+    console.log(`[Poligrid] extractInspirationStyle → POST /api/inspire/extract-furnish-style (${inspirationDataUrls.length} images)`);
+    const precomputedStyleGuidance = await extractInspirationStyle(inspirationDataUrls);
+    console.log(`[Poligrid] extractInspirationStyle ✓ ${precomputedStyleGuidance.length} chars`);
 
     const roomGroups = {};
     for (const src of renderSources) {
@@ -1942,6 +1963,7 @@ async function onGenerate() {
     latestArtifacts = buildArtifacts(planner?.getSceneState() || {}, finalBoq);
     dom.downloadScene.disabled = false;
     dom.downloadBoq.disabled = false;
+    if (dom.downloadDeck) dom.downloadDeck.disabled = false;
     dom.generateStatus.textContent = "✓ Generation complete";
     dom.statusBox.textContent = "";
 

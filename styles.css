@@ -366,6 +366,8 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 }
 .pin-popover-head > span { flex: 1; }
 .pin-popover-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.pin-popover .field-label input, .pin-popover .field-label textarea, .pin-popover .field-label select { color: #e0e0f0; background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.12); }
+.pin-popover .field-label { color: rgba(255,255,255,0.5); }
 .pin-photo-preview { border-radius: 8px; overflow: hidden; }
 .pin-photo-preview img { width: 100%; height: 130px; object-fit: cover; display: block; }
 
@@ -807,7 +809,11 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
   font-family: var(--font-serif); font-size: 20px;
   color: var(--accent); letter-spacing: -0.3px;
 }
-.results-header-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.results-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.deck-btn { border-color: var(--gold) !important; color: var(--gold) !important; font-weight: 600; }
+.deck-btn:hover:not(:disabled) { background: rgba(184,109,53,0.08) !important; border-color: var(--gold) !important; }
+.deck-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.deck-progress-msg { font-size: 11px; color: var(--text-dim); font-style: italic; max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .results-scroll {
   flex: 1; overflow-y: auto;

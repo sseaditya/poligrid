@@ -90,6 +90,12 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, result);
     }
 
+    if (req.method === "POST" && url.pathname === "/api/generate-text") {
+      const body = await readJson(req);
+      const result = await generateText(body);
+      return sendJson(res, 200, result);
+    }
+
     if (req.method === "GET" && url.pathname === "/api/project/list") {
       const result = await projectList();
       return sendJson(res, 200, result);
@@ -246,7 +252,7 @@ async function furnishRoomWithOpenAi(body) {
   const cam = body.cameraContext || {};
   const camXFt = mToFtIn(cam.xM || 0);
   const camYFt = mToFtIn(cam.yM || 0);
-  const cameraPositionText = `Camera is located at X:${camXFt}, Y:${camYFt} from room origin, facing ${cam.angleDeg || 0}° with a ${cam.fovDeg || 60}° Field of View. The camera diagram image shows the exact pin location and viewing cone on the floor plan.`;
+  const cameraPositionText = `Camera is located at X:${camXFt}, Y:${camYFt} from room origin, facing ${cam.angleDeg || 0}° with a ${cam.fovDeg || 60}° Field of View. The camera pin and FOV cone are already drawn on the floor plan image provided.`;
 
   if (!placements || placements.length === 0) {
     if (!emptyRoomBase64) {
@@ -266,8 +272,8 @@ async function furnishRoomWithOpenAi(body) {
       "You are a senior interior designer. Plan a COMPLETE furniture scheme for the entire room — not just what's visible in the photo.",
       `ROOM: ${roomCtxForPlan.roomType || 'residential'}, ${roomSizeText}`,
       roomCtxForPlan.archNotes ? `ARCHITECTURAL NOTES: ${roomCtxForPlan.archNotes}` : "",
-      `CAMERA REFERENCE (for spatial context only): pin at (${camXFt}, ${camYFt}), facing ${facingAngle}°, FOV ${fovDeg}° (viewing cone from ${leftEdge.toFixed(0)}° to ${rightEdge.toFixed(0)}°). The camera diagram image shows this pin on the floor plan. Use this to understand what the 3D photo shows, but plan furniture for the ENTIRE room — the list must cover everything, not just visible items.`,
-      floorPlanBase64 ? "The floor plan and camera diagram are provided — use them to understand all walls, zones, room boundaries, and the camera viewpoint." : "",
+      `CAMERA REFERENCE (for spatial context only): pin at (${camXFt}, ${camYFt}), facing ${facingAngle}°, FOV ${fovDeg}° (viewing cone from ${leftEdge.toFixed(0)}° to ${rightEdge.toFixed(0)}°). The camera pin and its FOV cone are drawn directly on the floor plan image. Use this to understand what the 3D photo shows, but plan furniture for the ENTIRE room — the list must cover everything, not just visible items.`,
+      floorPlanBase64 ? "The floor plan image is provided — it shows all walls, zones, room boundaries, and has the camera pin with FOV cone drawn on it." : "",
       body.brief ? `DESIGN BRIEF: "${body.brief}"` : "",
       styleGuidance
         ? [
@@ -287,12 +293,7 @@ async function furnishRoomWithOpenAi(body) {
       "Return NOTHING but valid JSON."
     ].filter(Boolean).join("\n");
 
-    // Generate camera annotation PNG (bird's-eye diagram showing pin + FOV cone)
-    const camAnnotationBase64 = createCameraAnnotationPng(
-      roomCtxForPlan.widthM || 5, roomCtxForPlan.lengthM || 5,
-      cam.xM || 0, cam.yM || 0, cam.angleDeg || 0, cam.fovDeg || 60
-    );
-
+    // Floor plan already has the camera pin + FOV cone drawn on it by the frontend (planner canvas composited in)
     const contentArray = [
       { type: "input_text", text: planningPrompt },
       { type: "input_image", image_url: emptyRoomBase64.startsWith("data:") ? emptyRoomBase64 : `data:${mimeType};base64,${emptyRoomBase64}` }
@@ -301,15 +302,9 @@ async function furnishRoomWithOpenAi(body) {
     if (floorPlanBase64) {
       contentArray.push({
         type: "input_image",
-        image_url: floorPlanBase64.startsWith("data:") ? floorPlanBase64 : `data:image/png;base64,${floorPlanBase64}`
+        image_url: floorPlanBase64.startsWith("data:") ? floorPlanBase64 : `data:image/jpeg;base64,${floorPlanBase64}`
       });
     }
-
-    // Always include camera FOV diagram so AI knows exactly where the camera looks from
-    contentArray.push({
-      type: "input_image",
-      image_url: `data:image/png;base64,${camAnnotationBase64}`
-    });
 
     // Include inspiration images in planning so AI picks style-matching furniture
     for (const inspBase64 of inspirationImages.slice(0, 2)) {
@@ -377,19 +372,12 @@ async function furnishRoomWithOpenAi(body) {
     }).join(' | ')
     : '';
 
-  // Generate camera annotation for the render step as well
-  const renderCamAnnotationBase64 = createCameraAnnotationPng(
-    roomCtx.widthM || 5, roomCtx.lengthM || 5,
-    cam.xM || 0, cam.yM || 0, cam.angleDeg || 0, cam.fovDeg || 60
-  );
-
-  // Build additional reference images: annotated floor plan + camera diagram
+  // Floor plan already has camera pin + FOV cone composited by the frontend — send it as the single reference
   const renderAdditionalImages = [];
   if (floorPlanBase64) {
     const fpRaw = floorPlanBase64.includes("base64,") ? floorPlanBase64.split("base64,")[1] : floorPlanBase64;
-    renderAdditionalImages.push({ base64: fpRaw, mimeType: "image/png", name: "floor_plan.png" });
+    renderAdditionalImages.push({ base64: fpRaw, mimeType: "image/jpeg", name: "floor_plan_with_camera.jpg" });
   }
-  renderAdditionalImages.push({ base64: renderCamAnnotationBase64, mimeType: "image/png", name: "camera_fov_diagram.png" });
 
   let renderPrompt;
 
@@ -423,8 +411,8 @@ async function furnishRoomWithOpenAi(body) {
         : "",
       `CAMERA REFERENCE: ${cameraPositionText}`,
       floorPlanBase64
-        ? "Additional reference images provided: floor plan and camera FOV diagram. Use these only to verify spatial relationships — do NOT alter the photographic viewpoint."
-        : "A camera FOV diagram is provided as a reference image. Use it only to verify spatial relationships — do NOT alter the photographic viewpoint."
+        ? "The floor plan image provided shows the camera pin and FOV cone — use it only to verify spatial relationships — do NOT alter the photographic viewpoint."
+        : ""
     ].filter(Boolean).join("\n");
   } else {
     // ── TEXT-TO-IMAGE: generate full room render ──────────────────────────────
@@ -444,7 +432,9 @@ async function furnishRoomWithOpenAi(body) {
         ].join("\n")
         : "",
       `CAMERA: ${cameraPositionText}`,
-      "The floor plan image and camera diagram show the viewing position. Compose the shot from the exact camera pin location and angle indicated."
+      floorPlanBase64
+        ? "The floor plan image shows the camera pin and viewing cone — compose the shot from the exact pin location and angle indicated."
+        : ""
     ].filter(Boolean).join("\n");
   }
 
@@ -1242,8 +1232,8 @@ async function extractFurnishStyleGuidance(body) {
       _debug: [{ step: "Inspiration Style Extraction", payload: { model: visionModel, images: inspirationImages.length }, response: parsed }]
     };
   } catch (e) {
-    console.warn("[OpenAI] extractFurnishStyle ✗ failed:", e);
-    return { styleGuidance: "" };
+    console.warn("[OpenAI] extractFurnishStyle ✗ failed:", e.message);
+    return { styleGuidance: "", _debug: [{ step: "Inspiration Style Extraction", payload: {}, response: { error: { message: e.message } } }] };
   }
 }
 
@@ -1330,6 +1320,33 @@ async function extractStyleWithOpenAi(body) {
     model,
     style: json
   };
+}
+
+async function generateText(body) {
+  const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
+  const model   = DEFAULT_OPENAI_TEXT_MODEL;
+  const prompt  = String(body.prompt || "").trim();
+  const maxTok  = Math.min(parseInt(body.maxTokens) || 500, 1000);
+  if (!prompt) throw httpError(400, "Missing prompt for text generation.");
+
+  const payload = {
+    model,
+    reasoning: { effort: "low" },
+    input: [{ role: "user", content: [{ type: "input_text", text: prompt }] }],
+    max_output_tokens: maxTok,
+  };
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const raw = await response.text();
+  if (!response.ok) throw httpError(response.status, extractApiError(raw));
+
+  const text = extractResponsesText(safeJson(raw));
+  console.log(`[OpenAI] generateText ✓ chars=${text.length}`);
+  return { text };
 }
 
 function resolveApiKey(override, envValue, envName) {

@@ -262,6 +262,8 @@
         <div class="results-header-actions">
           <button id="downloadScene" class="ghost-sm" disabled>↓ Scene JSON</button>
           <button id="downloadBoq"   class="ghost-sm" disabled>↓ BOQ CSV</button>
+          <button id="downloadDeckBtn" class="ghost-sm deck-btn" disabled>✦ Client Deck PDF</button>
+          <span id="deckProgressMsg" class="deck-progress-msg"></span>
         </div>
       </header>
 
@@ -351,6 +353,7 @@
     <script src="analysis.js"></script>
     <script src="room-editor.js"></script>
     <script src="planner-canvas.js"></script>
+    <script src="deck-generator.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
