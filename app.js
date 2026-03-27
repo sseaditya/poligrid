@@ -362,6 +362,7 @@ let _projectBoqItems = [];    // Project-level floor plan BOQ items (shared acro
 let roomEditor = null;
 let activePinId = null;
 let latestArtifacts = null;
+let _editBoqData = []; // Working copy of BOQ being edited in the edit panel
 let _inspirationDataUrls = [];
 
 const appState = {
@@ -999,6 +1000,7 @@ const Debugger = {
 };
 
 init();
+initBoqEditPanel();
 
 function init() {
   // Phase 1 bindings
@@ -1116,23 +1118,9 @@ function init() {
     if (latestArtifacts) downloadText("boq.csv", latestArtifacts.boq.csv, "text/csv");
   });
 
-  dom.downloadDeck?.addEventListener("click", async () => {
+  dom.downloadDeck?.addEventListener("click", () => {
     if (!window.DeckGenerator) return;
-    try {
-      await window.DeckGenerator.generate({
-        appState,
-        allVersions: _allVersions,
-        activeCameraPins: _activeCameraPins,
-        projectBoqItems: _projectBoqItems,
-        projectName: el("projectNameInput")?.value?.trim() || "Interior Design Proposal",
-      });
-    } catch (e) {
-      console.error("[Deck] Generation failed:", e);
-      const msg = document.getElementById("deckProgressMsg");
-      if (msg) { msg.textContent = "PDF failed: " + e.message; setTimeout(() => { msg.textContent = ""; }, 6000); }
-      const btn = document.getElementById("downloadDeckBtn");
-      if (btn) btn.disabled = false;
-    }
+    openBoqEditPanel();
   });
 
   // Debug panel — toggle collapse, clear, download
@@ -2295,6 +2283,181 @@ function drawRoomResult(result) {
     } else {
       card.appendChild(compareWrap);
     }
+  });
+}
+
+// ─── BOQ Edit Panel ────────────────────────────────────────────────────────────
+
+function openBoqEditPanel() {
+  // Build working copy, tagging each item with its origin so we can split on save
+  const latestVer = _allVersions[_allVersions.length - 1] || {};
+  _editBoqData = [
+    ..._projectBoqItems.map(it => ({ ...it, _origin: "project" })),
+    ...(latestVer.boqItems || []).map(it => ({ ...it, _origin: "version" }))
+  ];
+
+  // Populate project name field
+  const nameInput = el("boqEditProjectName");
+  if (nameInput) nameInput.value = el("projectNameInput")?.value?.trim() || "Interior Design Proposal";
+
+  renderEditTable();
+  el("boqEditOverlay").hidden = false;
+}
+
+function closeBoqEditPanel() {
+  el("boqEditOverlay").hidden = true;
+  _editBoqData = [];
+}
+
+function renderEditTable() {
+  const tbody = el("boqEditBody");
+  tbody.innerHTML = "";
+  for (let i = 0; i < _editBoqData.length; i++) {
+    tbody.appendChild(buildEditRow(i));
+  }
+  recalcEditTotal();
+}
+
+function buildEditRow(i) {
+  const it = _editBoqData[i];
+  const tr = document.createElement("tr");
+  tr.dataset.idx = i;
+
+  const fields = [
+    { key: "category", type: "text",   width: "130px" },
+    { key: "item",     type: "text",   width: "auto"  },
+    { key: "qty",      type: "number", width: "60px"  },
+    { key: "unit",     type: "text",   width: "60px"  },
+    { key: "rate",     type: "number", width: "80px"  },
+  ];
+
+  for (const f of fields) {
+    const td = document.createElement("td");
+    const inp = document.createElement("input");
+    inp.type = f.type;
+    inp.className = "boq-edit-cell";
+    inp.value = it[f.key] ?? "";
+    if (f.width !== "auto") inp.style.width = f.width;
+    if (f.type === "number") { inp.min = "0"; inp.step = "any"; }
+    inp.addEventListener("input", () => {
+      _editBoqData[i][f.key] = f.type === "number" ? parseFloat(inp.value) || 0 : inp.value;
+      if (f.key === "qty" || f.key === "rate") {
+        _editBoqData[i].amount = (_editBoqData[i].qty || 0) * (_editBoqData[i].rate || 0);
+        // Refresh amount cell in same row
+        const amtCell = tr.querySelector(".amount-cell");
+        if (amtCell) amtCell.value = _editBoqData[i].amount.toLocaleString("en-IN");
+        recalcEditTotal();
+      }
+    });
+    td.appendChild(inp);
+    tr.appendChild(td);
+  }
+
+  // Amount (read-only)
+  const amtTd = document.createElement("td");
+  const amtInp = document.createElement("input");
+  amtInp.type = "text";
+  amtInp.className = "boq-edit-cell amount-cell";
+  amtInp.readOnly = true;
+  amtInp.style.width = "90px";
+  amtInp.value = (parseFloat(it.amount) || 0).toLocaleString("en-IN");
+  amtTd.appendChild(amtInp);
+  tr.appendChild(amtTd);
+
+  // Delete button
+  const delTd = document.createElement("td");
+  const delBtn = document.createElement("button");
+  delBtn.className = "boq-edit-del-btn";
+  delBtn.title = "Remove row";
+  delBtn.textContent = "×";
+  delBtn.addEventListener("click", () => {
+    _editBoqData.splice(i, 1);
+    renderEditTable();
+  });
+  delTd.appendChild(delBtn);
+  tr.appendChild(delTd);
+
+  return tr;
+}
+
+function recalcEditTotal() {
+  const total = _editBoqData.reduce((s, it) => s + (parseFloat(it.amount) || 0), 0);
+  const totalEl = el("boqEditGrandTotal");
+  if (totalEl) totalEl.textContent = "₹" + total.toLocaleString("en-IN");
+}
+
+async function generatePdfFromEditor() {
+  const saveToDb = el("boqEditSaveToDb")?.checked;
+  const projectName = el("boqEditProjectName")?.value?.trim() || el("projectNameInput")?.value?.trim() || "Interior Design Proposal";
+
+  // Recalculate amounts to be safe
+  const finalBoq = _editBoqData.map(it => ({
+    ...it,
+    amount: (parseFloat(it.qty) || 0) * (parseFloat(it.rate) || 0)
+  }));
+
+  if (saveToDb) {
+    const latestVer = _allVersions[_allVersions.length - 1] || {};
+    const projectItems = finalBoq.filter(it => it._origin === "project").map(({ _origin, ...rest }) => rest);
+    const versionItems = finalBoq.filter(it => it._origin !== "project").map(({ _origin, ...rest }) => rest);
+    try {
+      await fetch("/api/project/update-boq", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: appState.projectId,
+          versionId: latestVer.id || null,
+          projectItems,
+          versionItems
+        })
+      });
+      // Sync in-memory state
+      _projectBoqItems = projectItems;
+      if (latestVer.boqItems !== undefined) latestVer.boqItems = versionItems;
+      appState.globalBoq = projectItems;
+      const combinedBoq = [...projectItems, ...versionItems];
+      drawBoq(combinedBoq);
+      latestArtifacts = buildArtifacts(planner?.getSceneState() || {}, combinedBoq);
+    } catch (e) {
+      console.error("[BOQ Edit] Save to DB failed:", e);
+    }
+  }
+
+  closeBoqEditPanel();
+
+  if (!window.DeckGenerator) return;
+  const btn = el("downloadDeckBtn");
+  const msg = el("deckProgressMsg");
+  try {
+    if (btn) btn.disabled = true;
+    const overrideBoq = finalBoq.map(({ _origin, ...rest }) => rest);
+    await window.DeckGenerator.generate({
+      appState,
+      allVersions: _allVersions,
+      activeCameraPins: _activeCameraPins,
+      projectBoqItems: _projectBoqItems,
+      projectName,
+      overrideBoq,
+    });
+  } catch (e) {
+    console.error("[Deck] Generation failed:", e);
+    if (msg) { msg.textContent = "PDF failed: " + e.message; setTimeout(() => { msg.textContent = ""; }, 6000); }
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Wire up edit panel buttons (called once DOM is ready)
+function initBoqEditPanel() {
+  el("boqEditClose")?.addEventListener("click", closeBoqEditPanel);
+  el("boqEditCancel")?.addEventListener("click", closeBoqEditPanel);
+  el("boqEditGenerate")?.addEventListener("click", generatePdfFromEditor);
+  el("boqEditAddRow")?.addEventListener("click", () => {
+    _editBoqData.push({ category: "", item: "", qty: 1, unit: "LS", rate: 0, amount: 0, _origin: "version" });
+    renderEditTable();
+  });
+  // Close on backdrop click
+  el("boqEditOverlay")?.addEventListener("click", e => {
+    if (e.target === el("boqEditOverlay")) closeBoqEditPanel();
   });
 }
 

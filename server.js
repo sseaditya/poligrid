@@ -1729,6 +1729,7 @@ async function handleProjectAction(action, body) {
     case "save-render": return projectSaveRender(body);
     case "save-placements": return projectSavePlacements(body);
     case "save-boq": return projectSaveBoq(body);
+    case "update-boq": return projectUpdateBoq(body);
     case "save-scene": return projectSaveScene(body);
     case "rename": return projectRename(body);
     case "save-brief": return projectSaveBrief(body);
@@ -2092,6 +2093,53 @@ async function projectSaveBoq(body) {
       amount: b.amount
     }))
   );
+
+  return { ok: true };
+}
+
+async function projectUpdateBoq(body) {
+  const { projectId, versionId, projectItems, versionItems } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+  const sb = db.getClient();
+
+  // Replace project-level (floor plan) BOQ items
+  if (Array.isArray(projectItems)) {
+    await db.replaceRows(
+      "boq_items",
+      { project_id: projectId, source: "floor_plan_analysis" },
+      projectItems.map(b => ({
+        project_id: projectId,
+        source: "floor_plan_analysis",
+        category: b.category,
+        item: b.item,
+        qty: b.qty,
+        unit: b.unit,
+        rate: b.rate,
+        amount: b.amount
+      }))
+    );
+  }
+
+  // Replace version-level BOQ items
+  if (versionId && Array.isArray(versionItems)) {
+    const { error: delErr } = await sb.from("boq_items").delete().eq("version_id", versionId);
+    if (delErr) console.error("[DB] Delete version BOQ failed:", delErr.message);
+    if (versionItems.length) {
+      const rows = versionItems.map(b => ({
+        project_id: projectId,
+        version_id: versionId,
+        source: "furniture_generated",
+        category: b.category,
+        item: b.item,
+        qty: b.qty,
+        unit: b.unit,
+        rate: b.rate,
+        amount: b.amount
+      }));
+      const { error: insErr } = await sb.from("boq_items").insert(rows);
+      if (insErr) console.error("[DB] Insert updated version BOQ failed:", insErr.message);
+    }
+  }
 
   return { ok: true };
 }

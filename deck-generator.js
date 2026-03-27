@@ -233,7 +233,7 @@ Respond ONLY with valid JSON (no markdown fences): {"intro":"...","highlights":[
 
   window.DeckGenerator = {
 
-    async generate({ appState, allVersions, activeCameraPins, projectBoqItems, projectName }) {
+    async generate({ appState, allVersions, activeCameraPins, projectBoqItems, projectName, overrideBoq }) {
 
       // ── Load jsPDF on demand ───────────────────────────────────────────────
       if (!window.jspdf) {
@@ -257,7 +257,7 @@ Respond ONLY with valid JSON (no markdown fences): {"intro":"...","highlights":[
       // ── Gather data ────────────────────────────────────────────────────────
       const latestVer    = allVersions[allVersions.length - 1] || {};
       const renders      = latestVer.renders || [];
-      const boqItems     = [...(projectBoqItems || []), ...(latestVer.boqItems || [])];
+      const boqItems     = overrideBoq || [...(projectBoqItems || []), ...(latestVer.boqItems || [])];
       const rooms        = appState.confirmedRooms || appState.detectedRooms || [];
       const context      = appState.context || {};
       const brief        = latestVer.design_brief || '';

@@ -337,6 +337,66 @@
       </div>
     </div>
 
+    <!-- ── BOQ Edit Panel (pre-print editor) ─────────────────────────────── -->
+    <div class="boq-edit-overlay" id="boqEditOverlay" hidden>
+      <div class="boq-edit-panel">
+
+        <header class="boq-edit-header">
+          <div class="boq-edit-header-left">
+            <h2 class="boq-edit-title">Edit Before Print</h2>
+            <span class="boq-edit-hint">Changes here are only for this PDF unless you choose to save them.</span>
+          </div>
+          <button class="ghost-sm" id="boqEditClose">✕ Cancel</button>
+        </header>
+
+        <!-- Project name row -->
+        <div class="boq-edit-meta">
+          <label class="boq-edit-meta-label">Project name on PDF</label>
+          <input type="text" id="boqEditProjectName" class="boq-edit-name-input" placeholder="Interior Design Proposal" maxlength="100" />
+        </div>
+
+        <!-- Editable BOQ table -->
+        <div class="boq-edit-scroll">
+          <table class="boq-edit-table" id="boqEditTable">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Unit</th>
+                <th>Rate (₹)</th>
+                <th>Amount (₹)</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="boqEditBody"></tbody>
+          </table>
+          <button class="boq-edit-add-row" id="boqEditAddRow">+ Add row</button>
+        </div>
+
+        <!-- Grand total bar -->
+        <div class="boq-edit-total-bar">
+          <span class="boq-edit-total-label">Grand Total</span>
+          <span class="boq-edit-total-amount" id="boqEditGrandTotal">₹0</span>
+        </div>
+
+        <!-- Action footer -->
+        <footer class="boq-edit-footer">
+          <div class="boq-edit-footer-note">
+            <label class="boq-edit-save-toggle">
+              <input type="checkbox" id="boqEditSaveToDb" />
+              <span>Save these edits to the project database</span>
+            </label>
+          </div>
+          <div class="boq-edit-footer-actions">
+            <button class="ghost-btn" id="boqEditCancel">Cancel</button>
+            <button class="primary-btn boq-edit-generate-btn" id="boqEditGenerate">✦ Generate PDF</button>
+          </div>
+        </footer>
+
+      </div>
+    </div>
+
     <!-- ── LLM Debug Panel ─────────────────────────────────────────────────── -->
     <div class="debug-panel collapsed" id="debugPanel">
       <div class="debug-header" id="debugHeader">
