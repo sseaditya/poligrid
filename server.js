@@ -1,6 +1,7 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
 const db = require("./db.js");
 
 const ROOT = process.cwd();
@@ -156,7 +157,17 @@ async function renderWithOpenAi(body) {
     form.append("model", model);
     form.append("prompt", prompt.slice(0, 4000));
     form.append("quality", "low");
-    form.append("image", new Blob([imageBuffer], { type: mimeType }), "room_input.png");
+    // Use image[] to support multiple reference images (gpt-image-1 supports up to 16)
+    form.append("image[]", new Blob([imageBuffer], { type: mimeType }), "room_3d_reference.png");
+
+    // Additional reference images (e.g. annotated floor plan with camera pin)
+    const additionalImages = Array.isArray(body.additionalImages) ? body.additionalImages : [];
+    for (let i = 0; i < additionalImages.length; i++) {
+      const ai = additionalImages[i];
+      if (!ai || !ai.base64) continue;
+      const buf = Buffer.from(ai.base64, "base64");
+      form.append("image[]", new Blob([buf], { type: ai.mimeType || "image/png" }), ai.name || `ref_${i}.png`);
+    }
 
     headers = { Authorization: `Bearer ${apiKey}` };
     payload = form;
@@ -230,10 +241,12 @@ async function furnishRoomWithOpenAi(body) {
   // STEP 2: Vision Planning (Decide what furniture to place)
   const providedPlacements = Array.isArray(body.placements) ? body.placements : null;
   let placements = providedPlacements;
-  
+
   const floorPlanBase64 = String(body.floorPlanBase64 || "").trim();
   const cam = body.cameraContext || {};
-  const cameraPositionText = `Camera is located at X:${cam.xM || 0}m, Y:${cam.yM || 0}m relative to the room origin, facing angle ${cam.angleDeg || 0}° with a ${cam.fovDeg || 60}° Field of View.`;
+  const camXFt = mToFtIn(cam.xM || 0);
+  const camYFt = mToFtIn(cam.yM || 0);
+  const cameraPositionText = `Camera is located at X:${camXFt}, Y:${camYFt} from room origin, facing ${cam.angleDeg || 0}° with a ${cam.fovDeg || 60}° Field of View. The camera diagram image shows the exact pin location and viewing cone on the floor plan.`;
 
   if (!placements || placements.length === 0) {
     if (!emptyRoomBase64) {
@@ -241,7 +254,7 @@ async function furnishRoomWithOpenAi(body) {
     }
     const roomCtxForPlan = body.roomContext || {};
     const roomSizeText = (roomCtxForPlan.widthM && roomCtxForPlan.lengthM)
-      ? `${roomCtxForPlan.widthM}m wide × ${roomCtxForPlan.lengthM}m long`
+      ? `${mToFtIn(roomCtxForPlan.widthM)} wide × ${mToFtIn(roomCtxForPlan.lengthM)} long`
       : "unknown size";
     // Describe camera FOV sectors for spatial awareness
     const fovDeg = cam.fovDeg || 60;
@@ -253,26 +266,32 @@ async function furnishRoomWithOpenAi(body) {
       "You are a senior interior designer. Plan a COMPLETE furniture scheme for the entire room — not just what's visible in the photo.",
       `ROOM: ${roomCtxForPlan.roomType || 'residential'}, ${roomSizeText}`,
       roomCtxForPlan.archNotes ? `ARCHITECTURAL NOTES: ${roomCtxForPlan.archNotes}` : "",
-      `CAMERA REFERENCE (for spatial context only): positioned at (${cam.xM || 0}m, ${cam.yM || 0}m), facing ${facingAngle}°, FOV ${fovDeg}°. Use this to understand what the photo shows, but plan furniture for the ENTIRE room — the BOQ must cover everything, not just visible items.`,
-      floorPlanBase64 ? "The floor plan is provided — use it to understand all walls, zones, and room boundaries to plan complete furniture placement." : "",
+      `CAMERA REFERENCE (for spatial context only): pin at (${camXFt}, ${camYFt}), facing ${facingAngle}°, FOV ${fovDeg}° (viewing cone from ${leftEdge.toFixed(0)}° to ${rightEdge.toFixed(0)}°). The camera diagram image shows this pin on the floor plan. Use this to understand what the 3D photo shows, but plan furniture for the ENTIRE room — the list must cover everything, not just visible items.`,
+      floorPlanBase64 ? "The floor plan and camera diagram are provided — use them to understand all walls, zones, room boundaries, and the camera viewpoint." : "",
       body.brief ? `DESIGN BRIEF: "${body.brief}"` : "",
       styleGuidance
         ? [
-            "STYLE DIRECTIVE — This is the most critical instruction. Every item MUST reflect this extracted style:",
-            styleGuidance,
-            "Name each item with its material/finish explicitly (e.g. 'Walnut-veneer Full-Height Wardrobe', 'Bouclé 3-Seater Sofa on brass legs', 'Fluted oak TV unit'). The label should be descriptive enough to price it."
-          ].join("\n")
+          "STYLE DIRECTIVE — This is the most critical instruction. Every item MUST reflect this extracted style:",
+          styleGuidance,
+          "Name each item with its material/finish explicitly (e.g. 'Walnut-veneer Full-Height Wardrobe', 'Bouclé 3-Seater Sofa on brass legs', 'Fluted oak TV unit'). The label should be descriptive enough to price it."
+        ].join("\n")
         : "",
       "Return STRICT JSON only — a 'placements' array covering ALL furniture for this room type. Each item:",
       "  label: specific descriptive name with material and finish (e.g. 'Matte walnut 3-door full-height wardrobe', 'Marble-top 6-seater dining table', 'Linen-upholstered queen bed with padded headboard')",
       "  type: exactly one of 'seating'|'table'|'cabinet'|'bed'|'decor'|'custom'",
       "  category: either 'Modular furniture' (built-in/fitted: wardrobes, kitchen cabinets, TV units, study units, shoe racks) or 'Loose furniture' (free-standing: sofas, beds, dining tables, chairs, decor)",
-      "  wM: realistic width in meters for Indian rooms",
-      "  dM: depth in meters",
-      "  hM: height in meters",
+      "  wFt: realistic width in decimal feet (e.g. 7.0 for a 3-seater sofa, 6.5 for a queen bed, 8.0 for a full-height wardrobe)",
+      "  dFt: depth in decimal feet (e.g. 3.0 for sofa, 6.5 for queen bed, 2.0 for wardrobe)",
+      "  hFt: height in decimal feet (e.g. 3.0 for sofa, 4.0 for bed with headboard, 7.5 for full-height wardrobe)",
       "  rateINR: your best estimate of the Hyderabad premium market price in INR for this specific item (one unit, supply + install). Be realistic — e.g. a full-height sliding wardrobe ₹95,000, a 3-seater sofa ₹70,000-85,000, a queen bed ₹55,000-70,000, kitchen cabinets ₹45,000-65,000 per unit.",
       "Return NOTHING but valid JSON."
     ].filter(Boolean).join("\n");
+
+    // Generate camera annotation PNG (bird's-eye diagram showing pin + FOV cone)
+    const camAnnotationBase64 = createCameraAnnotationPng(
+      roomCtxForPlan.widthM || 5, roomCtxForPlan.lengthM || 5,
+      cam.xM || 0, cam.yM || 0, cam.angleDeg || 0, cam.fovDeg || 60
+    );
 
     const contentArray = [
       { type: "input_text", text: planningPrompt },
@@ -286,6 +305,12 @@ async function furnishRoomWithOpenAi(body) {
       });
     }
 
+    // Always include camera FOV diagram so AI knows exactly where the camera looks from
+    contentArray.push({
+      type: "input_image",
+      image_url: `data:image/png;base64,${camAnnotationBase64}`
+    });
+
     // Include inspiration images in planning so AI picks style-matching furniture
     for (const inspBase64 of inspirationImages.slice(0, 2)) {
       contentArray.push({
@@ -296,7 +321,7 @@ async function furnishRoomWithOpenAi(body) {
 
     const payload = {
       model: visionModel,
-      reasoning: { effort: "high" },
+      reasoning: { effort: "medium" },
       max_output_tokens: 4000,
       input: [{ role: "user", content: contentArray }]
     };
@@ -313,7 +338,22 @@ async function furnishRoomWithOpenAi(body) {
     const parsed = safeJson(raw);
     _debug.push({ step: "Vision Room Planning", payload: payload, response: parsed });
     const jsonOutput = extractJsonFromText(extractResponsesText(parsed));
-    placements = jsonOutput?.placements || [];
+    placements = (jsonOutput?.placements || []).map(p => {
+      // AI always returns feet (wFt/dFt/hFt). Compute meters server-side so
+      // all downstream code (deterministicPack, furnitureStr, BOQ) uses consistent wM/dM/hM.
+      const wFt = parseFloat(p.wFt) || 0;
+      const dFt = parseFloat(p.dFt) || 0;
+      const hFt = parseFloat(p.hFt) || 0;
+      return {
+        ...p,
+        wFt: wFt || p.wFt,
+        dFt: dFt || p.dFt,
+        hFt: hFt || p.hFt,
+        wM: wFt ? parseFloat((wFt * 0.3048).toFixed(3)) : (parseFloat(p.wM) || 1.2),
+        dM: dFt ? parseFloat((dFt * 0.3048).toFixed(3)) : (parseFloat(p.dM) || 0.6),
+        hM: hFt ? parseFloat((hFt * 0.3048).toFixed(3)) : (parseFloat(p.hM) || 0.9)
+      };
+    });
     console.log(`[OpenAI] furnishRoom STEP2 ✓ placements=${placements.length}`);
   } else {
     console.log(`[OpenAI] furnishRoom STEP2 skipped (${placements?.length ?? 0} pre-provided placements)`);
@@ -321,47 +361,70 @@ async function furnishRoomWithOpenAi(body) {
 
   // STEP 3: Render Generation (DALL-E)
   const roomCtx = body.roomContext || {};
-  const furnitureStr = placements.map(p => `- ${p.label} (${p.wM || '?'}m wide × ${p.dM || '?'}m deep × ${p.hM || 0.9}m tall)`).join("\n");
+  // wM/dM/hM are always in meters here (either server-converted from wFt, or pre-provided in meters)
+  const furnitureStr = placements.map(p =>
+    `- ${p.label} (${mToFtIn(p.wM || 1.2)} wide × ${mToFtIn(p.dM || 0.6)} deep × ${mToFtIn(p.hM || 0.9)} tall)`
+  ).join("\n");
+
   const roomDimsText = (roomCtx.widthM && roomCtx.lengthM)
-    ? `Room: ${roomCtx.widthM}m wide × ${roomCtx.lengthM}m long × 2.85m ceiling height.`
+    ? `Room: ${mToFtIn(roomCtx.widthM)} wide × ${mToFtIn(roomCtx.lengthM)} long × 9'-4" ceiling height.`
     : '';
 
   const wallLines = Array.isArray(roomCtx.walls) && roomCtx.walls.length
     ? roomCtx.walls.map(w => {
-        const openings = (w.openings || []).map(o => `${o.type} (${o.widthM || 0.9}m)`).join(', ');
-        return `${w.side}: ${w.isExterior ? 'exterior' : 'interior'}${openings ? ' — ' + openings : ''}`;
-      }).join(' | ')
+      const openings = (w.openings || []).map(o => `${o.type} (${mToFtIn(o.widthM || 0.9)} wide)`).join(', ');
+      return `${w.side}: ${w.isExterior ? 'exterior' : 'interior'}${openings ? ' — ' + openings : ''}`;
+    }).join(' | ')
     : '';
+
+  // Generate camera annotation for the render step as well
+  const renderCamAnnotationBase64 = createCameraAnnotationPng(
+    roomCtx.widthM || 5, roomCtx.lengthM || 5,
+    cam.xM || 0, cam.yM || 0, cam.angleDeg || 0, cam.fovDeg || 60
+  );
+
+  // Build additional reference images: annotated floor plan + camera diagram
+  const renderAdditionalImages = [];
+  if (floorPlanBase64) {
+    const fpRaw = floorPlanBase64.includes("base64,") ? floorPlanBase64.split("base64,")[1] : floorPlanBase64;
+    renderAdditionalImages.push({ base64: fpRaw, mimeType: "image/png", name: "floor_plan.png" });
+  }
+  renderAdditionalImages.push({ base64: renderCamAnnotationBase64, mimeType: "image/png", name: "camera_fov_diagram.png" });
 
   let renderPrompt;
 
   if (emptyRoomBase64) {
-    // ── IMAGE-TO-IMAGE: preserve structure, apply style to surfaces + add furniture ──
+    // ── IMAGE-TO-IMAGE: preserve structure exactly, apply style + add furniture ──
     renderPrompt = [
-      "INTERIOR DESIGN RENDER — editing an existing empty room photograph.",
-      "═══ STRUCTURAL RULES — these must not change ═══",
-      "• Room geometry: wall positions, ceiling height, floor area, room proportions — UNCHANGED",
-      "• Architectural elements: all doors (position, size, swing), all windows (position, size) — UNCHANGED",
-      "• Camera viewpoint: same perspective, focal length, spatial distortion — UNCHANGED",
-      "═══ STYLE TRANSFORMATION — you MAY and SHOULD update these ═══",
-      "• Wall paint and finish: update to match the style guide below",
-      "• Floor finish: update to match style (tile, wood, stone — as specified)",
-      "• Ceiling finish and cove lighting: update per style",
-      "• Lighting mood: warm or cool per style directive",
-      "═══ PRIMARY TASK — add furniture ═══",
-      "Place and render the furniture items below into the room. Each piece must:",
-      "- Sit flush on the floor with correct perspective foreshortening",
-      "- Cast realistic shadows consistent with the room's light sources",
-      "- Be scaled correctly relative to the room dimensions",
-      "- Reflect in any glossy floor or surface",
+      "INTERIOR DESIGN RENDER — you are editing the REFERENCE PHOTOGRAPH provided as the first image.",
+      "═══ CRITICAL SPATIAL INTEGRITY RULES — MUST NOT CHANGE ═══",
+      "• Every wall surface visible in the photo: exact same position, shape, and perspective — DO NOT move, warp, or replace any wall",
+      "• All architectural elements: every door (exact position, size, swing direction), every window (exact position, size, mullion pattern) — UNCHANGED",
+      "• Camera viewpoint: identical perspective angle, focal length, vanishing points, horizon line, and spatial distortion as the reference photo — DO NOT re-angle or zoom",
+      "• Ceiling height and room proportions: UNCHANGED — do not raise, lower, or stretch the space",
+      "• Floor plane: same perspective, same level — furniture must sit on THIS floor, not a redrawn one",
+      "═══ PERMITTED CHANGES — apply style to surfaces ═══",
+      "• Wall paint / finish: update colour and texture to match the style guide",
+      "• Floor finish: replace with style-appropriate material (tile, wood, stone)",
+      "• Ceiling finish and cove/recessed lighting: update per style",
+      "• Lighting mood: warm or cool as directed",
+      "═══ PRIMARY TASK — place furniture ═══",
+      "Place every furniture item listed below into the room photograph. Requirements:",
+      "- Each piece must sit flush on the EXISTING floor plane with correct perspective foreshortening from the reference camera angle",
+      "- Scale each item accurately against the room dimensions stated below",
+      "- Cast realistic shadows from the existing light sources",
+      "- No floating, no clipping into walls, no blocking exit doors",
       roomDimsText,
-      wallLines ? `ARCHITECTURE: ${wallLines}. Never block doors or window light.` : "",
+      wallLines ? `ARCHITECTURE: ${wallLines}. Never block doors or interrupt window light paths.` : "",
       `FURNITURE:\n${furnitureStr}`,
       body.brief ? `DESIGN BRIEF: ${body.brief}` : "",
       styleGuidance
         ? ["STYLE GUIDE — apply to all surfaces AND furniture:", styleGuidance].join("\n")
         : "",
-      `CAMERA: ${cameraPositionText}. Compose and render from this exact viewpoint.`
+      `CAMERA REFERENCE: ${cameraPositionText}`,
+      floorPlanBase64
+        ? "Additional reference images provided: floor plan and camera FOV diagram. Use these only to verify spatial relationships — do NOT alter the photographic viewpoint."
+        : "A camera FOV diagram is provided as a reference image. Use it only to verify spatial relationships — do NOT alter the photographic viewpoint."
     ].filter(Boolean).join("\n");
   } else {
     // ── TEXT-TO-IMAGE: generate full room render ──────────────────────────────
@@ -375,12 +438,13 @@ async function furnishRoomWithOpenAi(body) {
       body.brief ? `DESIGN BRIEF: ${body.brief}` : "Modern Indian residential interior, warm and liveable.",
       styleGuidance
         ? [
-            "COMPREHENSIVE STYLE GUIDE — apply every detail below faithfully:",
-            styleGuidance,
-            "Match colors, materials, finishes, lighting mood, and decorative elements from the style guide exactly."
-          ].join("\n")
+          "COMPREHENSIVE STYLE GUIDE — apply every detail below faithfully:",
+          styleGuidance,
+          "Match colors, materials, finishes, lighting mood, and decorative elements from the style guide exactly."
+        ].join("\n")
         : "",
-      `CAMERA: ${cameraPositionText}. Compose the shot from this exact viewpoint.`
+      `CAMERA: ${cameraPositionText}`,
+      "The floor plan image and camera diagram show the viewing position. Compose the shot from the exact camera pin location and angle indicated."
     ].filter(Boolean).join("\n");
   }
 
@@ -390,7 +454,8 @@ async function furnishRoomWithOpenAi(body) {
     model: body.renderModel || "gpt-image-1.5",
     prompt: renderPrompt,
     imageBase64: emptyRoomBase64,
-    mimeType: mimeType
+    mimeType: mimeType,
+    additionalImages: emptyRoomBase64 ? renderAdditionalImages : []
   });
 
   if (renderResult._debug) _debug.push(...renderResult._debug);
@@ -413,14 +478,14 @@ async function analyzeFloorPlanWithOpenAi(body) {
     throw httpError(400, "Missing imageBase64 for floor plan analysis.");
   }
 
-  console.log(`[OpenAI] analyzeFloorPlan → model=${model} imageSize=${Math.round(imageBase64.length/1024)}KB (rooms+dimensions only, BOQ is separate call)`);
+  console.log(`[OpenAI] analyzeFloorPlan → model=${model} imageSize=${Math.round(imageBase64.length / 1024)}KB (rooms+dimensions only, BOQ is separate call)`);
 
   const isCommercial = (body.context?.propertyType || "").toLowerCase().includes("commercial");
 
   const prompt = [
     "You are an expert architectural floor plan analyst.",
     "You are analyzing a technical drawing (CAD, architectural blueprint, or hand-drafted plan).",
-    "DIMENSION READING: Read ALL dimension annotations visible on the drawing (e.g. '7-5\"', '8-1\"', '14-2\" etc.) to derive actual room sizes in meters. Convert feet-inch notation to meters (1 foot = 0.3048 m). Prefer these annotated dimensions over visual estimation.",
+    "DIMENSION READING: Read ALL dimension annotations visible on the drawing (e.g. '7-5\"', '8-1\"', '14-2\"', '10.5 ft' etc.). Prefer annotated dimensions over visual estimation. Convert all annotated dimensions to meters (1 ft = 0.3048 m) for the widthM/lengthM output fields. Estimate from visual scale only if no annotations are present.",
     "LABEL READING: Room/zone labels may appear as zone codes (ZONE-1, ZONE-2), numeric IDs (101, 102), abbreviations (LR, MBR, KIT), or plain text. Use whatever is printed inside or adjacent to each enclosed space as the label.",
     "Extract ALL rooms/spaces visible in the drawing.",
     "For each room return:",
@@ -430,17 +495,17 @@ async function analyzeFloorPlanWithOpenAi(body) {
       ? "  - roomType: one of: office, conference, reception, pantry, store, workstation, bathroom, utility, foyer, other"
       : "  - roomType: one of: bedroom, living, kitchen, bathroom, dining, study, balcony, foyer, utility, other",
     "  - bbox: TIGHT bounding box hugging the room's actual wall lines, as fractions of image dimensions: { xPct, yPct, wPct, hPct } (0.0–1.0). Do NOT add padding — the box must align with the walls.",
-    "  - widthM: width in meters derived from dimension annotations on the plan; estimate only if annotations are absent",
-    "  - lengthM: length in meters derived from dimension annotations on the plan; estimate only if annotations are absent",
-    "  - notes: brief plain-text summary of the space (e.g. 'open plan with glazed east partition')",
+    "  - widthM: room width in meters (converted from feet-inch annotation; estimate only if no annotation)",
+    "  - lengthM: room length in meters (converted from feet-inch annotation; estimate only if no annotation)",
+    "  - notes: brief plain-text summary including dimensions in feet (e.g. '11\\'-6\" × 13\\'-0\", open plan with glazed east partition')",
     "  - walls: array of exactly 4 wall objects, one per side. For each wall:",
     "      { side: 'north'|'south'|'east'|'west',",
     "        isExterior: boolean (true if it faces outside the building),",
     "        adjacentRoomLabel: string|null (label of neighbouring room if shared wall, else null),",
     "        openings: array of openings on this wall, each:",
     "          { type: 'door'|'window'|'glazed-partition'|'archway'|'none',",
-    "            widthM: number,",
-    "            offsetFromWestOrNorthM: number (distance from the left/top end of that wall to the opening's near edge) }",
+    "            widthM: number (opening width in meters),",
+    "            offsetFromWestOrNorthM: number (distance in meters from the left/top end of that wall to the opening's near edge) }",
     "      }",
     "    If a wall has no openings, return openings: []",
     "",
@@ -456,7 +521,7 @@ async function analyzeFloorPlanWithOpenAi(body) {
     "Context provided by user:",
     `- Property Type: ${body.context?.propertyType || "unspecified"}`,
     `- Configuration/Space Type: ${body.context?.bhk || "unspecified"}`,
-    `- Total Area: ${body.context?.totalAreaM2 ? body.context.totalAreaM2 + " sqm" : "unspecified"}`,
+    `- Total Area: ${body.context?.totalAreaM2 ? m2ToSqft(body.context.totalAreaM2) + " sqft" : "unspecified"}`,
     `- Additional Notes/Brief: ${body.context?.notes || "none"}`,
     "CRITICAL: Pay close attention to the Additional Notes/Brief as it contains literal descriptions of the rooms from the user.",
     "",
@@ -541,22 +606,28 @@ async function generateStructuralBoqWithOpenAi(body) {
   const ctx = body.context || {};
 
   const totalAreaM2 = ctx.totalAreaM2 || rooms.reduce((s, r) => s + ((r.widthM || 0) * (r.lengthM || 0)), 0);
+  const totalAreaSqft = Math.round(totalAreaM2 * 10.764);
   const bathroomCount = rooms.filter(r => r.roomType === "bathroom").length;
-  const kitchenCount  = rooms.filter(r => r.roomType === "kitchen").length;
-  const roomSummary = rooms.map(r =>
-    `  - ${r.name || r.label} (${r.roomType}): ${r.widthM || "?"}m × ${r.lengthM || "?"}m` +
-    (r.walls ? `, doors=${r.walls.flatMap(w => w.openings || []).filter(o => o.type === "door").length}` +
-    `, windows=${r.walls.flatMap(w => w.openings || []).filter(o => o.type === "window").length}` : "")
-  ).join("\n");
+  const kitchenCount = rooms.filter(r => r.roomType === "kitchen").length;
+  const roomSummary = rooms.map(r => {
+    const wStr = r.widthM ? mToFtIn(r.widthM) : "?";
+    const lStr = r.lengthM ? mToFtIn(r.lengthM) : "?";
+    const roomSqft = r.widthM && r.lengthM ? ` (${Math.round(r.widthM * r.lengthM * 10.764)} sqft)` : "";
+    const doorCount = r.walls ? r.walls.flatMap(w => w.openings || []).filter(o => o.type === "door").length : 0;
+    const winCount = r.walls ? r.walls.flatMap(w => w.openings || []).filter(o => o.type === "window").length : 0;
+    return `  - ${r.name || r.label} (${r.roomType}): ${wStr} × ${lStr}${roomSqft}` +
+      (r.walls ? `, doors=${doorCount}, windows=${winCount}` : "");
+  }).join("\n");
 
-  console.log(`[OpenAI] generateStructuralBoq → rooms=${rooms.length} area=${totalAreaM2}m² bathrooms=${bathroomCount}`);
+  console.log(`[OpenAI] generateStructuralBoq → rooms=${rooms.length} area=${totalAreaSqft}sqft bathrooms=${bathroomCount}`);
 
   const prompt = [
     "You are an expert interior design project estimator specialising in Indian residential and commercial interiors.",
     "Generate a COMPREHENSIVE structural Bill of Quantities (BOQ) for the project described below.",
     "Use HYDERABAD PREMIUM MARKET RATES (INR). Be generous and realistic — this is a premium interior project.",
+    "ALL dimensions and quantities are in feet, sqft, or rft — do NOT use meters or sqm anywhere.",
     "",
-    `Project: ${ctx.propertyType || "Apartment"}, ${ctx.bhk || ""}, total area ≈ ${totalAreaM2.toFixed(1)} m² (${(totalAreaM2 * 10.764).toFixed(0)} sqft)`,
+    `Project: ${ctx.propertyType || "Apartment"}, ${ctx.bhk || ""}, total area ≈ ${totalAreaSqft} sqft`,
     `Rooms:\n${roomSummary}`,
     ctx.notes ? `Client notes: ${ctx.notes}` : "",
     "",
@@ -570,7 +641,7 @@ async function generateStructuralBoqWithOpenAi(body) {
     "'Electrical'        — DB/MCB panel, wiring (light + power points per room), earthing, switches+sockets. Separate line per room.",
     "                      Rates: DB + MCBs ₹25,000-40,000, per room wiring+points ₹8,000-18,000 depending on room size",
     "'Faux ceiling'      — gypsum board false ceiling with cove lighting per room (living, dining, master bed, kitchen). Separate line per room.",
-    "                      Rates: ₹100-145/sqft. Estimate 60-80% of each room has false ceiling.",
+    "                      Rates: ₹100-145/sqft. Estimate 60-80% of each room area has false ceiling.",
     "'Flooring'          — vitrified tiles or wood finish per room. Separate line per room.",
     "                      Rates: living/dining ₹160-220/sqft, bedrooms ₹135-185/sqft, kitchen/bath ₹115-165/sqft",
     "'Doors and windows' — count from room data. Main entrance door, internal flush doors, bathroom doors, UPVC windows per room.",
@@ -579,7 +650,7 @@ async function generateStructuralBoqWithOpenAi(body) {
     "                      Rates: ₹38-58/sqft (walls+ceiling combined)",
     "",
     "For each item: { \"category\": string, \"item\": string, \"qty\": number, \"unit\": string, \"rate\": number, \"amount\": number }",
-    "unit must be one of: 'sqft', 'sqm', 'pcs', 'rft', 'points', 'lump sum'",
+    "unit must be one of: 'sqft', 'pcs', 'rft', 'points', 'lump sum'  — NEVER use sqm",
     "amount = qty × rate",
     "NEVER return an empty globalBoq. Every project has all 7 categories.",
     floorPlanBase64 ? "Use the floor plan image provided to accurately count doors, windows, and wet areas." : ""
@@ -703,7 +774,7 @@ async function suggestFurnitureWithOpenAi(body) {
   if (!request) throw httpError(400, "Missing request for furniture suggestion.");
 
   const moduleList = availableModules
-    .map(m => `  - id:"${m.id}" label:"${m.label}" w:${m.w}m d:${m.d}m h:${m.h}m type:${m.type}`)
+    .map(m => `  - id:"${m.id}" label:"${m.label}" w:${mToFtIn(m.w)} d:${mToFtIn(m.d)} h:${mToFtIn(m.h)} type:${m.type}`)
     .join("\n");
 
   const prompt = [
@@ -766,17 +837,17 @@ async function autoPlaceFurnitureWithOpenAi(body) {
       ? "\n  Walls:\n" + r.walls.map(w => {
         const tag = w.isExterior ? "exterior" : (w.adjacentRoomLabel ? `shared with ${w.adjacentRoomLabel}` : "internal");
         const openings = (w.openings || []).map(o =>
-          `${o.type} (${(o.widthM || 0).toFixed(1)}m wide, ${(o.offsetFromWestOrNorthM || 0).toFixed(1)}m from ${w.side === "north" || w.side === "south" ? "west" : "north"} end)`
+          `${o.type} (${mToFtIn(o.widthM || 0)} wide, ${mToFtIn(o.offsetFromWestOrNorthM || 0)} from ${w.side === "north" || w.side === "south" ? "west" : "north"} end)`
         ).join(", ");
         return `    ${w.side}: ${tag}${openings ? " — " + openings : " — no openings"}`;
       }).join("\n")
       : "";
 
-    return `- ${r.label} (${r.name || r.roomType}): ${r.widthM || "?"}m × ${r.lengthM || "?"}m${bboxStr}${notesStr}${wallLines}`;
+    return `- ${r.label} (${r.name || r.roomType}): ${r.widthM ? mToFtIn(r.widthM) : "?"} × ${r.lengthM ? mToFtIn(r.lengthM) : "?"}${bboxStr}${notesStr}${wallLines}`;
   }).join("\n");
 
   const moduleList = (body.moduleLibrary || []).map(m =>
-    `${m.id}: "${m.label}" w=${m.w}m d=${m.d}m h=${m.h}m [${(m.keywords || []).join(", ")}]`
+    `${m.id}: "${m.label}" w=${mToFtIn(m.w)} d=${mToFtIn(m.d)} h=${mToFtIn(m.h)} [${(m.keywords || []).join(", ")}]`
   ).join("\n");
 
   const prompt = [
@@ -790,13 +861,13 @@ async function autoPlaceFurnitureWithOpenAi(body) {
     "2. DO NOT BLOCK DOORS: If a wall has a door, mark it 'hasDoor:true' in your reasoning and prefer lighter items or skip that wall.",
     "3. WINDOWS: Avoid placing tall storage units in front of windows (they block light). Prefer low items (coffee tables, sofas) in front of windows.",
     "4. PRIORITIES: Large cabinets first, then beds, then seating, then tables. Do not overcrowd.",
-    "5. CUSTOM ITEMS: If a room needs an item not in the module list, add it with custom wM/dM/hM dimensions.",
+    "5. CUSTOM ITEMS: If a room needs an item not in the module list, add it with custom wFt/dFt/hFt dimensions in feet (e.g. a custom peninsula counter: wFt:8.0, dFt:2.5, hFt:3.0).",
     "6. MAX ITEMS: Do not assign more items than can realistically fit.",
     "",
     "Property context:",
     context.bhk ? `- Space type: ${context.bhk}` : "",
     context.propertyType ? `- Property type: ${context.propertyType}` : "",
-    context.totalAreaM2 ? `- Total area: ${context.totalAreaM2} m\u00b2` : "",
+    context.totalAreaM2 ? `- Total area: ${m2ToSqft(context.totalAreaM2)} sqft` : "",
     context.notes ? `- Notes: ${context.notes}` : "",
     "",
     `Design brief: ${brief || "Modern, minimal, functional"}`,
@@ -816,9 +887,9 @@ async function autoPlaceFurnitureWithOpenAi(body) {
     `      "roomLabel": string,`,
     `      "wall": "north"|"south"|"east"|"west"|"center",`,
     `      "type": "cabinet"|"study"|"bed"|"table"|"seating"|"decor",`,
-    `      "wM": number|null,`,
-    `      "dM": number|null,`,
-    `      "hM": number|null,`,
+    `      "wFt": number|null,   // custom item width in feet (null = use module default)`,
+    `      "dFt": number|null,   // custom item depth in feet`,
+    `      "hFt": number|null,   // custom item height in feet`,
     `      "rationale": string`,
     `    }`,
     `  ]`,
@@ -849,8 +920,16 @@ async function autoPlaceFurnitureWithOpenAi(body) {
     throw httpError(502, "Autoplace returned unexpected output.");
   }
 
+  // Convert AI's feet dimensions to meters before passing to the deterministic packer
+  const assignmentsInMeters = json.assignments.map(a => ({
+    ...a,
+    wM: a.wFt ? parseFloat((a.wFt * 0.3048).toFixed(3)) : (a.wM || null),
+    dM: a.dFt ? parseFloat((a.dFt * 0.3048).toFixed(3)) : (a.dM || null),
+    hM: a.hFt ? parseFloat((a.hFt * 0.3048).toFixed(3)) : (a.hM || null)
+  }));
+
   // Hand assignments to the deterministic packer — it computes exact center coordinates
-  const placements = deterministicPack(json.assignments, rooms, body.moduleLibrary || []);
+  const placements = deterministicPack(assignmentsInMeters, rooms, body.moduleLibrary || []);
   return { model, placements };
 }
 
@@ -1031,15 +1110,15 @@ async function chatPlacementWithOpenAi(body) {
   if (!message) throw httpError(400, "Missing message.");
 
   const currentLayout = currentPlacements.map(p =>
-    `[id:${p.id}] ${p.label} in ${p.roomLabel} at (${(p.xM || 0).toFixed(1)}, ${(p.yM || 0).toFixed(1)}), ${(p.wM || 0).toFixed(1)}×${(p.dM || 0).toFixed(1)}m`
+    `[id:${p.id}] ${p.label} in ${p.roomLabel} at (${mToFtIn(p.xM || 0)}, ${mToFtIn(p.yM || 0)}), ${mToFtIn(p.wM || 0)} × ${mToFtIn(p.dM || 0)}`
   ).join("\n") || "(empty)";
 
   const moduleList = moduleLibrary.map(m =>
-    `${m.id}: "${m.label}" default ${m.w}×${m.d}m`
+    `${m.id}: "${m.label}" default ${mToFtIn(m.w)} × ${mToFtIn(m.d)}`
   ).join("\n");
 
   const roomList = rooms.map(r =>
-    `${r.label} (${r.roomType}) ${r.widthM}×${r.lengthM}m`
+    `${r.label} (${r.roomType}) ${r.widthM ? mToFtIn(r.widthM) : "?"} × ${r.lengthM ? mToFtIn(r.lengthM) : "?"}`
   ).join(", ");
 
   const prompt = [
@@ -1056,10 +1135,10 @@ async function chatPlacementWithOpenAi(body) {
     `User request: "${message}"`,
     "",
     "Understand the user's intent and return an ARRAY of structured actions. You can return multiple actions if the user requests moving/removing/adding several items. Actions:",
-    "- add: add a new piece  { action:'add', moduleId, label, roomLabel, xM, yM, wM, dM, rotationDeg, rationale }",
-    "- move: move existing  { action:'move', id, xM, yM, rationale }",
+    "- add: add a new piece  { action:'add', moduleId, label, roomLabel, xFt, yFt, wFt, dFt, rotationDeg, rationale }  — positions and dims in decimal feet",
+    "- move: move existing  { action:'move', id, xFt, yFt, rationale }  — position in decimal feet from room origin",
     "- remove: delete        { action:'remove', id, rationale }",
-    "- resize: change dims   { action:'resize', id, wM, dM, rationale }",
+    "- resize: change dims   { action:'resize', id, wFt, dFt, rationale }  — new dims in decimal feet",
     "- message: explain/ask  { action:'message', text }",
     "",
     "Also include a 'reply' string: a short natural language response to the user (1–2 sentences).",
@@ -1091,10 +1170,25 @@ async function chatPlacementWithOpenAi(body) {
     console.error("Chat placement failed to parse. Raw text:", text.slice(0, 500));
     throw httpError(502, "Chat placement returned unexpected output.");
   }
-  return { 
-    model, 
-    reply: json.reply || "", 
-    actions: json.actions || [json.action].filter(Boolean),
+
+  // AI returns feet (xFt, yFt, wFt, dFt). Convert to meters for the canvas engine.
+  const ft2m = ft => ft ? parseFloat((ft * 0.3048).toFixed(3)) : undefined;
+  const normalizeAction = a => {
+    if (!a || typeof a !== "object") return a;
+    const out = { ...a };
+    if (a.xFt != null) { out.xM = ft2m(a.xFt); delete out.xFt; }
+    if (a.yFt != null) { out.yM = ft2m(a.yFt); delete out.yFt; }
+    if (a.wFt != null) { out.wM = ft2m(a.wFt); delete out.wFt; }
+    if (a.dFt != null) { out.dM = ft2m(a.dFt); delete out.dFt; }
+    return out;
+  };
+  const rawActions = json.actions || [json.action].filter(Boolean);
+  const actions = rawActions.map(normalizeAction);
+
+  return {
+    model,
+    reply: json.reply || "",
+    actions,
     _debug: [{ step: "Chat Placement Assistant", payload, response: parsed }]
   };
 }
@@ -1134,7 +1228,7 @@ async function extractFurnishStyleGuidance(body) {
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: visionModel,
-        reasoning: { effort: "high" },
+        reasoning: { effort: "medium" },
         max_output_tokens: 1800,
         input: [{ role: "user", content: styleContent }]
       })
@@ -1423,6 +1517,158 @@ function httpError(statusCode, message) {
   return error;
 }
 
+/** Convert decimal meters to a feet-inches string, e.g. 3.2 → "10'-6\"" */
+function mToFtIn(m) {
+  const totalInches = (parseFloat(m) || 0) * 39.3701;
+  const feet = Math.floor(totalInches / 12);
+  const inches = Math.round(totalInches % 12);
+  if (inches >= 12) return `${feet + 1}'-0"`;
+  return `${feet}'-${inches}"`;
+}
+
+/** Convert m² to sqft string */
+function m2ToSqft(m2) {
+  return `${Math.round((parseFloat(m2) || 0) * 10.764)} sqft`;
+}
+
+// ─── Minimal pure-JS PNG encoder (no native dependencies) ────────────────────
+const _CRC32_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c;
+  }
+  return t;
+})();
+
+function _crc32(buf) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) crc = _CRC32_TABLE[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+function _u32be(n) { return [(n >>> 24) & 0xFF, (n >>> 16) & 0xFF, (n >>> 8) & 0xFF, n & 0xFF]; }
+
+function _makePngChunk(type, data) {
+  const tb = Buffer.from(type, "ascii");
+  const crcSrc = Buffer.concat([tb, data]);
+  return Buffer.concat([Buffer.from(_u32be(data.length)), tb, data, Buffer.from(_u32be(_crc32(crcSrc)))]);
+}
+
+function _encodePng(pixels, w, h) {
+  // pixels: Buffer, RGBA, w*h*4 bytes
+  const PNG_SIG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = _makePngChunk("IHDR", Buffer.from([..._u32be(w), ..._u32be(h), 8, 6, 0, 0, 0]));
+  const scanlines = Buffer.alloc(h * (1 + w * 4));
+  for (let y = 0; y < h; y++) {
+    const row = y * (1 + w * 4);
+    scanlines[row] = 0; // filter: None
+    pixels.copy(scanlines, row + 1, y * w * 4, (y + 1) * w * 4);
+  }
+  const idat = _makePngChunk("IDAT", zlib.deflateSync(scanlines, { level: 1 }));
+  const iend = _makePngChunk("IEND", Buffer.alloc(0));
+  return Buffer.concat([PNG_SIG, ihdr, idat, iend]);
+}
+
+/**
+ * Create a bird's-eye camera-position diagram as a base64 PNG.
+ * Shows room boundary, camera dot (red), and FOV cone (blue).
+ * roomWidthM, roomLengthM: room dimensions in meters
+ * camXM, camYM: camera position in meters from room origin
+ * angleDeg: facing direction (0=north/up, 90=east/right)
+ * fovDeg: field of view in degrees
+ */
+function createCameraAnnotationPng(roomWidthM, roomLengthM, camXM, camYM, angleDeg, fovDeg) {
+  const W = 220, H = 220;
+  const pix = Buffer.alloc(W * H * 4, 255); // white, opaque
+
+  function sp(x, y, r, g, b) {
+    x = Math.round(x); y = Math.round(y);
+    if (x < 0 || x >= W || y < 0 || y >= H) return;
+    const i = (y * W + x) * 4;
+    pix[i] = r; pix[i + 1] = g; pix[i + 2] = b; pix[i + 3] = 255;
+  }
+
+  function line(x0, y0, x1, y1, r, g, b, thickness = 1) {
+    x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+    const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx - dy;
+    for (let i = 0; i < 1000; i++) {
+      for (let t = -Math.floor(thickness / 2); t <= Math.floor(thickness / 2); t++) {
+        if (dx > dy) sp(x0, y0 + t, r, g, b); else sp(x0 + t, y0, r, g, b);
+      }
+      sp(x0, y0, r, g, b);
+      if (x0 === x1 && y0 === y1) break;
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; x0 += sx; }
+      if (e2 < dx) { err += dx; y0 += sy; }
+    }
+  }
+
+  function fillRect(x0, y0, x1, y1, r, g, b) {
+    for (let y = Math.max(0, y0); y <= Math.min(H - 1, y1); y++)
+      for (let x = Math.max(0, x0); x <= Math.min(W - 1, x1); x++)
+        sp(x, y, r, g, b);
+  }
+
+  function fillCircle(cx, cy, radius, r, g, b) {
+    for (let dy = -radius; dy <= radius; dy++)
+      for (let dx = -radius; dx <= radius; dx++)
+        if (dx * dx + dy * dy <= radius * radius) sp(cx + dx, cy + dy, r, g, b);
+  }
+
+  const pad = 20;
+  const rw = W - pad * 2;
+  const rh = H - pad * 2;
+
+  // Light gray room fill
+  fillRect(pad, pad, pad + rw, pad + rh, 240, 240, 240);
+
+  // Room border (dark gray, 2px)
+  for (let t = 0; t < 2; t++) {
+    for (let x = pad - t; x <= pad + rw + t; x++) { sp(x, pad - t, 80, 80, 80); sp(x, pad + rh + t, 80, 80, 80); }
+    for (let y = pad - t; y <= pad + rh + t; y++) { sp(pad - t, y, 80, 80, 80); sp(pad + rw + t, y, 80, 80, 80); }
+  }
+
+  // Camera position in image coordinates (clamp to room)
+  const fracX = roomWidthM ? Math.min(Math.max(camXM / roomWidthM, 0.05), 0.95) : 0.5;
+  const fracY = roomLengthM ? Math.min(Math.max(camYM / roomLengthM, 0.05), 0.95) : 0.5;
+  const cx = Math.round(pad + fracX * rw);
+  const cy = Math.round(pad + fracY * rh);
+
+  // FOV cone (blue semi-transparent overlay via darker lines)
+  const coneLen = Math.min(rw, rh) * 0.45;
+  const halfFov = ((fovDeg || 60) / 2) * Math.PI / 180;
+  const baseAngle = ((angleDeg || 0) - 90) * Math.PI / 180; // rotate so 0°=up
+  const la = baseAngle - halfFov;
+  const ra = baseAngle + halfFov;
+  const ex1 = cx + Math.cos(la) * coneLen;
+  const ey1 = cy + Math.sin(la) * coneLen;
+  const ex2 = cx + Math.cos(ra) * coneLen;
+  const ey2 = cy + Math.sin(ra) * coneLen;
+
+  // Fill cone interior with light blue
+  const steps = 30;
+  for (let s = 0; s <= steps; s++) {
+    const a = la + (ra - la) * (s / steps);
+    for (let d = 0; d <= coneLen; d += 1.5) {
+      sp(Math.round(cx + Math.cos(a) * d), Math.round(cy + Math.sin(a) * d), 180, 210, 240);
+    }
+  }
+
+  line(cx, cy, ex1, ey1, 0, 80, 180, 2);
+  line(cx, cy, ex2, ey2, 0, 80, 180, 2);
+  line(ex1, ey1, ex2, ey2, 0, 80, 180, 1);
+
+  // Camera dot (red)
+  fillCircle(cx, cy, 7, 210, 30, 30);
+  fillCircle(cx, cy, 4, 255, 80, 80);
+
+  return _encodePng(pix, W, H).toString("base64");
+}
+
 function loadEnvFile(envPath) {
   if (!fs.existsSync(envPath)) {
     return;
@@ -1459,17 +1705,17 @@ function loadEnvFile(envPath) {
 
 async function handleProjectAction(action, body) {
   switch (action) {
-    case "save-analysis":    return projectSaveAnalysis(body);
-    case "save-rooms":       return projectSaveRooms(body);
+    case "save-analysis": return projectSaveAnalysis(body);
+    case "save-rooms": return projectSaveRooms(body);
     case "save-inspiration": return projectSaveInspiration(body);
-    case "save-pin":         return projectSavePin(body);
-    case "save-render":      return projectSaveRender(body);
-    case "save-placements":  return projectSavePlacements(body);
-    case "save-boq":         return projectSaveBoq(body);
-    case "save-scene":       return projectSaveScene(body);
-    case "rename":           return projectRename(body);
-    case "save-brief":       return projectSaveBrief(body);
-    case "create-version":   return projectCreateVersion(body);
+    case "save-pin": return projectSavePin(body);
+    case "save-render": return projectSaveRender(body);
+    case "save-placements": return projectSavePlacements(body);
+    case "save-boq": return projectSaveBoq(body);
+    case "save-scene": return projectSaveScene(body);
+    case "rename": return projectRename(body);
+    case "save-brief": return projectSaveBrief(body);
+    case "create-version": return projectCreateVersion(body);
     default: throw httpError(404, "Unknown project action: " + action);
   }
 }
