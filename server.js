@@ -384,34 +384,31 @@ async function furnishRoomWithOpenAi(body) {
   if (emptyRoomBase64) {
     // ── IMAGE-TO-IMAGE: preserve structure exactly, apply style + add furniture ──
     renderPrompt = [
-      "INTERIOR DESIGN RENDER — you are editing the REFERENCE PHOTOGRAPH provided as the first image.",
-      "═══ CRITICAL SPATIAL INTEGRITY RULES — MUST NOT CHANGE ═══",
-      "• Every wall surface visible in the photo: exact same position, shape, and perspective — DO NOT move, warp, or replace any wall",
-      "• All architectural elements: every door (exact position, size, swing direction), every window (exact position, size, mullion pattern) — UNCHANGED",
-      "• Camera viewpoint: identical perspective angle, focal length, vanishing points, horizon line, and spatial distortion as the reference photo — DO NOT re-angle or zoom",
-      "• Ceiling height and room proportions: UNCHANGED — do not raise, lower, or stretch the space",
-      "• Floor plane: same perspective, same level — furniture must sit on THIS floor, not a redrawn one",
-      "═══ PERMITTED CHANGES — apply style to surfaces ═══",
-      "• Wall paint / finish: update colour and texture to match the style guide",
-      "• Floor finish: replace with style-appropriate material (tile, wood, stone)",
-      "• Ceiling finish and cove/recessed lighting: update per style",
-      "• Lighting mood: warm or cool as directed",
-      "═══ PRIMARY TASK — place furniture ═══",
-      "Place every furniture item listed below into the room photograph. Requirements:",
-      "- Each piece must sit flush on the EXISTING floor plane with correct perspective foreshortening from the reference camera angle",
-      "- Scale each item accurately against the room dimensions stated below",
-      "- Cast realistic shadows from the existing light sources",
-      "- No floating, no clipping into walls, no blocking exit doors",
+      "INPAINTING TASK: You are adding furniture and surface finishes to the EXACT reference photograph. This is not a new image generation — it is a precise edit of the input photo.",
+      "",
+      "══ ABSOLUTE RULES (violating these makes the output useless) ══",
+      "1. CAMERA ANGLE IS FIXED: Output must be photographed from the IDENTICAL position, height, angle, and focal length as the input photo. Same vanishing points. Same horizon line. Same perspective distortion. DO NOT tilt, rotate, zoom, or reframe the camera in any way.",
+      "2. ARCHITECTURE IS FIXED: Every wall, door, window, ceiling, and floor must stay in EXACTLY the same pixel position as the input. Do not move, warp, remove, or replace any structural element.",
+      "3. ROOM PROPORTIONS ARE FIXED: Do not alter the perceived ceiling height, wall widths, or floor area.",
+      "",
+      "══ WHAT YOU MAY CHANGE ══",
+      "• Wall paint / finish: update colour and texture to match the style",
+      "• Floor finish: replace with style-appropriate material that lies on the SAME floor plane",
+      "• Ceiling finish: update lighting, cove details, colour",
+      "• Add all furniture listed below, placed naturally on the existing floor with correct perspective from the FIXED camera viewpoint",
+      "",
+      "══ FURNITURE TO ADD (place all items, respect room scale) ══",
+      `${furnitureStr}`,
+      "",
       roomDimsText,
-      wallLines ? `ARCHITECTURE: ${wallLines}. Never block doors or interrupt window light paths.` : "",
-      `FURNITURE:\n${furnitureStr}`,
+      wallLines ? `ROOM ARCHITECTURE: ${wallLines}. Never block exit doors or interrupt window light paths.` : "",
       body.brief ? `DESIGN BRIEF: ${body.brief}` : "",
       styleGuidance
         ? ["STYLE GUIDE — apply to all surfaces AND furniture:", styleGuidance].join("\n")
         : "",
-      `CAMERA REFERENCE: ${cameraPositionText}`,
+      `CAMERA CONTEXT (do NOT alter viewpoint): ${cameraPositionText}`,
       floorPlanBase64
-        ? "The floor plan image provided shows the camera pin and FOV cone — use it only to verify spatial relationships — do NOT alter the photographic viewpoint."
+        ? "The floor plan image shows the camera pin and FOV cone — use only to confirm spatial relationships. The photographic viewpoint must remain as-is."
         : ""
     ].filter(Boolean).join("\n");
   } else {
@@ -631,7 +628,7 @@ async function generateStructuralBoqWithOpenAi(body) {
     "'Electrical'        — DB/MCB panel, wiring (light + power points per room), earthing, switches+sockets. Separate line per room.",
     "                      Rates: DB + MCBs ₹25,000-40,000, per room wiring+points ₹8,000-18,000 depending on room size",
     "'Faux ceiling'      — gypsum board false ceiling with cove lighting per room (living, dining, master bed, kitchen). Separate line per room.",
-    "                      Rates: ₹100-145/sqft. Estimate 60-80% of each room area has false ceiling.",
+    "                      Rates: ₹100-145 per SQFT (e.g. 12×10 ft room at 70% = 84 sqft × ₹120 = ₹10,080). NEVER use per-sqm rates — sqm rates like ₹1,076/sqm would be 10× wrong.",
     "'Flooring'          — vitrified tiles or wood finish per room. Separate line per room.",
     "                      Rates: living/dining ₹160-220/sqft, bedrooms ₹135-185/sqft, kitchen/bath ₹115-165/sqft",
     "'Doors and windows' — count from room data. Main entrance door, internal flush doors, bathroom doors, UPVC windows per room.",
@@ -673,7 +670,24 @@ async function generateStructuralBoqWithOpenAi(body) {
   const parsed = safeJson(raw);
   const text = extractResponsesText(parsed);
   const json = extractJsonFromText(text);
-  const globalBoq = json?.globalBoq || [];
+  const rawBoq = json?.globalBoq || [];
+
+  // Post-process: catch rates accidentally given as per-sqm instead of per-sqft.
+  // Expected sqft ranges: faux ceiling ₹60-200, flooring ₹60-300, painting ₹25-80.
+  // If rate is 10x outside the upper bound it's almost certainly a per-sqm rate — divide by 10.764.
+  const SQM_THRESHOLD = { 'faux ceiling': 300, 'false ceiling': 300, 'flooring': 450, 'painting': 130 };
+  const globalBoq = rawBoq.map(item => {
+    const catLower = (item.category || '').toLowerCase();
+    const rate = parseFloat(item.rate) || 0;
+    for (const [key, cap] of Object.entries(SQM_THRESHOLD)) {
+      if (catLower.includes(key) && rate > cap) {
+        const fixedRate = Math.round(rate / 10.764);
+        console.log(`[BOQ] Corrected sqm→sqft rate for "${item.item}": ₹${rate} → ₹${fixedRate}/sqft`);
+        return { ...item, rate: fixedRate, amount: Math.round((parseFloat(item.qty) || 0) * fixedRate) };
+      }
+    }
+    return item;
+  });
 
   console.log(`[OpenAI] generateStructuralBoq ✓ ${globalBoq.length} items across ${new Set(globalBoq.map(b => b.category)).size} categories`);
 

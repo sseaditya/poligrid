@@ -569,59 +569,89 @@ Respond ONLY with valid JSON (no markdown fences): {"intro":"...","highlights":[
           const pin = pinsLoaded.find(p => p.client_id === render.camera_pin_client_id);
           const refImg = pin?.refData || null;
 
-          const cmpTop = 29;
-          const cellW = (IW - 5) / 2;
-          const cellH = Math.min(cellW * 0.68, 88);
+          const imgTop = 29;
+          let infoY;
 
-          // Column labels
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(7.5);
-          doc.setTextColor(...C.mid);
-          doc.text('BEFORE  (Reference)', ML, cmpTop - 1.5);
-          doc.text('AFTER  (Furnished Render)', ML + cellW + 5, cmpTop - 1.5);
-
-          // Before image
           if (refImg) {
-            await placeImg(doc, refImg, ML, cmpTop, cellW, cellH);
+            // ── Side-by-side: Before 38% | After 60% ────────────────────────
+            const beforeW = Math.round(IW * 0.38);
+            const afterW  = IW - beforeW - 6;
+            const imgH    = 118;
+
+            // Column labels
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7);
+            doc.setTextColor(...C.mid);
+            doc.text('BEFORE  ·  Reference Photograph', ML, imgTop - 2);
+            doc.text('AFTER  ·  Furnished Design Render', ML + beforeW + 6, imgTop - 2);
+
+            // Before image
+            await placeImg(doc, refImg, ML, imgTop, beforeW, imgH);
+            doc.setDrawColor(...C.border);
+            doc.setLineWidth(0.35);
+            doc.rect(ML, imgTop, beforeW, imgH);
+
+            // Arrow connector
+            const arrowX = ML + beforeW + 3;
+            const arrowY = imgTop + imgH / 2;
+            doc.setFillColor(...C.teal);
+            doc.circle(arrowX, arrowY, 3.5, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.setTextColor(...C.white);
+            doc.text('›', arrowX, arrowY + 1.5, { align: 'center' });
+
+            // After image
+            if (render.imgData) {
+              await placeImg(doc, render.imgData, ML + beforeW + 6, imgTop, afterW, imgH);
+            } else {
+              doc.setFillColor(...C.cream);
+              doc.rect(ML + beforeW + 6, imgTop, afterW, imgH, 'F');
+              doc.setFont('helvetica', 'italic');
+              doc.setFontSize(8);
+              doc.setTextColor(...C.dim);
+              doc.text('Render pending', ML + beforeW + 6 + afterW / 2, imgTop + imgH / 2, { align: 'center' });
+            }
+            doc.setDrawColor(...C.border);
+            doc.setLineWidth(0.35);
+            doc.rect(ML + beforeW + 6, imgTop, afterW, imgH);
+
+            infoY = imgTop + imgH + 10;
           } else {
-            doc.setFillColor(...C.cream);
-            doc.rect(ML, cmpTop, cellW, cellH, 'F');
-            doc.setFont('helvetica', 'italic');
-            doc.setFontSize(8);
-            doc.setTextColor(...C.dim);
-            doc.text('No reference photo', ML + cellW / 2, cmpTop + cellH / 2, { align: 'center' });
+            // ── Full-width render ────────────────────────────────────────────
+            const labelBarH = 6;
+            const imgH      = 150;
+
+            // Dark label bar above image
+            doc.setFillColor(...C.dark);
+            doc.rect(ML, imgTop, IW, labelBarH, 'F');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(6.5);
+            doc.setTextColor(...C.goldPale);
+            doc.text('FURNISHED  DESIGN  RENDER', ML + 5, imgTop + 4.2);
+
+            if (render.imgData) {
+              await placeImg(doc, render.imgData, ML, imgTop + labelBarH, IW, imgH);
+              doc.setDrawColor(...C.border);
+              doc.setLineWidth(0.35);
+              doc.rect(ML, imgTop + labelBarH, IW, imgH);
+            } else {
+              doc.setFillColor(...C.cream);
+              doc.rect(ML, imgTop + labelBarH, IW, imgH, 'F');
+              doc.setFont('helvetica', 'italic');
+              doc.setFontSize(9);
+              doc.setTextColor(...C.dim);
+              doc.text('Render pending', ML + IW / 2, imgTop + labelBarH + imgH / 2, { align: 'center' });
+            }
+
+            infoY = imgTop + labelBarH + imgH + 10;
           }
-
-          // After image
-          if (render.imgData) {
-            await placeImg(doc, render.imgData, ML + cellW + 5, cmpTop, cellW, cellH);
-          } else {
-            doc.setFillColor(...C.cream);
-            doc.rect(ML + cellW + 5, cmpTop, cellW, cellH, 'F');
-          }
-
-          // Borders
-          doc.setDrawColor(...C.border);
-          doc.setLineWidth(0.3);
-          doc.rect(ML, cmpTop, cellW, cellH);
-          doc.rect(ML + cellW + 5, cmpTop, cellW, cellH);
-
-          // Arrow connector
-          const arrowMidY = cmpTop + cellH / 2;
-          const arrowX = ML + cellW + 2.5;
-          doc.setFillColor(...C.teal);
-          doc.circle(arrowX, arrowMidY, 3, 'F');
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(10);
-          doc.setTextColor(...C.white);
-          doc.text('›', arrowX, arrowMidY + 1.2, { align: 'center' });
 
           // ── Info section ─────────────────────────────────────────────────
-          let infoY = cmpTop + cellH + 10;
 
           // Pin brief
           const pinBrief = pin?.brief || '';
-          if (pinBrief) {
+          if (pinBrief && infoY < PH - MB - 20) {
             const bLines = doc.splitTextToSize(`"${pinBrief}"`, IW - 10);
             const barH = bLines.length * 5.2 + 6;
             doc.setFillColor(...C.teal);
@@ -629,11 +659,11 @@ Respond ONLY with valid JSON (no markdown fences): {"intro":"...","highlights":[
             doc.setFont('helvetica', 'italic');
             doc.setFontSize(9);
             doc.setTextColor(...C.dark);
-            infoY = textBlock(doc, `"${pinBrief}"`, ML + 7, infoY, IW - 10, 5.2) + 7;
+            infoY = textBlock(doc, `"${pinBrief}"`, ML + 7, infoY, IW - 10, 5.2) + 8;
           }
 
           // Camera angle/FOV badges
-          if (pin) {
+          if (pin && infoY < PH - MB - 14) {
             const badges = [
               pin.angle_deg != null ? `${pin.angle_deg}° Direction` : null,
               pin.fov_deg ? `${pin.fov_deg}° FOV` : null,
@@ -665,28 +695,31 @@ Respond ONLY with valid JSON (no markdown fences): {"intro":"...","highlights":[
             }
           } catch {}
 
-          if (furList.length > 0) {
+          if (furList.length > 0 && infoY < PH - MB - 20) {
             doc.setFont('helvetica', 'bold');
-            doc.setFontSize(9);
+            doc.setFontSize(8.5);
             doc.setTextColor(...C.teal);
-            doc.text('Key Furniture Pieces', ML, infoY);
-            infoY += 7;
+            doc.text('Key Furniture & Finishes', ML, infoY);
+            doc.setDrawColor(...C.teal);
+            doc.setLineWidth(0.4);
+            doc.line(ML, infoY + 2, ML + 54, infoY + 2);
+            infoY += 9;
 
-            const fItems = furList.slice(0, 9);
+            const fItems = furList.slice(0, 12);
             const fCols = 3;
             const fCW = IW / fCols;
             fItems.forEach((item, fi) => {
               const fc = fi % fCols, fr = Math.floor(fi / fCols);
               const fx = ML + fc * fCW;
               const fy = infoY + fr * 8;
-              if (fy > PH - MB - 12) return;
+              if (fy > PH - MB - 10) return;
               doc.setFillColor(...C.gold);
-              doc.circle(fx + 2, fy - 1.5, 1.2, 'F');
+              doc.circle(fx + 2.2, fy - 1.5, 1.3, 'F');
               doc.setFont('helvetica', 'normal');
-              doc.setFontSize(8);
+              doc.setFontSize(7.5);
               doc.setTextColor(...C.dark);
               const fname = typeof item === 'string' ? item : (item.label || item.name || item.item || '');
-              doc.text(fname.slice(0, 30), fx + 6, fy, { maxWidth: fCW - 8 });
+              doc.text(fname.slice(0, 32), fx + 6.5, fy, { maxWidth: fCW - 9 });
             });
           }
         }

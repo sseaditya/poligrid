@@ -239,6 +239,11 @@
               <input type="text" id="pinRoomLabel" placeholder="e.g. Living Room, Unknown Area" />
             </label>
             <label class="field-label">
+              Camera angle °
+              <small class="field-hint" style="font-size:10px;color:var(--text-dim);display:block;margin-top:2px">Drag the arrow tip on the canvas to set direction, or type here (0 = up/north)</small>
+              <input type="number" id="pinAngle" value="0" min="0" max="359" step="1" />
+            </label>
+            <label class="field-label">
               FOV °
               <input type="number" id="pinFov" value="60" min="20" max="120" step="5" />
             </label>

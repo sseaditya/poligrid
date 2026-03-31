@@ -327,6 +327,7 @@ const dom = {
   pinPhotoInput: el("pinPhotoInput"),
   pinPhotoPreview: el("pinPhotoPreview"),
   pinRoomLabel: el("pinRoomLabel"),
+  pinAngle: el("pinAngle"),
   pinFov: el("pinFov"),
   pinBrief: el("pinBrief"),
   // Results view
@@ -363,6 +364,8 @@ let roomEditor = null;
 let activePinId = null;
 let latestArtifacts = null;
 let _editBoqData = []; // Working copy of BOQ being edited in the edit panel
+let _disabledBoqCategories = new Set(); // Categories hidden by user in results view
+let _lastDrawnBoq = []; // Full BOQ last passed to drawBoq (for toggle recalc)
 let _pinSaveTimer = null; // Debounce timer for angle-drag saves
 let _inspirationDataUrls = [];
 
@@ -1052,6 +1055,7 @@ function init() {
   dom.pinPopoverClose.addEventListener("click", () => { dom.pinPopover.hidden = true; activePinId = null; });
   dom.pinPhotoInput.addEventListener("change", onPinPhotoUpload);
   dom.pinRoomLabel.addEventListener("input", onPinFieldChange);
+  dom.pinAngle?.addEventListener("input", onPinFieldChange);
   dom.pinFov.addEventListener("input", onPinFieldChange);
   dom.pinBrief.addEventListener("input", onPinFieldChange);
 
@@ -1546,6 +1550,11 @@ function onSceneChange(state) {
   // Debounce-save all pins so angle drags (and position drags) are persisted
   clearTimeout(_pinSaveTimer);
   _pinSaveTimer = setTimeout(saveAllPins, 800);
+  // Sync angle field in open popover if user dragged the arrow tip on canvas
+  if (activePinId && dom.pinAngle && !dom.pinPopover.hidden) {
+    const activePin = planner?.cameraPins?.find(p => p.id === activePinId);
+    if (activePin) dom.pinAngle.value = Math.round(activePin.angleDeg || 0);
+  }
   dom.downloadScene.disabled = false;
   
   if (state.selected?.type === "furniture") {
@@ -1697,7 +1706,7 @@ function refreshPinsList() {
         ${hasPhoto ? `<img class="pin-item-thumb" src="${pin.photoDataUrl}" alt=""/>` : `<div class="pin-item-thumb-empty">📍</div>`}
         <div class="pin-item-info">
           <span class="pin-item-label">${escapeHtml(pin.roomLabel || "Untitled pin")}</span>
-          <div class="pin-item-meta">${hasPhoto_badge} · FOV ${pin.fovDeg || 60}°</div>
+          <div class="pin-item-meta">${hasPhoto_badge} · ${Math.round(pin.angleDeg || 0)}° · FOV ${pin.fovDeg || 60}°</div>
         </div>
         <button class="pin-item-edit ghost-sm" data-id="${pin.id}">Edit</button>
       </div>
@@ -1712,6 +1721,7 @@ function openPinPopover(pin) {
   activePinId = pin.id;
   dom.pinPopoverTitle.textContent = `Pin — ${pin.roomLabel || "Untitled"}`;
   dom.pinRoomLabel.value = pin.roomLabel || "";
+  if (dom.pinAngle) dom.pinAngle.value = Math.round(pin.angleDeg || 0);
   dom.pinFov.value = pin.fovDeg || 60;
   dom.pinBrief.value = pin.brief || "";
   dom.pinPhotoPreview.hidden = !pin.photoDataUrl;
@@ -1778,15 +1788,23 @@ function onPinPhotoUpload() {
 
 function onPinFieldChange() {
   if (!activePinId || !planner) return;
-  planner.updatePin(activePinId, {
+  const angleVal = dom.pinAngle ? (parseFloat(dom.pinAngle.value) || 0) : null;
+  const updates = {
     roomLabel: dom.pinRoomLabel.value,
     fovDeg: parseFloat(dom.pinFov.value) || 60,
     brief: dom.pinBrief.value
-  });
+  };
+  if (angleVal !== null) updates.angleDeg = ((angleVal % 360) + 360) % 360;
+  planner.updatePin(activePinId, updates);
+  // Keep the angle input in sync with canvas (in case it was dragged and popover opened after)
+  if (dom.pinAngle) {
+    const pin = planner.cameraPins?.find(p => p.id === activePinId);
+    if (pin) dom.pinAngle.value = Math.round(pin.angleDeg || 0);
+  }
   planner.render();
   refreshPinsList();
 
-  // Persist updated pin to Supabase
+  // Persist updated pin to Supabase (no photo data here — photos are saved by onPinPhotoUpload)
   const pin = planner.cameraPins?.find(p => p.id === activePinId);
   if (pin) {
     saveToDb("/api/project/save-pin", {
@@ -1796,9 +1814,6 @@ function onPinFieldChange() {
         xM: pin.xM, yM: pin.yM,
         angleDeg: pin.angleDeg, fovDeg: pin.fovDeg,
         roomLabel: pin.roomLabel, brief: pin.brief,
-        photoDataUrl: pin.photoDataUrl || null,
-        photoMimeType: pin.photoFile?.type || null,
-        photoFileName: pin.photoFile?.name || null,
         existingPhotoPath: pin.existingPhotoPath || null
       }
     });
@@ -2490,6 +2505,7 @@ function initBoqEditPanel() {
 }
 
 function drawBoq(globalBoq) {
+  _lastDrawnBoq = globalBoq || [];
   dom.boqAccordionContainer.innerHTML = "";
   let grandTotal = 0;
 
@@ -2508,25 +2524,63 @@ function drawBoq(globalBoq) {
     const amt = parseFloat(item.amount) || 0;
     categories[cat].total += amt;
     categories[cat].items.push(item);
-    grandTotal += amt;
+    if (!_disabledBoqCategories.has(cat)) grandTotal += amt;
   }
 
   // Build Accordions
   for (const [catName, catData] of Object.entries(categories)) {
+    const isDisabled = _disabledBoqCategories.has(catName);
     const details = document.createElement("details");
-    details.className = "boq-accordion";
-    
+    details.className = "boq-accordion" + (isDisabled ? " boq-accordion-disabled" : "");
+    if (!isDisabled) details.open = false;
+
     const summary = document.createElement("summary");
     summary.className = "boq-accordion-header";
-    summary.innerHTML = `
-      <span class="boq-cat-name">${escapeHtml(catName)}</span>
-      <span class="boq-cat-total">₹${catData.total.toLocaleString("en-IN")}</span>
-    `;
+
+    // Checkbox to toggle category on/off
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.className = "boq-cat-toggle";
+    chk.checked = !isDisabled;
+    chk.title = "Include this category";
+    chk.addEventListener("click", e => e.stopPropagation()); // prevent accordion toggle
+    chk.addEventListener("change", e => {
+      e.stopPropagation();
+      if (e.target.checked) {
+        _disabledBoqCategories.delete(catName);
+      } else {
+        _disabledBoqCategories.add(catName);
+      }
+      drawBoq(_lastDrawnBoq); // redraw with updated disabled state
+      _persistBoqDisabledState(); // save to DB
+    });
+
+    // Edit button
+    const editBtn = document.createElement("button");
+    editBtn.className = "boq-cat-edit-btn";
+    editBtn.title = "Edit this section";
+    editBtn.textContent = "✎";
+    editBtn.addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      openBoqEditPanel();
+    });
+
+    summary.appendChild(chk);
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "boq-cat-name";
+    nameSpan.textContent = catName;
+    summary.appendChild(nameSpan);
+    const totalSpan = document.createElement("span");
+    totalSpan.className = "boq-cat-total" + (isDisabled ? " boq-cat-total-disabled" : "");
+    totalSpan.textContent = `₹${catData.total.toLocaleString("en-IN")}`;
+    summary.appendChild(totalSpan);
+    summary.appendChild(editBtn);
     details.appendChild(summary);
 
     const tableWrap = document.createElement("div");
     tableWrap.className = "table-wrap boq-accordion-content";
-    
+
     // Build sub-table
     let rowsHtml = "";
     for (const line of catData.items) {
@@ -2548,22 +2602,43 @@ function drawBoq(globalBoq) {
         <thead>
           <tr><th>Item</th><th>Qty</th><th>Unit</th><th>Rate (₹)</th><th>Amount (₹)</th></tr>
         </thead>
-        <tbody>
-          ${rowsHtml}
-        </tbody>
+        <tbody>${rowsHtml}</tbody>
       </table>
     `;
-    
+
     details.appendChild(tableWrap);
     dom.boqAccordionContainer.appendChild(details);
   }
 
   dom.grandTotal.textContent = `₹${grandTotal.toLocaleString("en-IN")}`;
 
-  // Placement summary updated to just list all items
-  dom.placementSummary.textContent = globalBoq.map(p =>
-    `[${p.category}] ${p.item}: ${p.qty} ${p.unit} @ ₹${p.rate}`
-  ).join("\n");
+  // Placement summary for download
+  dom.placementSummary.textContent = globalBoq
+    .filter(p => !_disabledBoqCategories.has(p.category || "Uncategorized"))
+    .map(p => `[${p.category}] ${p.item}: ${p.qty} ${p.unit} @ ₹${p.rate}`)
+    .join("\n");
+}
+
+function _persistBoqDisabledState() {
+  if (!appState.projectId) return;
+  // Save only the enabled items to DB
+  const enabledProjectItems = _projectBoqItems.filter(
+    it => !_disabledBoqCategories.has(it.category || "Uncategorized")
+  );
+  const latestVer = _allVersions[_allVersions.length - 1] || {};
+  const enabledVersionItems = (latestVer.boqItems || []).filter(
+    it => !_disabledBoqCategories.has(it.category || "Uncategorized")
+  );
+  fetch("/api/project/update-boq", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectId: appState.projectId,
+      versionId: latestVer.id || null,
+      projectItems: enabledProjectItems,
+      versionItems: enabledVersionItems
+    })
+  }).catch(e => console.warn("[BOQ toggle] DB save failed:", e.message));
 }
 
 function buildArtifacts(sceneState, globalBoq) {

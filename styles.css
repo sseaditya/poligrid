@@ -1156,3 +1156,31 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
   display: block; font-size: 11px; color: var(--text-dim);
   font-weight: 400; margin-top: 1px; margin-bottom: 4px;
 }
+
+/* ── BOQ category toggle + edit button ───────────────────────────────────────── */
+.boq-accordion-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; cursor: pointer;
+  list-style: none;
+}
+.boq-accordion-header::-webkit-details-marker { display: none; }
+
+.boq-cat-toggle {
+  accent-color: var(--accent); width: 15px; height: 15px;
+  cursor: pointer; flex-shrink: 0; margin-right: 2px;
+}
+.boq-cat-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); }
+.boq-cat-total { font-size: 13px; font-weight: 700; color: var(--accent); }
+.boq-cat-total-disabled { color: var(--text-dim); text-decoration: line-through; }
+
+.boq-cat-edit-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--text-dim); border-radius: 6px;
+  padding: 2px 7px; font-size: 11px; cursor: pointer;
+  transition: all 0.15s; flex-shrink: 0;
+  font-family: var(--font);
+}
+.boq-cat-edit-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+.boq-accordion-disabled > summary .boq-cat-name { color: var(--text-dim); }
+.boq-accordion-disabled > .boq-accordion-content { display: none; }
