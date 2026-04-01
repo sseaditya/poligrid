@@ -1,0 +1,573 @@
+"use strict";
+const db = require("../db");
+const { httpError } = require("./utils");
+// ─── Project DB Handlers ─────────────────────────────────────────────────────
+
+async function handleProjectAction(action, body) {
+  switch (action) {
+    case "save-analysis": return projectSaveAnalysis(body);
+    case "save-rooms": return projectSaveRooms(body);
+    case "save-inspiration": return projectSaveInspiration(body);
+    case "save-pin": return projectSavePin(body);
+    case "save-render": return projectSaveRender(body);
+    case "save-placements": return projectSavePlacements(body);
+    case "save-boq": return projectSaveBoq(body);
+    case "update-boq": return projectUpdateBoq(body);
+    case "save-scene": return projectSaveScene(body);
+    case "rename": return projectRename(body);
+    case "save-brief": return projectSaveBrief(body);
+    case "create-version": return projectCreateVersion(body);
+    default: throw httpError(404, "Unknown project action: " + action);
+  }
+}
+
+// ── Create a new design version for a project ─────────────────────────────────
+async function projectCreateVersion(body) {
+  const { projectId, designBrief, regenInspirationImages } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+  const sb = db.getClient();
+
+  // Determine next version number
+  const { data: existing } = await sb
+    .from("project_versions")
+    .select("version_number")
+    .eq("project_id", projectId)
+    .order("version_number", { ascending: false })
+    .limit(1);
+  const nextNum = existing?.length ? existing[0].version_number + 1 : 1;
+
+  // Upload version-specific inspiration images if provided
+  let regenInspirationPaths = null;
+  if (Array.isArray(regenInspirationImages) && regenInspirationImages.length > 0) {
+    const paths = [];
+    for (let i = 0; i < regenInspirationImages.length; i++) {
+      const img = regenInspirationImages[i];
+      if (!img.base64) continue;
+      const ext = (img.mimeType || "").includes("png") ? "png" : "jpg";
+      const storagePath = await db.uploadBase64(
+        "poligrid-inspiration",
+        `${projectId}/v${nextNum}_insp_${Date.now()}_${i}.${ext}`,
+        img.base64,
+        img.mimeType || "image/jpeg"
+      );
+      if (storagePath) paths.push(storagePath);
+    }
+    if (paths.length) regenInspirationPaths = paths;
+  }
+
+  const { data, error } = await sb
+    .from("project_versions")
+    .insert({
+      project_id: projectId,
+      version_number: nextNum,
+      design_brief: designBrief || null,
+      regen_inspiration_paths: regenInspirationPaths
+    })
+    .select()
+    .single();
+
+  if (error) throw httpError(500, "Failed to create version: " + error.message);
+  return { version: data };
+}
+
+// ── Load all versions for a project with their renders + BOQ ──────────────────
+async function projectLoadVersions(projectId) {
+  if (!projectId) throw httpError(400, "Missing projectId");
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const pubUrl = (bucket, storagePath) =>
+    storagePath ? `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}` : null;
+
+  const [{ data: versions }, { data: insps }] = await Promise.all([
+    sb.from("project_versions").select("*").eq("project_id", projectId).order("version_number", { ascending: true }),
+    sb.from("inspiration_images").select("*").eq("project_id", projectId).order("sort_order", { ascending: true })
+  ]);
+
+  const versionsWithData = await Promise.all((versions || []).map(async v => {
+    const [{ data: renders }, { data: boq }] = await Promise.all([
+      sb.from("renders").select("*").eq("version_id", v.id).order("created_at", { ascending: true }),
+      sb.from("boq_items").select("*").eq("version_id", v.id)
+    ]);
+    // Version-specific inspiration overrides project-level inspiration
+    const inspPaths = v.regen_inspiration_paths;
+    const inspUrls = inspPaths
+      ? inspPaths.map(p => pubUrl("poligrid-inspiration", p))
+      : (insps || []).map(i => pubUrl("poligrid-inspiration", i.storage_path));
+    return {
+      ...v,
+      renders: (renders || []).map(r => ({ ...r, url: pubUrl("poligrid-renders", r.storage_path) })),
+      boqItems: boq || [],
+      inspirationUrls: inspUrls.filter(Boolean)
+    };
+  }));
+
+  return { versions: versionsWithData };
+}
+
+async function projectSaveAnalysis(body) {
+  const { projectId, floorPlanBase64, fileName, analysis, context } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  await db.upsertProject(projectId, {
+    property_type: context?.propertyType,
+    bhk: context?.bhk,
+    total_area_m2: context?.totalAreaM2 || analysis?.totalAreaM2,
+    notes: context?.notes,
+    bhk_type: analysis?.bhkType,
+    orientation: analysis?.orientation,
+    summary: analysis?.summary
+  });
+
+  const storagePath = await db.uploadBase64(
+    "poligrid-floor-plans",
+    `${projectId}/floorplan.png`,
+    floorPlanBase64,
+    "image/png"
+  );
+
+  // Floor plan is static per project — upsert in place rather than inserting a new row
+  const sb = db.getClient();
+  const { data: existingFp } = await sb.from("floor_plans").select("id").eq("project_id", projectId).limit(1).single();
+  let fpId;
+  if (existingFp) {
+    await sb.from("floor_plans").update({
+      file_name: fileName || "floorplan.png",
+      storage_path: storagePath,
+      analysis_raw: analysis,
+      analyzed_at: new Date().toISOString()
+    }).eq("id", existingFp.id);
+    fpId = existingFp.id;
+  } else {
+    fpId = await db.insertRow("floor_plans", {
+      project_id: projectId,
+      file_name: fileName || "floorplan.png",
+      storage_path: storagePath,
+      analysis_raw: analysis,
+      analyzed_at: new Date().toISOString()
+    });
+  }
+
+  const rooms = analysis?.rooms || [];
+  if (rooms.length) {
+    await db.replaceRows("rooms", { project_id: projectId }, rooms.map(r => ({
+      project_id: projectId,
+      floor_plan_id: fpId,
+      label: r.label,
+      name: r.name,
+      room_type: r.roomType,
+      bbox_x_pct: r.bbox?.xPct,
+      bbox_y_pct: r.bbox?.yPct,
+      bbox_w_pct: r.bbox?.wPct,
+      bbox_h_pct: r.bbox?.hPct,
+      width_m: r.widthM,
+      length_m: r.lengthM,
+      notes: r.notes,
+      walls: r.walls || null,
+      fp_placements: r.placements || null
+    })));
+  }
+
+  const boq = analysis?.globalBoq || [];
+  if (boq.length) {
+    await db.replaceRows(
+      "boq_items",
+      { project_id: projectId, source: "floor_plan_analysis" },
+      boq.map(b => ({
+        project_id: projectId,
+        source: "floor_plan_analysis",
+        category: b.category,
+        item: b.item,
+        qty: b.qty,
+        unit: b.unit,
+        rate: b.rate,
+        amount: b.amount
+      }))
+    );
+  }
+
+  return { ok: true };
+}
+
+async function projectSaveRooms(body) {
+  const { projectId, rooms } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  await db.replaceRows("rooms", { project_id: projectId }, (rooms || []).map(r => ({
+    project_id: projectId,
+    label: r.label,
+    name: r.name,
+    room_type: r.roomType,
+    bbox_x_pct: r.bbox?.xPct,
+    bbox_y_pct: r.bbox?.yPct,
+    bbox_w_pct: r.bbox?.wPct,
+    bbox_h_pct: r.bbox?.hPct,
+    width_m: r.widthM,
+    length_m: r.lengthM,
+    notes: r.notes
+  })));
+
+  return { ok: true };
+}
+
+async function projectSaveInspiration(body) {
+  const { projectId, images } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  // Ensure the project row exists before inserting child rows (FK constraint)
+  await db.upsertProject(projectId, {});
+
+  // Get current max sort_order so new images append rather than collide
+  const sb = db.getClient();
+  const { data: existing } = await sb
+    .from("inspiration_images")
+    .select("sort_order")
+    .eq("project_id", projectId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+  const offset = existing?.[0]?.sort_order != null ? existing[0].sort_order + 1 : 0;
+
+  const rows = [];
+  for (let i = 0; i < (images || []).length; i++) {
+    const img = images[i];
+    if (!img.base64) continue;
+    const ext = (img.mimeType || "").includes("png") ? "png" : "jpg";
+    const storagePath = await db.uploadBase64(
+      "poligrid-inspiration",
+      `${projectId}/${Date.now()}_${i}.${ext}`,
+      img.base64,
+      img.mimeType || "image/jpeg"
+    );
+    rows.push({
+      project_id: projectId,
+      file_name: img.fileName || `${i}.${ext}`,
+      storage_path: storagePath,
+      sort_order: offset + i
+    });
+  }
+
+  if (rows.length) {
+    const { error } = await sb.from("inspiration_images").insert(rows);
+    if (error) console.error("[DB] Insert inspiration_images failed:", error.message);
+  }
+  return { ok: true };
+}
+
+async function projectSavePin(body) {
+  const { projectId, pin } = body;
+  if (!projectId || !pin?.clientId) throw httpError(400, "Missing projectId or pin.clientId");
+
+  let photoStoragePath = null;
+  if (pin.photoDataUrl) {
+    const ext = (pin.photoMimeType || "").includes("png") ? "png" : "jpg";
+    photoStoragePath = await db.uploadBase64(
+      "poligrid-pin-photos",
+      `${projectId}/${pin.clientId}.${ext}`,
+      pin.photoDataUrl,
+      pin.photoMimeType || "image/jpeg"
+    );
+  }
+
+  const pinRow = {
+    project_id: projectId,
+    client_id: pin.clientId,
+    x_m: pin.xM,
+    y_m: pin.yM,
+    angle_deg: pin.angleDeg,
+    fov_deg: pin.fovDeg,
+    room_label: pin.roomLabel,
+    brief: pin.brief,
+    photo_file_name: pin.photoFileName || null,
+  };
+  const resolvedPath = photoStoragePath || pin.existingPhotoPath || null;
+  if (resolvedPath !== null) {
+    pinRow.photo_storage_path = resolvedPath;
+  }
+  await db.upsertPin(projectId, pinRow);
+
+  return { ok: true, photoStoragePath: resolvedPath };
+}
+
+async function projectSaveRender(body) {
+  const { projectId, pinClientId, roomLabel, dataUrl, modelUsed, furnitureList, generationType, versionId } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  const ts = Date.now();
+  const safe = (roomLabel || "room").replace(/[^a-z0-9_]/gi, "_").toLowerCase();
+  const storagePath = await db.uploadBase64(
+    "poligrid-renders",
+    `${projectId}/${safe}_${ts}.png`,
+    dataUrl,
+    "image/png"
+  );
+
+  await db.insertRow("renders", {
+    project_id: projectId,
+    camera_pin_client_id: pinClientId || null,
+    room_label: roomLabel,
+    storage_path: storagePath,
+    model_used: modelUsed || null,
+    furniture_list: furnitureList || null,
+    generation_type: generationType || "generate",
+    version_id: versionId || null
+  });
+
+  return { ok: true };
+}
+
+async function projectSavePlacements(body) {
+  const { projectId, placements } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  await db.replaceRows("furniture_placements", { project_id: projectId }, (placements || []).map(p => ({
+    project_id: projectId,
+    client_id: p.id,
+    module_id: p.moduleId,
+    label: p.label,
+    type: p.type,
+    room_label: p.roomLabel,
+    room_type: p.roomType,
+    x_m: p.xM,
+    y_m: p.yM,
+    w_m: p.wM,
+    d_m: p.dM,
+    h_m: p.hM,
+    rotation_y: p.rotationY,
+    wall: p.wall,
+    color: p.color,
+    source: p.source || "manual"
+  })));
+
+  return { ok: true };
+}
+
+async function projectSaveBoq(body) {
+  const { projectId, boqItems, versionId } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+  const sb = db.getClient();
+
+  if (versionId) {
+    // Version-specific: insert without deleting (each version owns its BOQ)
+    const rows = (boqItems || []).map(b => ({
+      project_id: projectId,
+      source: "furniture_generated",
+      version_id: versionId,
+      category: b.category,
+      item: b.item,
+      qty: b.qty,
+      unit: b.unit,
+      rate: b.rate,
+      amount: b.amount
+    }));
+    if (rows.length) {
+      const { error } = await sb.from("boq_items").insert(rows);
+      if (error) console.error("[DB] Insert version BOQ failed:", error.message);
+    }
+    return { ok: true };
+  }
+
+  // Legacy path (no version): replace all furniture_generated items
+  await db.replaceRows(
+    "boq_items",
+    { project_id: projectId, source: "furniture_generated" },
+    (boqItems || []).map(b => ({
+      project_id: projectId,
+      source: "furniture_generated",
+      category: b.category,
+      item: b.item,
+      qty: b.qty,
+      unit: b.unit,
+      rate: b.rate,
+      amount: b.amount
+    }))
+  );
+
+  return { ok: true };
+}
+
+async function projectUpdateBoq(body) {
+  const { projectId, versionId, projectItems, versionItems } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+  const sb = db.getClient();
+
+  // Replace project-level (floor plan) BOQ items
+  if (Array.isArray(projectItems)) {
+    await db.replaceRows(
+      "boq_items",
+      { project_id: projectId, source: "floor_plan_analysis" },
+      projectItems.map(b => ({
+        project_id: projectId,
+        source: "floor_plan_analysis",
+        category: b.category,
+        item: b.item,
+        qty: b.qty,
+        unit: b.unit,
+        rate: b.rate,
+        amount: b.amount
+      }))
+    );
+  }
+
+  // Replace version-level BOQ items
+  if (versionId && Array.isArray(versionItems)) {
+    const { error: delErr } = await sb.from("boq_items").delete().eq("version_id", versionId);
+    if (delErr) console.error("[DB] Delete version BOQ failed:", delErr.message);
+    if (versionItems.length) {
+      const rows = versionItems.map(b => ({
+        project_id: projectId,
+        version_id: versionId,
+        source: "furniture_generated",
+        category: b.category,
+        item: b.item,
+        qty: b.qty,
+        unit: b.unit,
+        rate: b.rate,
+        amount: b.amount
+      }));
+      const { error: insErr } = await sb.from("boq_items").insert(rows);
+      if (insErr) console.error("[DB] Insert updated version BOQ failed:", insErr.message);
+    }
+  }
+
+  return { ok: true };
+}
+
+async function projectSaveScene(body) {
+  const { projectId, sceneJson, boqCsv } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+
+  let csvPath = null;
+  if (boqCsv) {
+    csvPath = await db.uploadText(
+      "poligrid-exports",
+      `${projectId}/boq_${Date.now()}.csv`,
+      boqCsv,
+      "text/csv; charset=utf-8"
+    );
+  }
+
+  await db.insertRow("scene_exports", {
+    project_id: projectId,
+    scene_json: sceneJson || null,
+    boq_csv_storage_path: csvPath
+  });
+
+  return { ok: true };
+}
+
+async function projectList() {
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const { data, error } = await sb
+    .from("projects")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at")
+    .order("updated_at", { ascending: false });
+  if (error) throw httpError(500, "Failed to list projects: " + error.message);
+
+  const projects = await Promise.all((data || []).map(async p => {
+    const { data: fps } = await sb
+      .from("floor_plans")
+      .select("storage_path")
+      .eq("project_id", p.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const fp = fps && fps[0];
+    return {
+      ...p,
+      thumbnail_url: fp?.storage_path
+        ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
+        : null
+    };
+  }));
+  return { projects };
+}
+
+async function projectLoad(id) {
+  if (!id) throw httpError(400, "Missing project id");
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const pubUrl = (bucket, storagePath) =>
+    storagePath ? `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}` : null;
+
+  const [
+    { data: project },
+    { data: fps },
+    { data: rooms },
+    { data: cameraPins },
+    { data: furniturePlacements },
+    { data: boqItems },
+    { data: inspirationImages },
+    { data: versions }
+  ] = await Promise.all([
+    sb.from("projects").select("*").eq("id", id).single(),
+    sb.from("floor_plans").select("*").eq("project_id", id).order("created_at", { ascending: false }).limit(1),
+    sb.from("rooms").select("*").eq("project_id", id),
+    sb.from("camera_pins").select("*").eq("project_id", id),
+    sb.from("furniture_placements").select("*").eq("project_id", id),
+    sb.from("boq_items").select("*").eq("project_id", id).eq("source", "floor_plan_analysis"),
+    sb.from("inspiration_images").select("*").eq("project_id", id).order("sort_order", { ascending: true }),
+    sb.from("project_versions").select("*").eq("project_id", id).order("version_number", { ascending: true })
+  ]);
+
+  if (!project) throw httpError(404, "Project not found");
+  const fp = fps && fps[0] ? { ...fps[0], url: pubUrl("poligrid-floor-plans", fps[0].storage_path) } : null;
+
+  // For each version, fetch its renders and BOQ in parallel
+  const versionsWithData = await Promise.all((versions || []).map(async v => {
+    const [{ data: renders }, { data: boq }] = await Promise.all([
+      sb.from("renders").select("*").eq("version_id", v.id).order("created_at", { ascending: true }),
+      sb.from("boq_items").select("*").eq("version_id", v.id)
+    ]);
+    const inspPaths = v.regen_inspiration_paths;
+    const inspUrls = inspPaths
+      ? inspPaths.map(p => pubUrl("poligrid-inspiration", p))
+      : (inspirationImages || []).map(i => pubUrl("poligrid-inspiration", i.storage_path));
+    return {
+      ...v,
+      renders: (renders || []).map(r => ({ ...r, url: pubUrl("poligrid-renders", r.storage_path) })),
+      boqItems: boq || [],
+      inspirationUrls: inspUrls.filter(Boolean)
+    };
+  }));
+
+  return {
+    project,
+    floorPlan: fp,
+    rooms: rooms || [],
+    cameraPins: (cameraPins || []).map(p => ({
+      ...p,
+      photo_url: pubUrl("poligrid-pin-photos", p.photo_storage_path)
+    })),
+    furniturePlacements: furniturePlacements || [],
+    boqItems: boqItems || [],
+    inspirationImages: (inspirationImages || []).map(i => ({
+      ...i,
+      url: pubUrl("poligrid-inspiration", i.storage_path)
+    })),
+    versions: versionsWithData
+  };
+}
+
+async function projectRename(body) {
+  const { projectId, name } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+  const sb = db.getClient();
+  const { error } = await sb.from("projects").update({ name: name || null }).eq("id", projectId);
+  if (error) throw httpError(500, "Rename failed: " + error.message);
+  return { ok: true };
+}
+
+async function projectSaveBrief(body) {
+  const { projectId, globalBrief } = body;
+  if (!projectId) throw httpError(400, "Missing projectId");
+  const sb = db.getClient();
+  const { error } = await sb.from("projects").update({ global_brief: globalBrief || null }).eq("id", projectId);
+  if (error) throw httpError(500, "Save brief failed: " + error.message);
+  return { ok: true };
+}
+
+module.exports = {
+  handleProjectAction,
+  projectList,
+  projectLoad,
+  projectLoadVersions
+};
