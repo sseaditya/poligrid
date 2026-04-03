@@ -6,6 +6,7 @@
     }
   },
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/route" }
+    { "src": "/api/(.*)", "dest": "/api/route" },
+    { "src": "/", "dest": "/login.html" }
   ]
 }

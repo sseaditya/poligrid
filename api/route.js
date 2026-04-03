@@ -5,6 +5,29 @@
 const zlib = require("zlib");
 const db = require("../db.js");
 
+// ─── Auth helpers (inlined — route.js can't import server/* modules) ──────────
+function extractToken(req) {
+  const auth = req.headers["authorization"] || "";
+  if (!auth.startsWith("Bearer ")) return null;
+  return auth.slice(7).trim() || null;
+}
+async function requireAuthRoute(req, allowedRoles) {
+  const token = extractToken(req);
+  if (!token) throw httpError(401, "Authentication required.");
+  const sb = db.getClient();
+  const { data: { user }, error } = await sb.auth.getUser(token);
+  if (error || !user) throw httpError(401, "Invalid or expired session.");
+  const { data: profile, error: pe } = await sb.from("profiles").select("*").eq("id", user.id).single();
+  if (pe || !profile) throw httpError(401, "User profile not found.");
+  if (!profile.is_active) throw httpError(403, "Account is deactivated.");
+  if (allowedRoles && !allowedRoles.includes(profile.role))
+    throw httpError(403, `Role '${profile.role}' is not allowed.`);
+  return { user, profile };
+}
+async function getAuthProfileRoute(req) {
+  try { return await requireAuthRoute(req); } catch { return null; }
+}
+
 const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1.5";
 const DEFAULT_OPENAI_TEXT_MODEL  = "gpt-5.4-mini";
 const DEFAULT_OPENAI_VISION_MODEL = "gpt-5.4";
@@ -49,15 +72,84 @@ module.exports = async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/generate-text") {
       return sendJson(res, 200, await generateText(await readJson(req)));
     }
-    if (req.method === "GET" && url.pathname === "/api/project/list") {
-      return sendJson(res, 200, await projectList());
-    }
     if (req.method === "GET" && url.pathname === "/api/project/load") {
       return sendJson(res, 200, await projectLoad(url.searchParams.get("id")));
     }
     if (req.method === "GET" && url.pathname === "/api/project/versions") {
       return sendJson(res, 200, await projectLoadVersions(url.searchParams.get("id")));
     }
+    if (req.method === "GET" && url.pathname === "/api/config") {
+      return sendJson(res, 200, {
+        supabaseUrl: process.env.SUPABASE_URL,
+        supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+      });
+    }
+
+    // ── Auth ────────────────────────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/auth/me") {
+      const auth = await requireAuthRoute(req);
+      return sendJson(res, 200, { profile: auth.profile });
+    }
+
+    // ── Drawings ────────────────────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/drawings/list") {
+      return sendJson(res, 200, await apiDrawingsList(req, url.searchParams.get("projectId")));
+    }
+    if (req.method === "GET" && url.pathname === "/api/drawings/pending") {
+      return sendJson(res, 200, await apiDrawingsPending(req));
+    }
+    if (req.method === "GET" && url.pathname === "/api/drawings/signed-url") {
+      return sendJson(res, 200, await apiDrawingSignedUrl(req, url.searchParams.get("path")));
+    }
+    if (req.method === "POST" && url.pathname === "/api/drawings/upload") {
+      return sendJson(res, 200, await apiDrawingUpload(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/drawings/review") {
+      return sendJson(res, 200, await apiDrawingReview(req, await readJson(req)));
+    }
+
+    // ── Tasks ───────────────────────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/tasks/list") {
+      return sendJson(res, 200, await apiTasksList(req, url.searchParams));
+    }
+    if (req.method === "POST" && url.pathname === "/api/tasks/create") {
+      return sendJson(res, 200, await apiTaskCreate(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/tasks/update") {
+      return sendJson(res, 200, await apiTaskUpdate(req, await readJson(req)));
+    }
+
+    // ── Users / Admin ────────────────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/users/list") {
+      return sendJson(res, 200, await apiUsersList(req));
+    }
+    if (req.method === "POST" && url.pathname === "/api/users/update-role") {
+      return sendJson(res, 200, await apiUserUpdateRole(req, await readJson(req)));
+    }
+
+    // ── CEO dashboard ────────────────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/ceo/dashboard") {
+      return sendJson(res, 200, await apiCeoDashboard(req));
+    }
+    if (req.method === "GET" && url.pathname === "/api/ceo/team-stats") {
+      return sendJson(res, 200, await apiTeamStats(req));
+    }
+
+    // ── Projects ─────────────────────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/project/list") {
+      const auth = await getAuthProfileRoute(req);
+      return sendJson(res, 200, await projectList(auth));
+    }
+    if (req.method === "GET" && url.pathname === "/api/project/team") {
+      return sendJson(res, 200, await apiProjectTeamGet(req, url.searchParams.get("id")));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/assign-user") {
+      return sendJson(res, 200, await apiProjectAssignUser(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/unassign-user") {
+      return sendJson(res, 200, await apiProjectUnassignUser(req, await readJson(req)));
+    }
+
     if (req.method === "POST" && url.pathname.startsWith("/api/project/")) {
       const action = url.pathname.slice("/api/project/".length);
       return sendJson(res, 200, await handleProjectAction(action, await readJson(req)));
@@ -2011,13 +2103,32 @@ async function projectSaveScene(body) {
   return { ok: true };
 }
 
-async function projectList() {
+async function projectList(auth) {
   const sb = db.getClient();
   const supabaseUrl = process.env.SUPABASE_URL;
-  const { data, error } = await sb
+
+  let query = sb
     .from("projects")
-    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by")
     .order("updated_at", { ascending: false });
+
+  if (auth && !["admin", "ceo"].includes(auth.profile.role)) {
+    const userId = auth.profile.id;
+    const { data: assigned } = await sb.from("project_assignments").select("project_id").eq("user_id", userId);
+    const assignedIds = (assigned || []).map(a => a.project_id);
+    if (auth.profile.role === "sales") {
+      if (assignedIds.length > 0) {
+        query = query.or(`created_by.eq.${userId},id.in.(${assignedIds.join(",")})`);
+      } else {
+        query = query.eq("created_by", userId);
+      }
+    } else {
+      if (assignedIds.length === 0) return { projects: [] };
+      query = query.in("id", assignedIds);
+    }
+  }
+
+  const { data, error } = await query;
   if (error) throw httpError(500, "Failed to list projects: " + error.message);
 
   const projects = await Promise.all((data || []).map(async p => {
@@ -2118,5 +2229,256 @@ async function projectSaveBrief(body) {
   const sb = db.getClient();
   const { error } = await sb.from("projects").update({ global_brief: globalBrief || null }).eq("id", projectId);
   if (error) throw httpError(500, "Save brief failed: " + error.message);
+  return { ok: true };
+}
+
+// ─── Drawings ─────────────────────────────────────────────────────────────────
+const DRAWING_MIME_MAP = {
+  pdf: "application/pdf", png: "image/png", jpg: "image/jpeg",
+  jpeg: "image/jpeg", dwg: "application/octet-stream", dxf: "application/octet-stream",
+};
+
+async function apiDrawingsList(req, projectId) {
+  await requireAuthRoute(req);
+  if (!projectId) throw httpError(400, "projectId required.");
+  const sb = db.getClient();
+  const { data, error } = await sb
+    .from("drawings")
+    .select(`*, uploader:profiles!uploaded_by(id, full_name, role),
+      drawing_reviews(id, status, comments, reviewed_at, reviewer:profiles!reviewed_by(full_name))`)
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+  if (error) throw httpError(500, error.message);
+  return { drawings: data };
+}
+
+async function apiDrawingsPending(req) {
+  await requireAuthRoute(req, ["admin", "lead_designer"]);
+  const sb = db.getClient();
+  const { data, error } = await sb
+    .from("drawings")
+    .select(`*, project:projects(id, name, client_name), uploader:profiles!uploaded_by(id, full_name)`)
+    .eq("status", "pending_review")
+    .order("created_at", { ascending: true });
+  if (error) throw httpError(500, error.message);
+  return { drawings: data || [] };
+}
+
+async function apiDrawingSignedUrl(req, filePath) {
+  await requireAuthRoute(req);
+  if (!filePath) throw httpError(400, "path required.");
+  const sb = db.getClient();
+  const { data, error } = await sb.storage.from("poligrid-drawings").createSignedUrl(filePath, 120);
+  if (error || !data?.signedUrl) throw httpError(500, "Could not generate signed URL.");
+  return { url: data.signedUrl };
+}
+
+async function apiDrawingUpload(req, body) {
+  const { profile } = await requireAuthRoute(req, ["admin", "designer", "lead_designer"]);
+  const { projectId, drawingType, title, description, fileBase64, fileName, fileSizeBytes } = body;
+  if (!projectId || !drawingType || !title || !fileBase64 || !fileName)
+    throw httpError(400, "projectId, drawingType, title, fileBase64, fileName required.");
+
+  const ext = fileName.split(".").pop().toLowerCase();
+  const mimeType = DRAWING_MIME_MAP[ext] || "application/octet-stream";
+  const sb = db.getClient();
+
+  const { data: existing } = await sb.from("drawings").select("version_number")
+    .eq("project_id", projectId).eq("drawing_type", drawingType)
+    .order("version_number", { ascending: false }).limit(1);
+  const versionNumber = existing?.length ? existing[0].version_number + 1 : 1;
+  const storagePath = `${projectId}/${drawingType}/v${versionNumber}_${Date.now()}_${fileName}`;
+
+  const uploadedPath = await db.uploadBase64("poligrid-drawings", storagePath, fileBase64, mimeType);
+  if (!uploadedPath) throw httpError(500, "Failed to upload drawing to storage.");
+
+  const { data: row, error } = await sb.from("drawings").insert({
+    project_id: projectId, uploaded_by: profile.id, drawing_type: drawingType,
+    title, description: description || null, file_path: storagePath,
+    file_name: fileName, file_size_bytes: fileSizeBytes || null, version_number: versionNumber,
+  }).select("id").single();
+  if (error) throw httpError(500, error.message);
+
+  const { data: leads } = await sb.from("profiles").select("id, full_name, email")
+    .eq("role", "lead_designer").eq("is_active", true);
+  if (leads?.length) {
+    const tasks = leads.map(ld => ({
+      assigned_to: ld.id, assigned_by: profile.id, project_id: projectId, drawing_id: row.id,
+      title: `Review ${drawingType} drawing: ${title}`,
+      description: `Submitted by ${profile.full_name} — v${versionNumber}.`, priority: "medium",
+    }));
+    await sb.from("tasks").insert(tasks);
+  }
+  return { drawingId: row.id, storagePath, versionNumber };
+}
+
+async function apiDrawingReview(req, body) {
+  const { profile } = await requireAuthRoute(req, ["admin", "lead_designer"]);
+  const { drawingId, status, comments } = body;
+  if (!drawingId || !status) throw httpError(400, "drawingId, status required.");
+  const valid = ["approved", "rejected", "revision_requested"];
+  if (!valid.includes(status)) throw httpError(400, "Invalid status.");
+
+  const sb = db.getClient();
+  await sb.from("drawing_reviews").insert({
+    drawing_id: drawingId, reviewed_by: profile.id, status, comments: comments || null,
+  });
+  await sb.from("drawings").update({ status }).eq("id", drawingId);
+
+  const { data: drawing } = await sb.from("drawings")
+    .select("project_id, uploaded_by, title, drawing_type, projects(name)")
+    .eq("id", drawingId).single();
+  if (drawing && status === "revision_requested") {
+    const { data: designer } = await sb.from("profiles").select("id").eq("id", drawing.uploaded_by).single();
+    if (designer) {
+      await sb.from("tasks").insert({
+        assigned_to: designer.id, assigned_by: profile.id,
+        project_id: drawing.project_id, drawing_id: drawingId,
+        title: `Revision needed: ${drawing.title}`,
+        description: comments || "Your drawing needs revision.", priority: "high",
+      });
+    }
+  }
+  return { ok: true };
+}
+
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+async function apiTasksList(req, searchParams) {
+  const { profile } = await requireAuthRoute(req);
+  const sb = db.getClient();
+  let query = sb.from("tasks")
+    .select(`*, project:projects(id, name), drawing:drawings(id, title, drawing_type),
+      assigner:profiles!assigned_by(full_name)`)
+    .order("created_at", { ascending: false }).limit(100);
+
+  const isAdmin = ["admin", "ceo"].includes(profile.role);
+  const filterUserId = searchParams?.get("userId");
+  if (isAdmin && filterUserId) { query = query.eq("assigned_to", filterUserId); }
+  else if (!isAdmin) { query = query.eq("assigned_to", profile.id); }
+
+  const statusFilter = searchParams?.get("status");
+  if (statusFilter) query = query.eq("status", statusFilter);
+  const projectFilter = searchParams?.get("projectId");
+  if (projectFilter) query = query.eq("project_id", projectFilter);
+
+  const { data, error } = await query;
+  if (error) throw httpError(500, error.message);
+  return { tasks: data };
+}
+
+async function apiTaskCreate(req, body) {
+  const { profile } = await requireAuthRoute(req, ["admin", "lead_designer"]);
+  const { assignedTo, projectId, drawingId, title, description, priority, dueDate } = body;
+  if (!assignedTo || !title) throw httpError(400, "assignedTo, title required.");
+  const sb = db.getClient();
+  const { data, error } = await sb.from("tasks").insert({
+    assigned_to: assignedTo, assigned_by: profile.id,
+    project_id: projectId || null, drawing_id: drawingId || null,
+    title, description: description || null,
+    priority: priority || "medium", due_date: dueDate || null,
+  }).select("id").single();
+  if (error) throw httpError(500, error.message);
+  return { taskId: data.id };
+}
+
+async function apiTaskUpdate(req, body) {
+  const { profile } = await requireAuthRoute(req);
+  const { taskId, status } = body;
+  if (!taskId || !status) throw httpError(400, "taskId, status required.");
+  const sb = db.getClient();
+  const updates = { status };
+  if (status === "completed") updates.completed_at = new Date().toISOString();
+  let q = sb.from("tasks").update(updates).eq("id", taskId);
+  if (!["admin"].includes(profile.role)) q = q.eq("assigned_to", profile.id);
+  const { error } = await q;
+  if (error) throw httpError(500, error.message);
+  return { ok: true };
+}
+
+// ─── Users / Admin ────────────────────────────────────────────────────────────
+async function apiUsersList(req) {
+  await requireAuthRoute(req, ["admin", "ceo"]);
+  const sb = db.getClient();
+  const { data, error } = await sb.from("profiles").select("*").order("created_at", { ascending: true });
+  if (error) throw httpError(500, error.message);
+  return { users: data };
+}
+
+async function apiUserUpdateRole(req, body) {
+  const { profile: admin } = await requireAuthRoute(req, ["admin"]);
+  const { userId, role, isActive } = body;
+  if (!userId) throw httpError(400, "userId required.");
+  if (userId === admin.id) throw httpError(400, "Cannot change your own role here.");
+  const updates = {};
+  if (role !== undefined) updates.role = role;
+  if (isActive !== undefined) updates.is_active = isActive;
+  if (!Object.keys(updates).length) throw httpError(400, "Nothing to update.");
+  const sb = db.getClient();
+  const { error } = await sb.from("profiles").update(updates).eq("id", userId);
+  if (error) throw httpError(500, error.message);
+  return { ok: true };
+}
+
+// ─── CEO dashboard ────────────────────────────────────────────────────────────
+async function apiCeoDashboard(req) {
+  await requireAuthRoute(req, ["admin", "ceo"]);
+  const sb = db.getClient();
+  const { data, error } = await sb.from("ceo_project_dashboard").select("*").order("created_at", { ascending: false });
+  if (error) throw httpError(500, error.message);
+  return { projects: data };
+}
+
+async function apiTeamStats(req) {
+  await requireAuthRoute(req, ["admin", "ceo"]);
+  const sb = db.getClient();
+  const [{ data: byRole }, { data: pendingTasks }, { data: pendingDrawings }, { data: totalProjects }] =
+    await Promise.all([
+      sb.from("profiles").select("role").eq("is_active", true),
+      sb.from("tasks").select("id").eq("status", "pending"),
+      sb.from("drawings").select("id").eq("status", "pending_review"),
+      sb.from("projects").select("id"),
+    ]);
+  const roleCount = {};
+  for (const p of (byRole || [])) roleCount[p.role] = (roleCount[p.role] || 0) + 1;
+  return {
+    roleCount,
+    pendingTasksTotal: (pendingTasks || []).length,
+    pendingDrawingsTotal: (pendingDrawings || []).length,
+    totalProjects: (totalProjects || []).length,
+  };
+}
+
+// ─── Project team management ──────────────────────────────────────────────────
+async function apiProjectTeamGet(req, projectId) {
+  await requireAuthRoute(req, ["admin", "ceo", "lead_designer"]);
+  if (!projectId) throw httpError(400, "projectId required.");
+  const sb = db.getClient();
+  const { data, error } = await sb.from("project_assignments")
+    .select("*, profile:profiles(id, full_name, email, role)").eq("project_id", projectId);
+  if (error) throw httpError(500, error.message);
+  return { team: data };
+}
+
+async function apiProjectAssignUser(req, body) {
+  const { profile } = await requireAuthRoute(req, ["admin", "lead_designer"]);
+  const { projectId, userId } = body;
+  if (!projectId || !userId) throw httpError(400, "projectId, userId required.");
+  const sb = db.getClient();
+  const { error } = await sb.from("project_assignments").upsert(
+    { project_id: projectId, user_id: userId, assigned_by: profile.id },
+    { onConflict: "project_id,user_id" }
+  );
+  if (error) throw httpError(500, error.message);
+  return { ok: true };
+}
+
+async function apiProjectUnassignUser(req, body) {
+  await requireAuthRoute(req, ["admin"]);
+  const { projectId, userId } = body;
+  if (!projectId || !userId) throw httpError(400, "projectId, userId required.");
+  const sb = db.getClient();
+  const { error } = await sb.from("project_assignments").delete()
+    .eq("project_id", projectId).eq("user_id", userId);
+  if (error) throw httpError(500, error.message);
   return { ok: true };
 }
