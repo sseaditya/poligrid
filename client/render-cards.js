@@ -171,17 +171,9 @@ function drawVersionRenders(renders, cameraPins) {
         lbl.textContent = "Reference";
         beforeCell.appendChild(lbl);
       } else {
-        const mapSnippet2 = buildFloorPlanSnippetForCard(roomLabel);
-        if (mapSnippet2) {
-          const mapImg2 = document.createElement("img");
-          mapImg2.src = mapSnippet2;
-          mapImg2.alt = "Room layout";
-          mapImg2.addEventListener("click", () => openLightbox(mapSnippet2));
-          beforeCell.appendChild(mapImg2);
-        }
         const lbl = document.createElement("span");
         lbl.className = "render-cell-label";
-        lbl.textContent = "Room Layout";
+        lbl.textContent = "No reference photo";
         beforeCell.appendChild(lbl);
       }
       if (pin?.angle_deg !== undefined) {
@@ -308,17 +300,9 @@ function drawRoomResult(result) {
       beforeLabel.textContent = "Reference";
       beforeCell.appendChild(beforeLabel);
     } else {
-      const mapSnippet2 = buildFloorPlanSnippetForCard(result.room.label);
-      if (mapSnippet2) {
-        const mapImg2 = document.createElement("img");
-        mapImg2.src = mapSnippet2;
-        mapImg2.alt = "Room layout";
-        mapImg2.addEventListener("click", () => openLightbox(mapSnippet2));
-        beforeCell.appendChild(mapImg2);
-      }
       const beforeLabel = document.createElement("span");
       beforeLabel.className = "render-cell-label";
-      beforeLabel.textContent = "Room Layout";
+      beforeLabel.textContent = "No reference photo";
       beforeCell.appendChild(beforeLabel);
     }
     if (pinInfo.angleDeg !== undefined) {

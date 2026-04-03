@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poligrid — CEO Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="dash-body">
+  <div class="noise"></div>
+
+  <header class="top-bar">
+    <div class="top-bar-left">
+      <a href="/homepage.html" class="logo-link"><span class="logo-text">Poligrid</span></a>
+      <span class="page-title">CEO Dashboard</span>
+    </div>
+    <nav class="dash-nav" id="dashNav"></nav>
+    <div class="top-bar-right" id="userChipWrap"></div>
+  </header>
+
+  <main class="dash-main">
+
+    <!-- Headline stats -->
+    <div class="stat-row" id="statRow">
+      <div class="stat-card">
+        <span class="stat-num" id="sTotal">—</span>
+        <span class="stat-label">Total Projects</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num" id="sSales">—</span>
+        <span class="stat-label">Sales</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num" id="sDesigners">—</span>
+        <span class="stat-label">Designers</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num" id="sLeads">—</span>
+        <span class="stat-label">Lead Designers</span>
+      </div>
+      <div class="stat-card accent-card">
+        <span class="stat-num" id="sPendingDrawings">—</span>
+        <span class="stat-label">Drawings Pending Review</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num" id="sPendingTasks">—</span>
+        <span class="stat-label">Open Tasks</span>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="dash-toolbar">
+      <input class="ctx-input" id="searchInput" type="search" placeholder="Search projects…" style="max-width:280px" />
+      <select class="ctx-input" id="statusFilter" style="max-width:160px">
+        <option value="">All statuses</option>
+        <option value="active">Active</option>
+        <option value="on_hold">On Hold</option>
+        <option value="completed">Completed</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+
+    <!-- Projects drill-down table -->
+    <div class="table-wrap">
+      <table class="admin-table" id="projectsTable">
+        <thead>
+          <tr>
+            <th>Project</th>
+            <th>Client</th>
+            <th>Sales Person</th>
+            <th>Status</th>
+            <th>Team</th>
+            <th>Drawings</th>
+            <th>Open Tasks</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="projectsBody">
+          <tr><td colspan="8" class="loading-hint">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="client/auth.js"></script>
+  <script src="client/ceo.js"></script>
+</body>
+</html>

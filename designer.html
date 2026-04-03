@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poligrid — Drawings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="dash-body">
+  <div class="noise"></div>
+
+  <header class="top-bar">
+    <div class="top-bar-left">
+      <a href="/homepage.html" class="logo-link"><span class="logo-text">Poligrid</span></a>
+      <span class="page-title">Drawings</span>
+    </div>
+    <nav class="dash-nav" id="dashNav"></nav>
+    <div class="top-bar-right" id="userChipWrap"></div>
+  </header>
+
+  <main class="dash-main">
+
+    <!-- Project selector -->
+    <div class="dash-toolbar">
+      <label class="field-label" style="flex:1;max-width:320px">
+        Project
+        <select class="ctx-input" id="projectSelect">
+          <option value="">Loading projects…</option>
+        </select>
+      </label>
+      <button class="primary-btn btn-sm" id="uploadBtn" disabled>+ Upload Drawing</button>
+    </div>
+
+    <!-- Drawings list per type -->
+    <div id="drawingsWrap">
+      <p class="loading-hint" id="drawingsHint">Select a project to view drawings.</p>
+      <div id="drawingsByType"></div>
+    </div>
+
+  </main>
+
+  <!-- Upload modal -->
+  <div class="modal-overlay" id="uploadModal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Upload Drawing</h2>
+        <button class="ghost-sm" id="uploadModalClose">✕</button>
+      </div>
+      <form class="modal-body" id="uploadForm">
+        <label class="field-label">
+          Drawing type
+          <select class="ctx-input" id="drawingType" required>
+            <option value="">Select type…</option>
+            <option value="civil">Civil</option>
+            <option value="electrical">Electrical</option>
+            <option value="plumbing">Plumbing</option>
+            <option value="hvac">HVAC</option>
+            <option value="firefighting">Fire Fighting</option>
+            <option value="architectural">Architectural</option>
+            <option value="structural">Structural</option>
+            <option value="interior">Interior</option>
+            <option value="landscape">Landscape</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label class="field-label">
+          Title
+          <input class="ctx-input" id="drawingTitle" type="text" placeholder="e.g. Ground Floor Civil Drawing" required />
+        </label>
+        <label class="field-label">
+          Description (optional)
+          <textarea class="ctx-textarea" id="drawingDesc" rows="2"></textarea>
+        </label>
+        <label class="field-label">
+          File (PDF, PNG, JPG, DWG, DXF)
+          <input type="file" id="drawingFile" accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf" required />
+        </label>
+        <div class="auth-error" id="uploadError" hidden></div>
+        <div class="modal-footer">
+          <button type="button" class="ghost-btn" id="uploadCancelBtn">Cancel</button>
+          <button type="submit" class="primary-btn" id="uploadSubmitBtn">Upload</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Review modal (lead_designer / admin) -->
+  <div class="modal-overlay" id="reviewModal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Review Drawing</h2>
+        <button class="ghost-sm" id="reviewModalClose">✕</button>
+      </div>
+      <div class="modal-body" id="reviewModalBody">
+        <p id="reviewDrawingTitle" class="review-drawing-name"></p>
+        <label class="field-label">
+          Comments
+          <textarea class="ctx-textarea" id="reviewComments" rows="3" placeholder="Optional feedback…"></textarea>
+        </label>
+        <div class="auth-error" id="reviewError" hidden></div>
+        <div class="modal-footer review-actions">
+          <button class="ghost-btn danger-btn" id="reviewRejectBtn">Reject</button>
+          <button class="ghost-btn" id="reviewRevisionBtn">Request Revision</button>
+          <button class="primary-btn" id="reviewApproveBtn">Approve</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="client/auth.js"></script>
+  <script src="client/designer.js"></script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poligrid — Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="dash-body">
+  <div class="noise"></div>
+
+  <header class="top-bar">
+    <div class="top-bar-left">
+      <a href="/homepage.html" class="logo-link"><span class="logo-text">Poligrid</span></a>
+      <span class="page-title">Admin</span>
+    </div>
+    <nav class="dash-nav">
+      <a class="dash-nav-link" href="/homepage.html">Home</a>
+      <a class="dash-nav-link" href="/index.html">Fitout Planner</a>
+      <a class="dash-nav-link" href="/designer.html">Drawings</a>
+      <a class="dash-nav-link active" href="/admin.html">Admin</a>
+      <a class="dash-nav-link" href="/ceo.html">Dashboard</a>
+    </nav>
+    <div class="top-bar-right" id="userChipWrap"></div>
+  </header>
+
+  <main class="dash-main">
+
+    <!-- Users section -->
+    <section class="dash-section">
+      <div class="dash-section-head">
+        <h2 class="dash-section-title">Team Members</h2>
+        <p class="dash-section-hint">Assign roles to control what each person can access.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table class="admin-table" id="usersTable">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody">
+            <tr><td colspan="5" class="loading-hint">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Project assignment section -->
+    <section class="dash-section" style="margin-top:32px">
+      <div class="dash-section-head">
+        <h2 class="dash-section-title">Project Assignments</h2>
+        <p class="dash-section-hint">Assign designers and sales to specific projects.</p>
+      </div>
+
+      <div class="dash-toolbar">
+        <label class="field-label" style="flex:1;max-width:280px">
+          Project
+          <select class="ctx-input" id="assignProjectSelect">
+            <option value="">Loading…</option>
+          </select>
+        </label>
+        <label class="field-label" style="flex:1;max-width:280px">
+          User
+          <select class="ctx-input" id="assignUserSelect">
+            <option value="">Select user…</option>
+          </select>
+        </label>
+        <button class="primary-btn btn-sm" id="assignBtn" disabled>Assign</button>
+      </div>
+
+      <div id="teamWrap" class="team-wrap">
+        <p class="loading-hint">Select a project to see its team.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="client/auth.js"></script>
+  <script src="client/admin.js"></script>
+</body>
+</html>

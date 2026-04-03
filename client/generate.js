@@ -196,13 +196,25 @@ async function onGenerate() {
       if (freshData.versions) {
         _projectBoqItems = appState.globalBoq || [];
         renderVersionsUI(freshData.versions, _activeCameraPins, freshData.versions.length - 1);
-        // Populate inspiration for the newly rendered version using current _inspirationDataUrls
         const latestVer = freshData.versions[freshData.versions.length - 1];
         if (latestVer) {
-          // Merge in-memory inspiration URLs (data URLs from current session)
           latestVer.inspirationUrls = _inspirationDataUrls.length
             ? _inspirationDataUrls
             : latestVer.inspirationUrls;
+          // saveToDb is fire-and-forget so DB may not have renders yet.
+          // Inject in-memory renders so showVersion displays them immediately.
+          if (!latestVer.renders || latestVer.renders.length === 0) {
+            latestVer.renders = [];
+            for (const result of roomResults) {
+              result.renders.forEach((render, i) => {
+                latestVer.renders.push({
+                  url: render.dataUrl,
+                  room_label: result.room.label,
+                  camera_pin_client_id: result.pinIds?.[i] || null
+                });
+              });
+            }
+          }
           showVersion(latestVer);
         }
       }
@@ -364,17 +376,21 @@ async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64, precompu
 
     renders.push({ name: src.photoDataUrl ? `Photo ${i + 1}` : `Generated ${i + 1}`, dataUrl: finalDataUrl, source: "openai" });
 
-    // Persist render image to Supabase (link to current version)
-    saveToDb("/api/project/save-render", {
-      projectId: appState.projectId,
-      pinClientId: src.pinId || null,
-      roomLabel: src.roomLabel,
-      dataUrl: finalDataUrl,
-      modelUsed: "gpt-image-1.5",
-      furnitureList: res.furnitureList || [],
-      generationType: src.photoDataUrl ? "edit" : "generate",
-      versionId: appState.currentVersionId || null
-    });
+    // Persist render image to Supabase — awaited so DB write completes before version fetch
+    try {
+      await postJson("/api/project/save-render", {
+        projectId: appState.projectId,
+        pinClientId: src.pinId || null,
+        roomLabel: src.roomLabel,
+        dataUrl: finalDataUrl,
+        modelUsed: "gpt-image-1.5",
+        furnitureList: res.furnitureList || [],
+        generationType: src.photoDataUrl ? "edit" : "generate",
+        versionId: appState.currentVersionId || null
+      });
+    } catch (e) {
+      console.warn("[save-render] Failed to persist render:", e.message);
+    }
 
     // Accumulate the generated or floor-plan placements into the global BOQ
     const furnitureToAdd = (res.furnitureList && res.furnitureList.length) ? res.furnitureList : (src.placements || []);
@@ -390,7 +406,8 @@ async function generateRoom(srcs, inspirationDataUrls, floorPlanBase64, precompu
     room: { label: mainSrc.roomLabel, name: mainSrc.roomLabel, roomType: mainSrc.roomType, widthM: mainSrc.widthM, lengthM: mainSrc.lengthM },
     laminate, style: {}, placements, renders,
     sourcePhotos: srcs.map(s => s.photoDataUrl || null),
-    cameraPins: srcs.map(s => ({ xM: s.xM, yM: s.yM, angleDeg: s.angleDeg, fovDeg: s.fovDeg }))
+    cameraPins: srcs.map(s => ({ xM: s.xM, yM: s.yM, angleDeg: s.angleDeg, fovDeg: s.fovDeg })),
+    pinIds: srcs.map(s => s.pinId || null)
   };
 }
 

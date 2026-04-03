@@ -60,7 +60,7 @@
           <span class="pill-num">5</span><span class="pill-label">Results</span>
         </button>
       </nav>
-      <div class="top-bar-right"></div>
+      <div class="top-bar-right" id="userChipWrap"></div>
     </header>
 
     <div class="workspace">
@@ -414,6 +414,16 @@
       <div class="debug-content" id="debugContent"></div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="client/auth.js"></script>
+    <script>
+      // Gate fitout planner to sales, lead_designer, admin
+      AuthClient.requireAuth(["sales", "lead_designer", "admin"]).then(({ profile }) => {
+        AuthClient.renderUserChip(profile, document.getElementById("userChipWrap"));
+        // Expose session for project picker API calls
+        window._authProfile = profile;
+      }).catch(() => {});
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <script src="analysis.js"></script>
     <script src="room-editor.js"></script>

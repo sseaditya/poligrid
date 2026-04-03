@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poligrid — Home</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="dash-body">
+  <div class="noise"></div>
+
+  <!-- Top bar -->
+  <header class="top-bar">
+    <div class="top-bar-left">
+      <a href="/homepage.html" class="logo-link">
+        <span class="logo-text">Poligrid</span>
+      </a>
+    </div>
+    <nav class="dash-nav" id="dashNav"></nav>
+    <div class="top-bar-right" id="userChipWrap"></div>
+  </header>
+
+  <main class="dash-main">
+    <div class="dash-hero">
+      <h1 class="dash-greeting" id="greeting">Good morning</h1>
+      <p class="dash-subline" id="subline"></p>
+    </div>
+
+    <!-- Stats row (shown for admin / lead_designer) -->
+    <div class="stat-row" id="statRow" hidden>
+      <div class="stat-card" id="statProjects">
+        <span class="stat-num" id="statProjectsNum">—</span>
+        <span class="stat-label">Projects</span>
+      </div>
+      <div class="stat-card" id="statPending">
+        <span class="stat-num" id="statPendingNum">—</span>
+        <span class="stat-label">Drawings to review</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num" id="statTasksNum">—</span>
+        <span class="stat-label">Open tasks</span>
+      </div>
+    </div>
+
+    <div class="dash-grid" id="dashGrid">
+      <!-- Projects section -->
+      <section class="dash-section" id="projectsSection">
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">My Projects</h2>
+          <div id="projectsAction"></div>
+        </div>
+        <div id="projectsList" class="projects-mini-list">
+          <p class="loading-hint">Loading…</p>
+        </div>
+      </section>
+
+      <!-- Tasks section -->
+      <section class="dash-section" id="tasksSection">
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">My Tasks</h2>
+        </div>
+        <div id="tasksList" class="tasks-list">
+          <p class="loading-hint">Loading…</p>
+        </div>
+      </section>
+
+      <!-- Drawings pending review (lead_designer only) -->
+      <section class="dash-section" id="reviewSection" hidden>
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">Drawings Awaiting Review</h2>
+        </div>
+        <div id="reviewList" class="drawings-list">
+          <p class="loading-hint">Loading…</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="client/auth.js"></script>
+  <script src="client/homepage.js"></script>
+</body>
+</html>

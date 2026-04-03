@@ -24,6 +24,14 @@ const {
   projectLoad,
   projectLoadVersions
 } = require("./server/projects");
+const { requireAuth, getAuthProfile } = require("./server/auth");
+const { drawingsList, drawingsPending, drawingSignedUrl, drawingUpload, drawingReview } = require("./server/drawings");
+const { tasksList, taskCreate, taskUpdate } = require("./server/tasks");
+const {
+  usersList, userUpdateRole,
+  projectTeamGet, projectAssignUser, projectUnassignUser,
+  ceoDashboard, teamStats
+} = require("./server/admin");
 
 loadEnvFile(path.join(ROOT, ".env.local"));
 
@@ -64,8 +72,67 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/generate-text") {
       return sendJson(res, 200, await generateText(await readJson(req)));
     }
+    // ── Config (public — exposes anon key for client-side Supabase Auth) ──────
+    if (req.method === "GET" && url.pathname === "/api/config") {
+      return sendJson(res, 200, {
+        supabaseUrl: process.env.SUPABASE_URL,
+        supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+      });
+    }
+
+    // ── Auth ──────────────────────────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/auth/me") {
+      const auth = await requireAuth(req);
+      return sendJson(res, 200, { profile: auth.profile });
+    }
+
+    // ── Drawings ──────────────────────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/drawings/list") {
+      return sendJson(res, 200, await drawingsList(req, url.searchParams.get("projectId")));
+    }
+    if (req.method === "GET" && url.pathname === "/api/drawings/pending") {
+      return sendJson(res, 200, await drawingsPending(req));
+    }
+    if (req.method === "GET" && url.pathname === "/api/drawings/signed-url") {
+      return sendJson(res, 200, await drawingSignedUrl(req, url.searchParams.get("path")));
+    }
+    if (req.method === "POST" && url.pathname === "/api/drawings/upload") {
+      return sendJson(res, 200, await drawingUpload(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/drawings/review") {
+      return sendJson(res, 200, await drawingReview(req, await readJson(req)));
+    }
+
+    // ── Tasks ─────────────────────────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/tasks/list") {
+      return sendJson(res, 200, await tasksList(req, url.searchParams));
+    }
+    if (req.method === "POST" && url.pathname === "/api/tasks/create") {
+      return sendJson(res, 200, await taskCreate(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/tasks/update") {
+      return sendJson(res, 200, await taskUpdate(req, await readJson(req)));
+    }
+
+    // ── User management (admin) ───────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/users/list") {
+      return sendJson(res, 200, await usersList(req));
+    }
+    if (req.method === "POST" && url.pathname === "/api/users/update-role") {
+      return sendJson(res, 200, await userUpdateRole(req, await readJson(req)));
+    }
+
+    // ── CEO dashboard ─────────────────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/ceo/dashboard") {
+      return sendJson(res, 200, await ceoDashboard(req));
+    }
+    if (req.method === "GET" && url.pathname === "/api/ceo/team-stats") {
+      return sendJson(res, 200, await teamStats(req));
+    }
+
     if (req.method === "GET" && url.pathname === "/api/project/list") {
-      return sendJson(res, 200, await projectList());
+      const auth = await getAuthProfile(req);
+      return sendJson(res, 200, await projectList(auth));
     }
     if (req.method === "GET" && url.pathname === "/api/project/load") {
       return sendJson(res, 200, await projectLoad(url.searchParams.get("id")));
@@ -73,6 +140,17 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/project/versions") {
       return sendJson(res, 200, await projectLoadVersions(url.searchParams.get("id")));
     }
+    // ── Project team management ───────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/project/team") {
+      return sendJson(res, 200, await projectTeamGet(req, url.searchParams.get("id")));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/assign-user") {
+      return sendJson(res, 200, await projectAssignUser(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/unassign-user") {
+      return sendJson(res, 200, await projectUnassignUser(req, await readJson(req)));
+    }
+
     if (req.method === "POST" && url.pathname.startsWith("/api/project/")) {
       const body   = await readJson(req);
       const action = url.pathname.slice("/api/project/".length);

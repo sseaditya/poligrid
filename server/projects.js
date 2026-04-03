@@ -454,13 +454,39 @@ async function projectSaveScene(body) {
   return { ok: true };
 }
 
-async function projectList() {
+async function projectList(auth) {
   const sb = db.getClient();
   const supabaseUrl = process.env.SUPABASE_URL;
-  const { data, error } = await sb
+
+  let query = sb
     .from("projects")
-    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by")
     .order("updated_at", { ascending: false });
+
+  // Filter by role when auth is present
+  if (auth && !["admin", "ceo"].includes(auth.profile.role)) {
+    const userId = auth.profile.id;
+    const { data: assigned } = await sb
+      .from("project_assignments")
+      .select("project_id")
+      .eq("user_id", userId);
+    const assignedIds = (assigned || []).map(a => a.project_id);
+
+    if (auth.profile.role === "sales") {
+      // Sales see projects they created + projects they're assigned to
+      if (assignedIds.length > 0) {
+        query = query.or(`created_by.eq.${userId},id.in.(${assignedIds.join(",")})`);
+      } else {
+        query = query.eq("created_by", userId);
+      }
+    } else {
+      // Designers / lead designers see only explicitly assigned projects
+      if (assignedIds.length === 0) return { projects: [] };
+      query = query.in("id", assignedIds);
+    }
+  }
+
+  const { data, error } = await query;
   if (error) throw httpError(500, "Failed to list projects: " + error.message);
 
   const projects = await Promise.all((data || []).map(async p => {

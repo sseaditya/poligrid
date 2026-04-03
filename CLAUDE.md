@@ -13,3 +13,46 @@ We use the following structure
         doors and windows
         paintwork - entire house
         use hyd premium prices for this.
+
+## Multi-role platform (added 2026-04-01)
+The app now has Supabase Auth and role-based access control.
+
+### Roles
+- admin — full access, manages roles, see all projects
+- sales — fitout planner only (index.html), sees own/assigned projects
+- designer — uploads drawings per project (designer.html)
+- lead_designer — approves/rejects designer drawings, sees assigned projects + fitout planner
+- ceo — read-only CEO dashboard (ceo.html)
+
+### Pages
+- login.html — Supabase Auth sign-in (all users)
+- homepage.html — per-user homepage with tasks + projects + review queue
+- index.html — fitout planner (sales, lead_designer, admin)
+- designer.html — drawing upload & review (designer, lead_designer, admin)
+- admin.html — user role management + project assignments (admin only)
+- ceo.html — aggregated project drill-down dashboard (ceo, admin)
+
+### New server files
+- server/auth.js — JWT validation middleware (requireAuth, getAuthProfile)
+- server/drawings.js — drawing upload + lead designer review flow
+- server/tasks.js — task CRUD (auto-created on drawing upload/review)
+- server/admin.js — user list, role update, project assignments, CEO dashboard
+
+### Key env vars to set in .env.local
+- SUPABASE_ANON_KEY — anon/public key, exposed to client via GET /api/config
+- SUPABASE_SERVICE_ROLE_KEY — server-only (already set)
+
+### Auth flow
+- Client uses @supabase/supabase-js CDN + client/auth.js
+- SUPABASE_URL and SUPABASE_ANON_KEY are fetched from GET /api/config
+- Each protected page calls AuthClient.requireAuth(allowedRoles) at load
+- Server validates Bearer JWT via sb.auth.getUser(token) in server/auth.js
+- project list (GET /api/project/list) is now role-filtered
+
+### Storage
+- poligrid-drawings bucket — PRIVATE, accessed via signed URLs (GET /api/drawings/signed-url?path=)
+
+### Future integrations (stubs in place)
+- **WhatsApp notifications**: server/notifications.js has notifyDrawingUploaded / notifyDrawingReviewed / notifyTaskAssigned stubs. Wire real Twilio/Meta calls there. User phone field will need to be added to profiles table.
+- **Inventory**: will need products/items tables and a link to BOQ line items. BOQ system already exists.
+- **Finances**: BOQ is already generated per project. Finance module will aggregate across projects.

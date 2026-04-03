@@ -13,7 +13,8 @@ async function loadProjectList() {
   const list = el("projectPickerList");
   list.innerHTML = '<div class="proj-loading">Loading projects…</div>';
   try {
-    const res = await fetch("/api/project/list");
+    const headers = await AuthClient.authHeader();
+    const res = await fetch("/api/project/list", { headers });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     renderProjectCards(data.projects || []);

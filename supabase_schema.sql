@@ -185,3 +185,198 @@ create index if not exists idx_renders_version_id on renders(version_id);
 
 -- 3. Link furniture BOQ items to a version
 alter table boq_items add column if not exists version_id uuid references project_versions(id) on delete set null;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Migration: Role-Based Access Control (run after initial schema)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─── Enums ───────────────────────────────────────────────────────────────────
+
+create type user_role as enum ('admin', 'sales', 'designer', 'lead_designer', 'ceo');
+
+create type drawing_type as enum (
+  'civil', 'electrical', 'plumbing', 'hvac',
+  'firefighting', 'architectural', 'structural',
+  'interior', 'landscape', 'other'
+);
+
+create type drawing_status as enum (
+  'pending_review', 'approved', 'rejected', 'revision_requested'
+);
+
+create type task_status as enum ('pending', 'in_progress', 'completed', 'cancelled');
+
+create type task_priority as enum ('low', 'medium', 'high');
+
+-- ─── Profiles (extends Supabase auth.users) ──────────────────────────────────
+-- One row per user, auto-created on sign-up via trigger below.
+-- Admin panel manages the `role` column to grant/revoke access.
+
+create table if not exists profiles (
+  id          uuid primary key references auth.users(id) on delete cascade,
+  full_name   text not null,
+  email       text not null unique,
+  role        user_role not null default 'sales',
+  is_active   boolean not null default false,  -- blocked until admin activates
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create trigger update_profiles_updated_at before update on profiles
+  for each row execute function update_updated_at_column();
+
+-- Auto-insert a profile row whenever a new user signs up in Supabase Auth.
+-- The role can be pre-seeded via user_metadata when the admin creates the invite.
+-- Every new Google sign-in is blocked by default (is_active = false).
+-- Admin must activate users via the admin panel or SQL before they can log in.
+create or replace function handle_new_user()
+returns trigger as $$
+begin
+  insert into profiles (id, email, full_name, role, is_active)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    'sales',
+    false
+  );
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function handle_new_user();
+
+-- ─── Extend projects with ownership + client info ────────────────────────────
+
+alter table projects add column if not exists created_by   uuid references profiles(id);
+alter table projects add column if not exists client_name  text;
+alter table projects add column if not exists client_email text;
+alter table projects add column if not exists client_phone text;
+-- status: active | on_hold | completed | cancelled
+alter table projects add column if not exists status       text not null default 'active';
+
+create index if not exists idx_projects_created_by on projects(created_by);
+create index if not exists idx_projects_status     on projects(status);
+
+-- ─── Project Assignments ─────────────────────────────────────────────────────
+-- Controls which users have access to which projects.
+-- Sales are assigned by admin; designers/lead designers are assigned by admin or lead designer.
+
+create table if not exists project_assignments (
+  id          uuid primary key default uuid_generate_v4(),
+  project_id  uuid not null references projects(id) on delete cascade,
+  user_id     uuid not null references profiles(id) on delete cascade,
+  assigned_by uuid references profiles(id),
+  assigned_at timestamptz not null default now(),
+  unique(project_id, user_id)
+);
+
+create index if not exists idx_project_assignments_project_id on project_assignments(project_id);
+create index if not exists idx_project_assignments_user_id    on project_assignments(user_id);
+
+-- ─── Drawings ────────────────────────────────────────────────────────────────
+-- Designers upload drawings per project. Lead designers review and approve them.
+-- Storage bucket: poligrid-drawings (create as private in Supabase dashboard)
+
+create table if not exists drawings (
+  id              uuid primary key default uuid_generate_v4(),
+  project_id      uuid not null references projects(id) on delete cascade,
+  uploaded_by     uuid not null references profiles(id),
+  drawing_type    drawing_type not null,
+  title           text not null,
+  description     text,
+  file_path       text not null,   -- path inside bucket poligrid-drawings
+  file_name       text not null,
+  file_size_bytes bigint,
+  status          drawing_status not null default 'pending_review',
+  version_number  integer not null default 1,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+create index if not exists idx_drawings_project_id   on drawings(project_id);
+create index if not exists idx_drawings_uploaded_by  on drawings(uploaded_by);
+create index if not exists idx_drawings_status       on drawings(status);
+
+create trigger update_drawings_updated_at before update on drawings
+  for each row execute function update_updated_at_column();
+
+-- ─── Drawing Reviews ─────────────────────────────────────────────────────────
+-- Each review by a lead designer appends a row; the drawing's status column is
+-- updated to match the latest review outcome.
+
+create table if not exists drawing_reviews (
+  id           uuid primary key default uuid_generate_v4(),
+  drawing_id   uuid not null references drawings(id) on delete cascade,
+  reviewed_by  uuid not null references profiles(id),  -- must be lead_designer
+  status       drawing_status not null,                -- approved | rejected | revision_requested
+  comments     text,
+  reviewed_at  timestamptz not null default now()
+);
+
+create index if not exists idx_drawing_reviews_drawing_id on drawing_reviews(drawing_id);
+
+-- ─── Tasks ───────────────────────────────────────────────────────────────────
+-- Drives each user's personal homepage. Can be linked to a project and/or a drawing.
+
+create table if not exists tasks (
+  id           uuid primary key default uuid_generate_v4(),
+  assigned_to  uuid not null references profiles(id) on delete cascade,
+  assigned_by  uuid references profiles(id),
+  project_id   uuid references projects(id) on delete set null,
+  drawing_id   uuid references drawings(id) on delete set null,
+  title        text not null,
+  description  text,
+  status       task_status not null default 'pending',
+  priority     task_priority not null default 'medium',
+  due_date     date,
+  completed_at timestamptz,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+create index if not exists idx_tasks_assigned_to on tasks(assigned_to);
+create index if not exists idx_tasks_project_id  on tasks(project_id);
+create index if not exists idx_tasks_status      on tasks(status);
+
+create trigger update_tasks_updated_at before update on tasks
+  for each row execute function update_updated_at_column();
+
+-- ─── CEO Dashboard View ───────────────────────────────────────────────────────
+-- Aggregated per-project snapshot for the CEO drill-down dashboard.
+
+create or replace view ceo_project_dashboard as
+select
+  p.id                                                                       as project_id,
+  p.name                                                                     as project_name,
+  p.status                                                                   as project_status,
+  p.client_name,
+  p.created_at,
+  creator.full_name                                                          as sales_person,
+  count(distinct pa.user_id)                                                 as team_size,
+  count(distinct d.id) filter (where d.status = 'pending_review')           as drawings_pending_review,
+  count(distinct d.id) filter (where d.status = 'approved')                 as drawings_approved,
+  count(distinct d.id) filter (where d.status = 'revision_requested')       as drawings_needs_revision,
+  count(distinct t.id) filter (where t.status = 'pending')                  as tasks_pending,
+  count(distinct t.id) filter (where t.status = 'completed')                as tasks_completed
+from projects p
+left join profiles creator          on p.created_by = creator.id
+left join project_assignments pa    on p.id = pa.project_id
+left join drawings d                on p.id = d.project_id
+left join tasks t                   on p.id = t.project_id
+group by p.id, p.name, p.status, p.client_name, p.created_at, creator.full_name;
+
+-- ─── Storage Bucket Note ─────────────────────────────────────────────────────
+-- Create the following bucket manually in Supabase Dashboard → Storage:
+--   Name: poligrid-drawings
+--   Public: No (private — serve files via signed URLs)
+
+-- ─── One-time Bootstrap: Activate the first admin ────────────────────────────
+-- Run AFTER sseaditya@gmail.com signs in with Google for the first time.
+-- (Sign-in creates the profile row with is_active=false; this unlocks it.)
+--
+-- update profiles
+-- set is_active = true, role = 'admin'
+-- where email = 'sseaditya@gmail.com';
