@@ -53,14 +53,13 @@ const AuthClient = (() => {
     const res = await fetch("/api/auth/me", {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
-    if (res.status === 403) {
-      // Account exists but is not yet approved — sign out and bounce to login
+    if (!res.ok) {
+      // Sign out on any auth failure to prevent infinite redirect loop
       const sb = await _getSb();
       await sb.auth.signOut();
-      window.location.href = "/login.html?blocked=1";
+      window.location.href = "/login.html";
       return null;
     }
-    if (!res.ok) return null;
     const data = await res.json();
     _profile = data.profile;
     return _profile;

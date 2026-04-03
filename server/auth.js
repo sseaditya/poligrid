@@ -25,8 +25,18 @@ async function requireAuth(req, allowedRoles) {
     .eq("id", user.id)
     .single();
 
-  if (profileError || !profile) throw httpError(401, "User profile not found.");
-  if (!profile.is_active) throw httpError(403, "Account is deactivated.");
+  if (profileError || !profile) {
+    // Auto-create profile for any Google OAuth user on first login
+    const { data: newProfile, error: upsertError } = await sb.from("profiles").upsert({
+      id: user.id,
+      email: user.email,
+      full_name: user.user_metadata?.full_name || user.email.split("@")[0],
+      role: "sales",
+      is_active: true,
+    }, { onConflict: "id" }).select().single();
+    if (upsertError || !newProfile) throw httpError(500, "Could not create user profile.");
+    return { user, profile: newProfile };
+  }
 
   if (allowedRoles && !allowedRoles.includes(profile.role)) {
     throw httpError(403, `Role '${profile.role}' is not allowed for this action.`);
