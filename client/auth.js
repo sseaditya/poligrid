@@ -27,6 +27,21 @@ const AuthClient = (() => {
 
   async function getSession() {
     const sb = await _getSb();
+    // If returning from OAuth (PKCE), the code exchange is async — wait for it
+    if (window.location.search.includes("code=")) {
+      return new Promise((resolve) => {
+        const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
+          subscription.unsubscribe();
+          resolve(session);
+        });
+        // Fallback: if no event fires in 5s, try getSession directly
+        setTimeout(async () => {
+          subscription.unsubscribe();
+          const { data: { session } } = await sb.auth.getSession();
+          resolve(session);
+        }, 5000);
+      });
+    }
     const { data: { session } } = await sb.auth.getSession();
     return session;
   }
