@@ -875,5 +875,27 @@ function onPinFieldChange() {
 
 
 // ─── Boot ────────────────────────────────────────────────────────────────────
-init();
-initBoqEditPanel();
+(async () => {
+  let profile;
+  try {
+    ({ profile } = await AuthClient.requireAuth(['sales', 'lead_designer', 'admin']));
+  } catch { return; } // requireAuth redirects on failure
+
+  AuthClient.renderUserChip(profile, document.getElementById('userChipWrap'));
+
+  init();
+  initBoqEditPanel();
+
+  // URL-based routing
+  const params = new URLSearchParams(location.search);
+  const projectId = params.get('id');
+  if (projectId) {
+    // Linked directly to a project (e.g. from homepage)
+    await loadProject(projectId);
+  } else if (params.get('new')) {
+    // "New project" shortcut — skip the picker and start fresh
+    el('newProjectBtn')?.click();
+  } else {
+    showProjectPicker();
+  }
+})();
