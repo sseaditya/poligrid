@@ -879,7 +879,10 @@ function onPinFieldChange() {
   let profile;
   try {
     ({ profile } = await AuthClient.requireAuth(['sales', 'lead_designer', 'admin']));
-  } catch { return; } // requireAuth redirects on failure
+  } catch {
+    window.location.href = '/login.html';
+    return;
+  }
 
   AuthClient.renderUserChip(profile, document.getElementById('userChipWrap'));
 

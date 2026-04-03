@@ -142,7 +142,7 @@ function sendJson(res, statusCode, payload) {
 // ─── Static file server ───────────────────────────────────────────────────────
 
 function serveStatic(pathname, headOnly, res) {
-  const normalized = pathname === "/" ? "/index.html" : pathname;
+  const normalized = pathname === "/" ? "/login.html" : pathname;
   const safePath   = path.normalize(decodeURIComponent(normalized));
   const absolute   = path.resolve(ROOT, `.${safePath}`);
 

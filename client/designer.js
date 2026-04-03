@@ -6,7 +6,7 @@ let _session, _profile, _currentProjectId, _reviewDrawingId;
   try {
     ({ session: _session, profile: _profile } =
       await AuthClient.requireAuth(["admin", "designer", "lead_designer"]));
-  } catch { return; }
+  } catch { window.location.href = '/login.html'; return; }
 
   AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
   renderNav(_profile);

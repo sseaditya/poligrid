@@ -4,7 +4,7 @@
   let session, profile;
   try {
     ({ session, profile } = await AuthClient.requireAuth());
-  } catch { return; }
+  } catch { window.location.href = '/login.html'; return; }
 
   // Render user chip + role-based nav
   AuthClient.renderUserChip(profile, document.getElementById("userChipWrap"));

@@ -48,6 +48,11 @@
     // If already signed in, skip the login page
     AuthClient.getSession().then(session => {
       if (session) window.location.href = "/homepage.html";
+    }).catch(err => {
+      const el = document.getElementById("authError");
+      el.textContent = err.message || "Configuration error. Contact your administrator.";
+      el.hidden = false;
+      document.getElementById("googleBtn").disabled = true;
     });
 
     const btn   = document.getElementById("googleBtn");

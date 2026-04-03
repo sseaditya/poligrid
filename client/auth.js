@@ -18,6 +18,9 @@ const AuthClient = (() => {
   async function _getSb() {
     if (_sb) return _sb;
     const cfg = await _getConfig();
+    if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+      throw new Error("Server misconfigured: SUPABASE_URL or SUPABASE_ANON_KEY not set. Contact admin.");
+    }
     _sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
     return _sb;
   }

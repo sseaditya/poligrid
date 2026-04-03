@@ -12,7 +12,7 @@ const ROLE_LABELS = {
   try {
     ({ session: _session, profile: _profile } =
       await AuthClient.requireAuth(["admin"]));
-  } catch { return; }
+  } catch { window.location.href = '/login.html'; return; }
 
   AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
 
