@@ -38,10 +38,17 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="client/auth.js"></script>
   <script>
-    // Show "not approved" message if bounced back from auth check
-    if (new URLSearchParams(location.search).get("blocked")) {
+    // Show rejection reason if bounced back from auth check
+    const _params = new URLSearchParams(location.search);
+    const _reason = _params.get("reason") || (_params.get("blocked") ? "account_inactive" : null);
+    if (_reason) {
+      const _messages = {
+        not_invited:      "Your email hasn't been added to Poligrid. Contact your administrator to get an invite.",
+        account_inactive: "Your account has been deactivated. Contact your administrator.",
+        error:            "Sign-in failed. Contact your administrator.",
+      };
       const el = document.getElementById("authError");
-      el.textContent = "Your account hasn't been approved yet. Ask your administrator to activate it.";
+      el.textContent = _messages[_reason] || _messages["error"];
       el.hidden = false;
     }
 

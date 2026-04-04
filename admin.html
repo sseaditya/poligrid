@@ -29,8 +29,41 @@
 
   <main class="dash-main">
 
-    <!-- Users section -->
+    <!-- Invite user section -->
     <section class="dash-section">
+      <div class="dash-section-head">
+        <h2 class="dash-section-title">Invite New User</h2>
+        <p class="dash-section-hint">Add a user by their Google account email. They can log in once invited.</p>
+      </div>
+
+      <div class="dash-toolbar" style="align-items:flex-end;gap:12px">
+        <label class="field-label" style="flex:2;max-width:320px">
+          Email
+          <input type="email" class="ctx-input" id="inviteEmail" placeholder="name@example.com" />
+        </label>
+        <label class="field-label" style="flex:1;max-width:200px">
+          Name (optional)
+          <input type="text" class="ctx-input" id="inviteFullName" placeholder="Full name" />
+        </label>
+        <label class="field-label" style="flex:1;max-width:180px">
+          Role
+          <select class="ctx-input" id="inviteRole">
+            <option value="sales">Sales</option>
+            <option value="designer">Designer</option>
+            <option value="lead_designer">Lead Designer</option>
+            <option value="admin">Admin</option>
+            <option value="ceo">CEO</option>
+          </select>
+        </label>
+        <button class="primary-btn btn-sm" id="inviteBtn" style="flex-shrink:0">Send Invite</button>
+      </div>
+      <div id="inviteMsg" style="margin-top:8px;font-size:13px"></div>
+
+      <div id="invitationsWrap" style="margin-top:16px"></div>
+    </section>
+
+    <!-- Users section -->
+    <section class="dash-section" style="margin-top:32px">
       <div class="dash-section-head">
         <h2 class="dash-section-title">Team Members</h2>
         <p class="dash-section-hint">Assign roles to control what each person can access.</p>

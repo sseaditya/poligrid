@@ -28,7 +28,8 @@ const { requireAuth, getAuthProfile } = require("./server/auth");
 const { drawingsList, drawingsPending, drawingSignedUrl, drawingUpload, drawingReview } = require("./server/drawings");
 const { tasksList, taskCreate, taskUpdate } = require("./server/tasks");
 const {
-  usersList, userUpdateRole,
+  userInvite, usersList, userUpdateRole,
+  invitationsList, invitationCancel,
   projectTeamGet, projectAssignUser, projectUnassignUser,
   ceoDashboard, teamStats
 } = require("./server/admin");
@@ -120,6 +121,15 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/users/update-role") {
       return sendJson(res, 200, await userUpdateRole(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/users/invite") {
+      return sendJson(res, 200, await userInvite(req, await readJson(req)));
+    }
+    if (req.method === "GET" && url.pathname === "/api/users/invitations") {
+      return sendJson(res, 200, await invitationsList(req));
+    }
+    if (req.method === "POST" && url.pathname === "/api/users/invitations/cancel") {
+      return sendJson(res, 200, await invitationCancel(req, await readJson(req)));
     }
 
     // ── CEO dashboard ─────────────────────────────────────────────────────────

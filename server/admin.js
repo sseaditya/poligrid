@@ -4,6 +4,24 @@ const db = require("../db");
 const { requireAuth } = require("./auth");
 const { httpError } = require("./utils");
 
+const VALID_ROLES = ["sales", "designer", "lead_designer", "admin", "ceo"];
+
+// ─── Invite a new user by email ───────────────────────────────────────────────
+async function userInvite(req, body) {
+  const { profile: admin } = await requireAuth(req, ["admin"]);
+  const { email, role, fullName } = body;
+  if (!email || !email.includes("@")) throw httpError(400, "Valid email required.");
+  if (!role || !VALID_ROLES.includes(role)) throw httpError(400, `Role must be one of: ${VALID_ROLES.join(", ")}.`);
+
+  const sb = db.getClient();
+  const { error } = await sb.from("invitations").upsert(
+    { email: email.toLowerCase().trim(), role, full_name: fullName || null, invited_by: admin.id },
+    { onConflict: "email" }
+  );
+  if (error) throw httpError(500, error.message);
+  return { ok: true };
+}
+
 // ─── List all user profiles ───────────────────────────────────────────────────
 async function usersList(req) {
   await requireAuth(req, ["admin", "ceo"]);
@@ -116,9 +134,35 @@ async function teamStats(req) {
   };
 }
 
+// ─── List pending invitations ─────────────────────────────────────────────────
+async function invitationsList(req) {
+  await requireAuth(req, ["admin"]);
+  const sb = db.getClient();
+  const { data, error } = await sb
+    .from("invitations")
+    .select("email, role, full_name, invited_at")
+    .order("invited_at", { ascending: false });
+  if (error) throw httpError(500, error.message);
+  return { invitations: data };
+}
+
+// ─── Cancel a pending invitation ─────────────────────────────────────────────
+async function invitationCancel(req, body) {
+  await requireAuth(req, ["admin"]);
+  const { email } = body;
+  if (!email) throw httpError(400, "email required.");
+  const sb = db.getClient();
+  const { error } = await sb.from("invitations").delete().eq("email", email);
+  if (error) throw httpError(500, error.message);
+  return { ok: true };
+}
+
 module.exports = {
+  userInvite,
   usersList,
   userUpdateRole,
+  invitationsList,
+  invitationCancel,
   projectTeamGet,
   projectAssignUser,
   projectUnassignUser,

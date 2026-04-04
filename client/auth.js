@@ -54,10 +54,11 @@ const AuthClient = (() => {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
     if (!res.ok) {
-      // Sign out on any auth failure to prevent infinite redirect loop
+      const errData = await res.json().catch(() => ({}));
+      const reason = errData.error || "error";
       const sb = await _getSb();
       await sb.auth.signOut();
-      window.location.href = "/login.html";
+      window.location.href = `/login.html?reason=${encodeURIComponent(reason)}`;
       return null;
     }
     const data = await res.json();
@@ -86,7 +87,7 @@ const AuthClient = (() => {
     // then routes the user to the right page based on their role.
     return sb.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin + "/homepage.html" },
+      options: { redirectTo: window.location.origin + "/login.html" },
     });
   }
 

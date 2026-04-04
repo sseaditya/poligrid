@@ -16,7 +16,9 @@ const ROLE_LABELS = {
 
   AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
 
-  await Promise.all([loadUsers(), loadProjects()]);
+  await Promise.all([loadUsers(), loadProjects(), loadInvitations()]);
+
+  document.getElementById("inviteBtn").addEventListener("click", handleInvite);
 
   document.getElementById("assignProjectSelect").addEventListener("change", e => {
     _currentProjectId = e.target.value;
@@ -27,6 +29,79 @@ const ROLE_LABELS = {
 
   document.getElementById("assignBtn").addEventListener("click", handleAssign);
 })();
+
+async function handleInvite() {
+  const email = document.getElementById("inviteEmail").value.trim();
+  const role = document.getElementById("inviteRole").value;
+  const fullName = document.getElementById("inviteFullName").value.trim();
+  const msg = document.getElementById("inviteMsg");
+  const btn = document.getElementById("inviteBtn");
+
+  if (!email) { msg.style.color = "var(--danger)"; msg.textContent = "Email is required."; return; }
+
+  btn.disabled = true;
+  btn.textContent = "Inviting…";
+  msg.textContent = "";
+
+  try {
+    const res = await fetch("/api/users/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
+      body: JSON.stringify({ email, role, fullName: fullName || undefined }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed");
+    msg.style.color = "var(--success, green)";
+    msg.textContent = `Invite sent for ${email}. They can now log in with their Google account.`;
+    document.getElementById("inviteEmail").value = "";
+    document.getElementById("inviteFullName").value = "";
+    await loadInvitations();
+  } catch (e) {
+    msg.style.color = "var(--danger)";
+    msg.textContent = e.message || "Failed to send invite.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Send Invite";
+  }
+}
+
+async function loadInvitations() {
+  const wrap = document.getElementById("invitationsWrap");
+  try {
+    const res = await fetch("/api/users/invitations", {
+      headers: { Authorization: `Bearer ${_session.access_token}` },
+    });
+    const { invitations } = await res.json();
+    if (!invitations?.length) {
+      wrap.innerHTML = `<p class="loading-hint" style="margin:0">No pending invitations.</p>`;
+      return;
+    }
+    wrap.innerHTML = `
+      <p class="loading-hint" style="margin:0 0 8px">Pending invitations (waiting for first login):</p>
+      <div class="team-chips">
+        ${invitations.map(inv => `
+          <div class="team-chip">
+            <span class="team-chip-name">${inv.full_name ? `${inv.full_name} &lt;${inv.email}&gt;` : inv.email}</span>
+            <span class="team-chip-role role-${inv.role}">${ROLE_LABELS[inv.role] || inv.role}</span>
+            <button class="ghost-sm danger-sm cancel-invite-btn" data-email="${inv.email}" title="Cancel invite">✕</button>
+          </div>`).join("")}
+      </div>`;
+
+    wrap.querySelectorAll(".cancel-invite-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        await fetch("/api/users/invitations/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
+          body: JSON.stringify({ email: btn.dataset.email }),
+        });
+        loadInvitations();
+      });
+    });
+  } catch {
+    wrap.innerHTML = "";
+  }
+}
 
 async function loadUsers() {
   const tbody = document.getElementById("usersBody");
