@@ -10,7 +10,7 @@ function extractToken(req) {
   return auth.slice(7).trim() || null;
 }
 
-// ─── Validate token, return { user, profile } or throw ───────────────────────
+// ─── Validate token, return {user, profile} or throw ───────────────────────
 async function requireAuth(req, allowedRoles) {
   const token = extractToken(req);
   if (!token) throw httpError(401, "Authentication required.");
