@@ -196,18 +196,17 @@
       <div class="modal-header">
         <h2 class="modal-title file-viewer-title" id="fileViewerTitle">Drawing</h2>
         <div style="display:flex;gap:8px;align-items:center">
-          <a class="ghost-sm" id="fileViewerDownload" href="#" download title="Download file">↓ Download</a>
+          <button class="ghost-sm" id="fileViewerDownload" title="Download file">↓ Download</button>
           <button class="ghost-sm" id="fileViewerClose">✕</button>
         </div>
       </div>
       <div class="file-viewer-body" id="fileViewerBody">
-        <div class="file-viewer-loading" id="fileViewerLoading">Opening file…</div>
+        <div class="file-viewer-loading" id="fileViewerLoading" style="display:none"></div>
       </div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="client/auth.js"></script>
   <script src="client/designer.js"></script>
 </body>

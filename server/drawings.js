@@ -1,5 +1,6 @@
 "use strict";
 
+const zlib = require("zlib");
 const db = require("../db");
 const { requireAuth } = require("./auth");
 const { httpError } = require("./utils");
@@ -13,6 +14,73 @@ const MIME_MAP = {
   dwg:  "application/octet-stream",
   dxf:  "application/octet-stream",
 };
+
+// ─── Minimal ZIP builder (no external deps) ───────────────────────────────────
+const _CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c;
+  }
+  return t;
+})();
+
+function _crc32(buf) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = (c >>> 8) ^ _CRC_TABLE[(c ^ buf[i]) & 0xFF];
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function _buildZip(files) {
+  // files: [{ name: string, data: Buffer }]
+  const parts = [];
+  const centralDir = [];
+  let offset = 0;
+
+  for (const { name, data } of files) {
+    const nameBuf = Buffer.from(name, "utf8");
+    const crc = _crc32(data);
+    const compressed = zlib.deflateRawSync(data, { level: 6 });
+    const useDeflate = compressed.length < data.length;
+    const fileData = useDeflate ? compressed : data;
+    const method = useDeflate ? 8 : 0;
+
+    const lh = Buffer.alloc(30 + nameBuf.length);
+    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4);
+    lh.writeUInt16LE(0, 6); lh.writeUInt16LE(method, 8);
+    lh.writeUInt16LE(0, 10); lh.writeUInt16LE(0, 12);
+    lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(fileData.length, 18);
+    lh.writeUInt32LE(data.length, 22); lh.writeUInt16LE(nameBuf.length, 26);
+    lh.writeUInt16LE(0, 28); nameBuf.copy(lh, 30);
+    parts.push(lh, fileData);
+
+    const cd = Buffer.alloc(46 + nameBuf.length);
+    cd.writeUInt32LE(0x02014b50, 0); cd.writeUInt16LE(20, 4); cd.writeUInt16LE(20, 6);
+    cd.writeUInt16LE(0, 8); cd.writeUInt16LE(method, 10);
+    cd.writeUInt16LE(0, 12); cd.writeUInt16LE(0, 14);
+    cd.writeUInt32LE(crc, 16); cd.writeUInt32LE(fileData.length, 20);
+    cd.writeUInt32LE(data.length, 24); cd.writeUInt16LE(nameBuf.length, 28);
+    cd.writeUInt16LE(0, 30); cd.writeUInt16LE(0, 32);
+    cd.writeUInt16LE(0, 34); cd.writeUInt16LE(0, 36);
+    cd.writeUInt32LE(0, 38); cd.writeUInt32LE(offset, 42);
+    nameBuf.copy(cd, 46);
+    centralDir.push(cd);
+    offset += lh.length + fileData.length;
+  }
+
+  const cdBuf = Buffer.concat(centralDir);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0); eocd.writeUInt16LE(0, 4); eocd.writeUInt16LE(0, 6);
+  eocd.writeUInt16LE(centralDir.length, 8); eocd.writeUInt16LE(centralDir.length, 10);
+  eocd.writeUInt32LE(cdBuf.length, 12); eocd.writeUInt32LE(offset, 16);
+  eocd.writeUInt16LE(0, 20);
+  return Buffer.concat([...parts, cdBuf, eocd]);
+}
+
+function _cap(str) {
+  return str ? str.charAt(0).toUpperCase() + str.slice(1).replace(/_/g, " ") : str;
+}
 
 // ─── List drawings for a project ─────────────────────────────────────────────
 async function drawingsList(req, projectId) {
@@ -337,11 +405,84 @@ async function drawingAssignmentDelete(req, body) {
   return { ok: true };
 }
 
+// ─── Proxy a single drawing file (forces download, no CORS issues) ────────────
+async function drawingDownload(req, res, filePath, fileName) {
+  await requireAuth(req);
+  if (!filePath) throw httpError(400, "path required.");
+
+  const sb = db.getClient();
+  const { data: blob, error } = await sb.storage
+    .from("poligrid-drawings")
+    .download(filePath);
+
+  if (error || !blob) throw httpError(404, "File not found.");
+
+  const buffer = Buffer.from(await blob.arrayBuffer());
+  const ext = (fileName || filePath).split(".").pop().toLowerCase();
+  const mime = MIME_MAP[ext] || "application/octet-stream";
+  const safeName = (fileName || filePath.split("/").pop()).replace(/[^\w.\- ]/g, "_");
+
+  res.writeHead(200, {
+    "Content-Type": mime,
+    "Content-Disposition": `attachment; filename="${safeName}"`,
+    "Content-Length": buffer.length,
+    "Cache-Control": "no-store",
+  });
+  res.end(buffer);
+}
+
+// ─── Server-side ZIP of all drawings for a project ────────────────────────────
+async function drawingDownloadZip(req, res, projectId) {
+  await requireAuth(req);
+  if (!projectId) throw httpError(400, "projectId required.");
+
+  const sb = db.getClient();
+  const { data: drawings, error } = await sb
+    .from("drawings")
+    .select("id, title, file_path, file_name, drawing_type, version_number")
+    .eq("project_id", projectId)
+    .order("drawing_type", { ascending: true });
+
+  if (error) throw httpError(500, error.message);
+  if (!drawings?.length) throw httpError(404, "No drawings found for this project.");
+
+  // Fetch files server-side — no browser CORS, uses service role key
+  const files = [];
+  await Promise.all(drawings.map(async d => {
+    try {
+      const { data: blob } = await sb.storage
+        .from("poligrid-drawings")
+        .download(d.file_path);
+      if (!blob) return;
+      const buffer = Buffer.from(await blob.arrayBuffer());
+      const ext = (d.file_name || "file").split(".").pop();
+      const safeTitle = (d.title || "drawing").replace(/[^a-z0-9_\- ]/gi, "_");
+      files.push({ name: `${_cap(d.drawing_type)}/v${d.version_number}_${safeTitle}.${ext}`, data: buffer });
+    } catch { /* skip unavailable files */ }
+  }));
+
+  if (!files.length) throw httpError(500, "Could not fetch any drawing files.");
+
+  const zipBuffer = _buildZip(files);
+  const { data: proj } = await sb.from("projects").select("name").eq("id", projectId).single();
+  const safeProjName = (proj?.name || "project").replace(/[^a-z0-9_\- ]/gi, "_");
+
+  res.writeHead(200, {
+    "Content-Type": "application/zip",
+    "Content-Disposition": `attachment; filename="${safeProjName}_drawings.zip"`,
+    "Content-Length": zipBuffer.length,
+    "Cache-Control": "no-store",
+  });
+  res.end(zipBuffer);
+}
+
 module.exports = {
   drawingsList,
   drawingsPending,
   drawingSignedUrl,
   drawingSignedUrlBatch,
+  drawingDownload,
+  drawingDownloadZip,
   drawingUpload,
   drawingReview,
   drawingAssignmentsList,

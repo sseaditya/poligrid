@@ -29,6 +29,7 @@ const {
 const { requireAuth, getAuthProfile } = require("./server/auth");
 const {
   drawingsList, drawingsPending, drawingSignedUrl, drawingSignedUrlBatch,
+  drawingDownload, drawingDownloadZip,
   drawingUpload, drawingReview,
   drawingAssignmentsList, drawingAssignmentUpsert, drawingAssignmentDelete,
 } = require("./server/drawings");
@@ -105,6 +106,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/drawings/signed-urls") {
       return sendJson(res, 200, await drawingSignedUrlBatch(req, (await readJson(req)).filePaths));
+    }
+    if (req.method === "GET" && url.pathname === "/api/drawings/download") {
+      return drawingDownload(req, res, url.searchParams.get("path"), url.searchParams.get("name"));
+    }
+    if (req.method === "GET" && url.pathname === "/api/drawings/download-zip") {
+      return drawingDownloadZip(req, res, url.searchParams.get("projectId"));
     }
     if (req.method === "POST" && url.pathname === "/api/drawings/upload") {
       return sendJson(res, 200, await drawingUpload(req, await readJson(req)));

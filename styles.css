@@ -1517,16 +1517,25 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .assignment-deadline.overdue { color:var(--danger); font-weight:600; }
 
 /* ── File viewer modal ───────────────────────────────────────────────────── */
-.file-viewer-card  { max-width:900px; width:95vw; max-height:92vh; display:flex; flex-direction:column; }
-.file-viewer-title { font-size:16px; font-family:var(--font); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:600px; }
-.file-viewer-body  { flex:1; overflow:auto; padding:0 24px 24px; min-height:200px; }
-.file-viewer-loading { color:var(--text-dim); font-size:13px; padding:40px 0; text-align:center; }
+.file-viewer-card  { max-width:960px; width:96vw; max-height:94vh; display:flex; flex-direction:column; }
+.file-viewer-title { font-size:15px; font-family:var(--font); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:680px; }
+.file-viewer-body  { flex:1; overflow:auto; padding:0 20px 20px; min-height:300px; display:flex; flex-direction:column; }
+.file-viewer-loading {
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  color:var(--text-dim); font-size:13px; padding:60px 0;
+}
+.fv-spinner {
+  width:18px; height:18px; border-radius:50%;
+  border:2px solid var(--border); border-top-color:var(--accent);
+  animation:spin 0.7s linear infinite; flex-shrink:0;
+}
+@keyframes spin { to { transform:rotate(360deg); } }
 .file-viewer-image {
   max-width:100%; border-radius:8px; display:block; margin:0 auto;
-  box-shadow:0 4px 24px rgba(0,0,0,0.15);
+  box-shadow:0 4px 24px rgba(0,0,0,0.15); flex:1;
 }
 .file-viewer-iframe {
-  width:100%; height:70vh; border:none; border-radius:8px;
+  width:100%; flex:1; min-height:500px; border:none; border-radius:8px;
   background:var(--bg3);
 }
 .file-viewer-download-prompt {

@@ -315,7 +315,10 @@ async function loadDrawings(projectId) {
     `).join("");
 
     wrap.querySelectorAll(".view-file-btn").forEach(btn => {
-      btn.addEventListener("click", () => openFileViewer(btn.dataset.path, btn.dataset.name, btn.dataset.mime));
+      btn.addEventListener("click", () => openFileViewer(btn.dataset.path, btn.dataset.name));
+    });
+    wrap.querySelectorAll(".download-file-btn").forEach(btn => {
+      btn.addEventListener("click", () => downloadFile(btn.dataset.path, btn.dataset.name));
     });
 
     if (["lead_designer", "admin"].includes(_profile.role)) {
@@ -333,10 +336,11 @@ function drawingCard(d) {
   const latestReview = d.drawing_reviews?.[0];
   const { icon, label, cls } = statusMeta(d.status);
   const ext = (d.file_name || "").split(".").pop().toLowerCase();
-  const mimeHint = ext === "pdf" ? "application/pdf" : (["png","jpg","jpeg"].includes(ext) ? "image/" + ext : "binary");
+  const canPreview = ["pdf", "png", "jpg", "jpeg", "gif", "webp"].includes(ext);
+  const fileSize = d.file_size_bytes ? fmtBytes(d.file_size_bytes) : null;
 
   return `
-    <div class="drawing-card status-border-${d.status}">
+    <div class="drawing-card status-${d.status}">
       <div class="drawing-card-top">
         <div class="drawing-card-info">
           <span class="drawing-title">${escHtml(d.title)}</span>
@@ -345,6 +349,7 @@ function drawingCard(d) {
             &nbsp;·&nbsp; ${escHtml(d.uploader?.full_name || "Unknown")}
             &nbsp;·&nbsp; ${fmtDate(d.created_at)}
             ${d.file_name ? `&nbsp;·&nbsp; <span class="drawing-filename">${escHtml(d.file_name)}</span>` : ""}
+            ${fileSize ? `&nbsp;·&nbsp; ${fileSize}` : ""}
           </span>
           ${d.description ? `<span class="drawing-desc">${escHtml(d.description)}</span>` : ""}
         </div>
@@ -359,11 +364,16 @@ function drawingCard(d) {
         </div>` : ""}
 
       <div class="drawing-card-actions">
-        <button class="ghost-sm view-file-btn"
+        ${canPreview ? `
+          <button class="ghost-sm view-file-btn"
+            data-path="${escHtml(d.file_path)}"
+            data-name="${escHtml(d.file_name || d.title)}">
+            ↗ View
+          </button>` : ""}
+        <button class="ghost-sm download-file-btn"
           data-path="${escHtml(d.file_path)}"
-          data-name="${escHtml(d.file_name || d.title)}"
-          data-mime="${mimeHint}">
-          ↗ View / Download
+          data-name="${escHtml(d.file_name || d.title)}">
+          ↓ Download
         </button>
         ${canReview ? `
           <button class="primary-btn btn-sm review-btn"
@@ -376,18 +386,21 @@ function drawingCard(d) {
 }
 
 // ─── File viewer ──────────────────────────────────────────────────────────────
-async function openFileViewer(filePath, fileName, mimeHint) {
+async function openFileViewer(filePath, fileName) {
   const modal   = document.getElementById("fileViewerModal");
   const titleEl = document.getElementById("fileViewerTitle");
   const bodyEl  = document.getElementById("fileViewerBody");
   const loadEl  = document.getElementById("fileViewerLoading");
-  const dlLink  = document.getElementById("fileViewerDownload");
+  const dlBtn   = document.getElementById("fileViewerDownload");
 
   titleEl.textContent = fileName || "Drawing";
   bodyEl.innerHTML = "";
-  loadEl.style.display = "block";
-  loadEl.textContent = "Opening file…";
+  loadEl.style.display = "flex";
+  loadEl.innerHTML = `<div class="fv-spinner"></div><span>Loading…</span>`;
   modal.hidden = false;
+
+  // Wire up the download button in the header
+  dlBtn.onclick = () => downloadFile(filePath, fileName);
 
   try {
     const res = await apiFetch(`/api/drawings/signed-url?path=${encodeURIComponent(filePath)}`);
@@ -396,15 +409,12 @@ async function openFileViewer(filePath, fileName, mimeHint) {
 
     const ext = (fileName || "").split(".").pop().toLowerCase();
 
-    // Set download link
-    dlLink.href = url;
-    dlLink.download = fileName || "drawing";
-
     if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) {
       const img = document.createElement("img");
       img.src = url;
       img.alt = fileName;
       img.className = "file-viewer-image";
+      img.onload = () => { loadEl.style.display = "none"; };
       bodyEl.appendChild(img);
     } else if (ext === "pdf") {
       const iframe = document.createElement("iframe");
@@ -413,74 +423,56 @@ async function openFileViewer(filePath, fileName, mimeHint) {
       iframe.title = fileName;
       bodyEl.appendChild(iframe);
     } else {
-      // DWG, DXF, or other — just offer download
       bodyEl.innerHTML = `
         <div class="file-viewer-download-prompt">
           <div class="file-viewer-icon">📄</div>
-          <p>${escHtml(fileName)}</p>
+          <p class="drawing-title">${escHtml(fileName)}</p>
           <p class="text-dim">This file type cannot be previewed in the browser.</p>
-          <a class="primary-btn" href="${url}" download="${escHtml(fileName)}">↓ Download File</a>
         </div>`;
     }
   } catch (err) {
-    loadEl.textContent = "Could not open file: " + err.message;
+    loadEl.innerHTML = `<span style="color:var(--danger)">Could not load file: ${escHtml(err.message)}</span>`;
   }
 }
 
-// ─── ZIP download ─────────────────────────────────────────────────────────────
+// ─── Individual file download (server-proxied, forces attachment) ──────────────
+async function downloadFile(filePath, fileName) {
+  try {
+    const res = await apiFetch(`/api/drawings/download?path=${encodeURIComponent(filePath)}&name=${encodeURIComponent(fileName || "drawing")}`);
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Download failed"); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fileName || "drawing";
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) {
+    alert("Download failed: " + err.message);
+  }
+}
+
+// ─── ZIP download (server-side — no CORS, no JSZip needed) ───────────────────
 async function handleZipDownload() {
   if (!_currentProjectId) return;
   const btn = document.getElementById("downloadZipBtn");
   btn.disabled = true;
-  btn.textContent = "Preparing ZIP…";
+  btn.textContent = "Building ZIP…";
 
   try {
-    // 1. Get all drawings for the project
-    const res = await apiFetch(`/api/drawings/list?projectId=${_currentProjectId}`);
-    const { drawings } = await res.json();
-    if (!drawings?.length) { alert("No drawings to download."); return; }
-
-    // 2. Batch signed URLs
-    const filePaths = drawings.map(d => d.file_path);
-    const urlRes = await apiFetch("/api/drawings/signed-urls", {
-      method: "POST",
-      body: JSON.stringify({ filePaths }),
-    });
-    const { urls } = await urlRes.json();
-
-    // Build path→url map
-    const urlMap = {};
-    for (const u of (urls || [])) urlMap[u.path] = u.signedUrl;
-
-    // 3. Download and zip
-    const zip = new JSZip();
-    let downloaded = 0;
-    btn.textContent = `Downloading (0/${drawings.length})…`;
-
-    await Promise.all(drawings.map(async d => {
-      const signedUrl = urlMap[d.file_path];
-      if (!signedUrl) return;
-      try {
-        const fileRes = await fetch(signedUrl);
-        const blob = await fileRes.blob();
-        const folder = capitalize(d.drawing_type);
-        const safeTitle = (d.title || "drawing").replace(/[^a-z0-9_\-\.]/gi, "_");
-        const ext = (d.file_name || "file").split(".").pop();
-        zip.folder(folder).file(`v${d.version_number}_${safeTitle}.${ext}`, blob);
-        downloaded++;
-        btn.textContent = `Downloading (${downloaded}/${drawings.length})…`;
-      } catch { /* skip failed files */ }
-    }));
-
-    btn.textContent = "Generating ZIP…";
+    const res = await apiFetch(`/api/drawings/download-zip?projectId=${_currentProjectId}`);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.error || `Server error ${res.status}`);
+    }
+    const blob = await res.blob();
     const projectName = document.getElementById("projectSelect").selectedOptions[0]?.text || "project";
-    const safeProjectName = projectName.replace(/[^a-z0-9_\-]/gi, "_");
-    const content = await zip.generateAsync({ type: "blob" });
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(content);
-    a.download = `${safeProjectName}_drawings.zip`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    a.href = URL.createObjectURL(blob);
+    a.download = `${projectName.replace(/[^a-z0-9_\- ]/gi, "_")}_drawings.zip`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   } catch (err) {
     alert("ZIP download failed: " + err.message);
   } finally {
@@ -619,6 +611,13 @@ function fileToBase64(file) {
 function fmtDate(iso) {
   if (!iso) return "";
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function fmtBytes(n) {
+  if (n == null) return "";
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(0) + " KB";
+  return (n / 1048576).toFixed(1) + " MB";
 }
 
 function capitalize(str) {
