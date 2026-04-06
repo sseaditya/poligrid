@@ -465,7 +465,7 @@ async function projectList(auth) {
 
   let query = sb
     .from("projects")
-    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by, floor_plans(storage_path)")
     .order("updated_at", { ascending: false });
 
   // Filter by role when auth is present
@@ -485,21 +485,15 @@ async function projectList(auth) {
   const { data, error } = await query;
   if (error) throw httpError(500, "Failed to list projects: " + error.message);
 
-  const projects = await Promise.all((data || []).map(async p => {
-    const { data: fps } = await sb
-      .from("floor_plans")
-      .select("storage_path")
-      .eq("project_id", p.id)
-      .order("created_at", { ascending: false })
-      .limit(1);
-    const fp = fps && fps[0];
+  const projects = (data || []).map(({ floor_plans, ...p }) => {
+    const fp = Array.isArray(floor_plans) ? floor_plans[0] : floor_plans;
     return {
       ...p,
       thumbnail_url: fp?.storage_path
         ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
         : null
     };
-  }));
+  });
   return { projects };
 }
 
@@ -595,25 +589,19 @@ async function salesProjectList(auth) {
 
   const { data, error } = await sb
     .from("projects")
-    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by, floor_plans(storage_path)")
     .order("updated_at", { ascending: false });
   if (error) throw httpError(500, "Failed to list projects: " + error.message);
 
-  const projects = await Promise.all((data || []).map(async p => {
-    const { data: fps } = await sb
-      .from("floor_plans")
-      .select("storage_path")
-      .eq("project_id", p.id)
-      .order("created_at", { ascending: false })
-      .limit(1);
-    const fp = fps && fps[0];
+  const projects = (data || []).map(({ floor_plans, ...p }) => {
+    const fp = Array.isArray(floor_plans) ? floor_plans[0] : floor_plans;
     return {
       ...p,
       thumbnail_url: fp?.storage_path
         ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
         : null
     };
-  }));
+  });
 
   return {
     mine:   projects.filter(p => p.created_by === userId),
