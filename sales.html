@@ -3,238 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Poligrid — Sales Dashboard</title>
+  <title>Poligrid — Home</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
-  <style>
-    /* ── Sales dashboard overrides ─────────────────────────────── */
-    .sales-hero {
-      padding: 2.5rem 2rem 1.5rem;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .sales-hero-top {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-    .sales-greeting {
-      font-family: "DM Serif Display", serif;
-      font-size: clamp(1.6rem, 4vw, 2.4rem);
-      color: #f0ece4;
-      margin: 0 0 0.3rem;
-    }
-    .sales-subline {
-      color: #a09a8e;
-      font-size: 0.95rem;
-      margin: 0;
-    }
-    .sales-actions {
-      display: flex;
-      gap: 0.75rem;
-      align-items: center;
-      flex-shrink: 0;
-    }
-
-    /* Stats */
-    .sales-stats {
-      display: flex;
-      gap: 1rem;
-      padding: 1.25rem 2rem;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      flex-wrap: wrap;
-    }
-    .sales-stat {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      padding: 0.9rem 1.4rem;
-      min-width: 120px;
-      flex: 1;
-      max-width: 200px;
-    }
-    .sales-stat-num {
-      display: block;
-      font-size: 1.9rem;
-      font-weight: 700;
-      color: #f0ece4;
-      line-height: 1;
-      margin-bottom: 0.3rem;
-    }
-    .sales-stat-label {
-      font-size: 0.8rem;
-      color: #a09a8e;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    /* Search */
-    .sales-search-bar {
-      padding: 1rem 2rem 0;
-    }
-    .sales-search-input {
-      width: 100%;
-      max-width: 400px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 8px;
-      padding: 0.55rem 1rem;
-      color: #f0ece4;
-      font-size: 0.9rem;
-      font-family: inherit;
-      outline: none;
-      transition: border-color 0.15s;
-    }
-    .sales-search-input::placeholder { color: #6b6560; }
-    .sales-search-input:focus { border-color: rgba(255,255,255,0.3); }
-
-    /* Sections */
-    .sales-body {
-      padding: 1.5rem 2rem 3rem;
-      display: flex;
-      flex-direction: column;
-      gap: 2.5rem;
-    }
-    .sales-section-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-    }
-    .sales-section-title {
-      font-size: 1.05rem;
-      font-weight: 600;
-      color: #f0ece4;
-      margin: 0;
-    }
-    .sales-section-count {
-      font-size: 0.8rem;
-      color: #6b6560;
-      background: rgba(255,255,255,0.05);
-      border-radius: 20px;
-      padding: 0.2rem 0.7rem;
-    }
-
-    /* Project card grid */
-    .sales-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
-      gap: 1rem;
-    }
-    .sales-card {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 12px;
-      overflow: hidden;
-      transition: border-color 0.15s, transform 0.15s;
-      cursor: pointer;
-      text-decoration: none;
-      display: flex;
-      flex-direction: column;
-    }
-    .sales-card:hover {
-      border-color: rgba(255,255,255,0.2);
-      transform: translateY(-2px);
-    }
-    .sales-card-thumb {
-      width: 100%;
-      aspect-ratio: 16/9;
-      background: rgba(255,255,255,0.04);
-      overflow: hidden;
-      flex-shrink: 0;
-    }
-    .sales-card-thumb img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .sales-card-thumb-empty {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: rgba(255,255,255,0.15);
-      font-size: 2rem;
-    }
-    .sales-card-body {
-      padding: 1rem;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 0.35rem;
-    }
-    .sales-card-name {
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: #f0ece4;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .sales-card-client {
-      font-size: 0.82rem;
-      color: #a09a8e;
-    }
-    .sales-card-meta {
-      font-size: 0.78rem;
-      color: #6b6560;
-    }
-    .sales-card-footer {
-      padding: 0.6rem 1rem;
-      border-top: 1px solid rgba(255,255,255,0.06);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .sales-card-date {
-      font-size: 0.75rem;
-      color: #6b6560;
-    }
-    .sales-card-open {
-      font-size: 0.78rem;
-      color: #c4b99a;
-      font-weight: 500;
-    }
-    .sales-card-open:hover { color: #f0ece4; }
-
-    .sales-empty {
-      padding: 2rem;
-      text-align: center;
-      color: #6b6560;
-      font-size: 0.9rem;
-      background: rgba(255,255,255,0.02);
-      border-radius: 10px;
-      border: 1px dashed rgba(255,255,255,0.06);
-    }
-
-    /* Badge colours (reuse existing pattern) */
-    .sales-badge {
-      display: inline-block;
-      font-size: 0.7rem;
-      font-weight: 600;
-      padding: 0.15rem 0.5rem;
-      border-radius: 20px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    .sales-badge-on_hold   { background: rgba(234,179,8,0.15); color: #ca8a04; }
-    .sales-badge-completed { background: rgba(34,197,94,0.12); color: #16a34a; }
-    .sales-badge-cancelled { background: rgba(239,68,68,0.12); color: #dc2626; }
-
-    @media (max-width: 600px) {
-      .sales-hero, .sales-stats, .sales-search-bar, .sales-body { padding-left: 1rem; padding-right: 1rem; }
-      .sales-grid { grid-template-columns: 1fr; }
-      .sales-stat { max-width: none; }
-    }
-  </style>
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body class="dash-body">
   <div class="noise"></div>
 
+  <!-- Top bar -->
   <header class="top-bar">
     <div class="top-bar-left">
       <a href="/homepage.html" class="logo-link">
@@ -245,70 +23,64 @@
     <div class="top-bar-right" id="userChipWrap"></div>
   </header>
 
-  <div class="sales-hero">
-    <div class="sales-hero-top">
-      <div>
-        <h1 class="sales-greeting" id="greeting">Good morning</h1>
-        <p class="sales-subline" id="subline">Your fitout projects at a glance.</p>
-      </div>
-      <div class="sales-actions">
-        <button class="primary-btn" id="newProjectBtn">+ New Project</button>
-      </div>
+  <main class="dash-main">
+    <div class="dash-hero">
+      <h1 class="dash-greeting" id="greeting">Good morning</h1>
+      <p class="dash-subline" id="subline"></p>
     </div>
-  </div>
 
-  <div class="sales-stats">
-    <div class="sales-stat">
-      <span class="sales-stat-num" id="statTotal">—</span>
-      <span class="sales-stat-label">Total Projects</span>
+    <!-- Stats row (shown for admin / lead_designer) -->
+    <div class="stat-row" id="statRow" hidden>
+      <div class="stat-card" id="statProjects">
+        <span class="stat-num" id="statProjectsNum">—</span>
+        <span class="stat-label">Projects</span>
+      </div>
+      <div class="stat-card" id="statPending">
+        <span class="stat-num" id="statPendingNum">—</span>
+        <span class="stat-label">Drawings to review</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num" id="statTasksNum">—</span>
+        <span class="stat-label">Open tasks</span>
+      </div>
     </div>
-    <div class="sales-stat">
-      <span class="sales-stat-num" id="statMine">—</span>
-      <span class="sales-stat-label">My Projects</span>
-    </div>
-    <div class="sales-stat">
-      <span class="sales-stat-num" id="statOthers">—</span>
-      <span class="sales-stat-label">Other Projects</span>
-    </div>
-    <div class="sales-stat">
-      <span class="sales-stat-num" id="statActive">—</span>
-      <span class="sales-stat-label">Active</span>
-    </div>
-  </div>
 
-  <div class="sales-search-bar">
-    <input
-      type="search"
-      class="sales-search-input"
-      id="searchInput"
-      placeholder="Search by project name or client…"
-    />
-  </div>
+    <div class="dash-grid" id="dashGrid">
+      <!-- Projects section -->
+      <section class="dash-section" id="projectsSection">
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">My Projects</h2>
+          <div id="projectsAction"></div>
+        </div>
+        <div id="projectsList" class="projects-mini-list">
+          <p class="loading-hint">Loading…</p>
+        </div>
+      </section>
 
-  <div class="sales-body">
-    <section id="mineSection">
-      <div class="sales-section-head">
-        <h2 class="sales-section-title">My Projects</h2>
-        <span class="sales-section-count" id="mineCount">0</span>
-      </div>
-      <div class="sales-grid" id="mineGrid">
-        <p class="loading-hint">Loading…</p>
-      </div>
-    </section>
+      <!-- Tasks section -->
+      <section class="dash-section" id="tasksSection">
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">My Tasks</h2>
+        </div>
+        <div id="tasksList" class="tasks-list">
+          <p class="loading-hint">Loading…</p>
+        </div>
+      </section>
 
-    <section id="othersSection">
-      <div class="sales-section-head">
-        <h2 class="sales-section-title">All Other Projects</h2>
-        <span class="sales-section-count" id="othersCount">0</span>
-      </div>
-      <div class="sales-grid" id="othersGrid">
-        <p class="loading-hint">Loading…</p>
-      </div>
-    </section>
-  </div>
+      <!-- Drawings pending review (lead_designer only) -->
+      <section class="dash-section" id="reviewSection" hidden>
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">Drawings Awaiting Review</h2>
+        </div>
+        <div id="reviewList" class="drawings-list">
+          <p class="loading-hint">Loading…</p>
+        </div>
+      </section>
+    </div>
+  </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-  <script src="client/auth.js"></script>
-  <script src="client/sales.js"></script>
+  <script src="/client/auth.js"></script>
+  <script src="/client/sales.js"></script>
 </body>
 </html>
