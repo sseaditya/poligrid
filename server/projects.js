@@ -3,9 +3,9 @@ const db = require("../db");
 const { httpError } = require("./utils");
 // ─── Project DB Handlers ─────────────────────────────────────────────────────
 
-async function handleProjectAction(action, body) {
+async function handleProjectAction(action, body, auth) {
   switch (action) {
-    case "save-analysis": return projectSaveAnalysis(body);
+    case "save-analysis": return projectSaveAnalysis(body, auth);
     case "save-rooms": return projectSaveRooms(body);
     case "save-inspiration": return projectSaveInspiration(body);
     case "save-pin": return projectSavePin(body);
@@ -104,9 +104,14 @@ async function projectLoadVersions(projectId) {
   return { versions: versionsWithData };
 }
 
-async function projectSaveAnalysis(body) {
+async function projectSaveAnalysis(body, auth) {
   const { projectId, floorPlanBase64, fileName, analysis, context } = body;
   if (!projectId) throw httpError(400, "Missing projectId");
+
+  const sb = db.getClient();
+  // Preserve created_by if already set; otherwise stamp the current user
+  const { data: existingProj } = await sb.from("projects").select("created_by").eq("id", projectId).maybeSingle();
+  const createdBy = existingProj?.created_by ?? (auth?.profile?.id ?? null);
 
   await db.upsertProject(projectId, {
     property_type: context?.propertyType,
@@ -115,7 +120,8 @@ async function projectSaveAnalysis(body) {
     notes: context?.notes,
     bhk_type: analysis?.bhkType,
     orientation: analysis?.orientation,
-    summary: analysis?.summary
+    summary: analysis?.summary,
+    created_by: createdBy
   });
 
   const storagePath = await db.uploadBase64(
@@ -126,7 +132,6 @@ async function projectSaveAnalysis(body) {
   );
 
   // Floor plan is static per project — upsert in place rather than inserting a new row
-  const sb = db.getClient();
   const { data: existingFp } = await sb.from("floor_plans").select("id").eq("project_id", projectId).limit(1).single();
   let fpId;
   if (existingFp) {
@@ -464,7 +469,7 @@ async function projectList(auth) {
     .order("updated_at", { ascending: false });
 
   // Filter by role when auth is present
-  if (auth && !["admin", "ceo"].includes(auth.profile.role)) {
+  if (auth && !["admin", "ceo", "sales"].includes(auth.profile.role)) {
     const userId = auth.profile.id;
     const { data: assigned } = await sb
       .from("project_assignments")
@@ -472,18 +477,9 @@ async function projectList(auth) {
       .eq("user_id", userId);
     const assignedIds = (assigned || []).map(a => a.project_id);
 
-    if (auth.profile.role === "sales") {
-      // Sales see projects they created + projects they're assigned to
-      if (assignedIds.length > 0) {
-        query = query.or(`created_by.eq.${userId},id.in.(${assignedIds.join(",")})`);
-      } else {
-        query = query.eq("created_by", userId);
-      }
-    } else {
-      // Designers / lead designers see only explicitly assigned projects
-      if (assignedIds.length === 0) return { projects: [] };
-      query = query.in("id", assignedIds);
-    }
+    // Designers / lead designers see only explicitly assigned projects
+    if (assignedIds.length === 0) return { projects: [] };
+    query = query.in("id", assignedIds);
   }
 
   const { data, error } = await query;
@@ -591,9 +587,44 @@ async function projectSaveBrief(body) {
   return { ok: true };
 }
 
+// ─── Sales-specific: all projects split into mine vs others ───────────────────
+async function salesProjectList(auth) {
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const userId = auth.profile.id;
+
+  const { data, error } = await sb
+    .from("projects")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by")
+    .order("updated_at", { ascending: false });
+  if (error) throw httpError(500, "Failed to list projects: " + error.message);
+
+  const projects = await Promise.all((data || []).map(async p => {
+    const { data: fps } = await sb
+      .from("floor_plans")
+      .select("storage_path")
+      .eq("project_id", p.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const fp = fps && fps[0];
+    return {
+      ...p,
+      thumbnail_url: fp?.storage_path
+        ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
+        : null
+    };
+  }));
+
+  return {
+    mine:   projects.filter(p => p.created_by === userId),
+    others: projects.filter(p => p.created_by !== userId)
+  };
+}
+
 module.exports = {
   handleProjectAction,
   projectList,
   projectLoad,
-  projectLoadVersions
+  projectLoadVersions,
+  salesProjectList
 };

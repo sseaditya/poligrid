@@ -16,6 +16,13 @@
   document.getElementById("greeting").textContent = `${greeting}, ${profile.full_name.split(" ")[0]}`;
   document.getElementById("subline").textContent = `You're signed in as ${roleLabel(profile.role)}.`;
 
+  // Redirect sales users to their dedicated dashboard
+  if (profile.role === "sales") {
+    const slug = profile.full_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    window.location.href = `/sales/${slug}`;
+    return;
+  }
+
   // Role-specific setup
   if (profile.role === "lead_designer" || profile.role === "admin") {
     document.getElementById("statRow").hidden = false;
@@ -27,7 +34,7 @@
     loadStats(session);
   }
 
-  if (profile.role === "sales" || profile.role === "admin") {
+  if (profile.role === "admin") {
     const wrap = document.getElementById("projectsAction");
     wrap.innerHTML = `<button class="primary-btn btn-sm" id="newProjectBtn">+ New Project</button>`;
     document.getElementById("newProjectBtn").addEventListener("click", () => {

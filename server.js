@@ -22,7 +22,8 @@ const {
   handleProjectAction,
   projectList,
   projectLoad,
-  projectLoadVersions
+  projectLoadVersions,
+  salesProjectList
 } = require("./server/projects");
 const { requireAuth, getAuthProfile } = require("./server/auth");
 const { drawingsList, drawingsPending, drawingSignedUrl, drawingUpload, drawingReview } = require("./server/drawings");
@@ -161,10 +162,20 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, await projectUnassignUser(req, await readJson(req)));
     }
 
+    if (req.method === "GET" && url.pathname === "/api/sales/projects") {
+      const auth = await requireAuth(req, ["sales", "admin", "ceo"]);
+      return sendJson(res, 200, await salesProjectList(auth));
+    }
+
     if (req.method === "POST" && url.pathname.startsWith("/api/project/")) {
+      const auth   = await getAuthProfile(req);
       const body   = await readJson(req);
       const action = url.pathname.slice("/api/project/".length);
-      return sendJson(res, 200, await handleProjectAction(action, body));
+      return sendJson(res, 200, await handleProjectAction(action, body, auth));
+    }
+    // Serve sales dashboard for /sales/:name paths
+    if (req.method === "GET" && url.pathname.startsWith("/sales/")) {
+      return serveStatic("/sales.html", false, res);
     }
     if (req.method === "GET" || req.method === "HEAD") {
       return serveStatic(url.pathname, req.method === "HEAD", res);
