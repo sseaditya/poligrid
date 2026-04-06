@@ -476,6 +476,68 @@ async function drawingDownloadZip(req, res, projectId) {
   res.end(zipBuffer);
 }
 
+// ─── Revision-requested drawings for the current designer ────────────────────
+async function drawingsRevisionRequests(req) {
+  const { profile } = await requireAuth(req, ["designer", "lead_designer", "admin"]);
+  const sb = db.getClient();
+
+  // Find projects this user is assigned to
+  const { data: assigned } = await sb
+    .from("project_assignments")
+    .select("project_id")
+    .eq("user_id", profile.id);
+
+  if (!assigned?.length) return { drawings: [] };
+  const projectIds = assigned.map(a => a.project_id);
+
+  let query = sb
+    .from("drawings")
+    .select(`
+      *,
+      project:projects(id, name, client_name),
+      drawing_reviews(id, status, comments, reviewed_at,
+        reviewer:profiles!reviewed_by(full_name))
+    `)
+    .in("project_id", projectIds)
+    .eq("status", "revision_requested")
+    .order("updated_at", { ascending: false });
+
+  // Designers only see their own uploaded drawings; leads see all
+  if (profile.role === "designer") {
+    query = query.eq("uploaded_by", profile.id);
+  }
+
+  const { data, error } = await query;
+  if (error) throw httpError(500, error.message);
+  return { drawings: data || [] };
+}
+
+// ─── Drawing assignment summary (counts) per project ─────────────────────────
+async function drawingProjectSummary(req, projectIds) {
+  await requireAuth(req);
+  if (!projectIds?.length) return { summary: {} };
+
+  const sb = db.getClient();
+  const { data, error } = await sb
+    .from("drawing_assignments")
+    .select("project_id, status")
+    .in("project_id", projectIds);
+
+  if (error) throw httpError(500, error.message);
+
+  const summary = {};
+  for (const row of data || []) {
+    if (!summary[row.project_id]) {
+      summary[row.project_id] = { total: 0, approved: 0, pending_review: 0, revision_requested: 0 };
+    }
+    summary[row.project_id].total++;
+    if (row.status === "approved")           summary[row.project_id].approved++;
+    if (row.status === "pending_review")     summary[row.project_id].pending_review++;
+    if (row.status === "revision_requested") summary[row.project_id].revision_requested++;
+  }
+  return { summary };
+}
+
 module.exports = {
   drawingsList,
   drawingsPending,
@@ -488,4 +550,6 @@ module.exports = {
   drawingAssignmentsList,
   drawingAssignmentUpsert,
   drawingAssignmentDelete,
+  drawingsRevisionRequests,
+  drawingProjectSummary,
 };

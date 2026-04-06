@@ -1,6 +1,7 @@
 "use strict";
 const db = require("../db");
 const { httpError } = require("./utils");
+const { requireAuth } = require("./auth");
 // ─── Project DB Handlers ─────────────────────────────────────────────────────
 
 async function handleProjectAction(action, body, auth) {
@@ -465,7 +466,7 @@ async function projectList(auth) {
 
   let query = sb
     .from("projects")
-    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by, floor_plans(storage_path)")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by, advance_payment_done, floor_plans(storage_path)")
     .order("updated_at", { ascending: false });
 
   // Filter by role when auth is present
@@ -624,6 +625,49 @@ async function salesProjectList(auth) {
   };
 }
 
+// ─── Create a new project (self-serve for designer / sales) ──────────────────
+async function projectCreate(req, body) {
+  const { profile } = await requireAuth(req, ["designer", "lead_designer", "admin", "sales"]);
+  const { name, clientName } = body;
+  if (!name || !name.trim()) throw httpError(400, "Project name required.");
+
+  const sb = db.getClient();
+  const newId = require("crypto").randomUUID();
+
+  const { error } = await sb.from("projects").insert({
+    id:          newId,
+    name:        name.trim(),
+    client_name: clientName?.trim() || null,
+    created_by:  profile.id,
+    status:      "active",
+  });
+  if (error) throw httpError(500, error.message);
+
+  // Auto-assign creator
+  await sb.from("project_assignments").insert({
+    project_id:  newId,
+    user_id:     profile.id,
+    assigned_by: profile.id,
+  });
+
+  return { projectId: newId };
+}
+
+// ─── Toggle advance payment done flag ────────────────────────────────────────
+async function projectAdvancePayment(req, body) {
+  await requireAuth(req, ["sales", "admin"]);
+  const { projectId, done } = body;
+  if (!projectId) throw httpError(400, "projectId required.");
+
+  const sb = db.getClient();
+  const { error } = await sb
+    .from("projects")
+    .update({ advance_payment_done: !!done, updated_at: new Date().toISOString() })
+    .eq("id", projectId);
+  if (error) throw httpError(500, error.message);
+  return { ok: true };
+}
+
 module.exports = {
   handleProjectAction,
   projectList,
@@ -631,4 +675,6 @@ module.exports = {
   projectLoadVersions,
   salesProjectList,
   projectUpdateStatus,
+  projectCreate,
+  projectAdvancePayment,
 };

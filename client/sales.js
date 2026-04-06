@@ -57,19 +57,62 @@ async function loadProjects(session, profile) {
       return;
     }
 
-    container.innerHTML = projects.slice(0, 8).map(p => `
-      <div class="proj-mini-card" data-id="${p.id}">
-        ${p.thumbnail_url ? `<img class="proj-mini-thumb" src="${p.thumbnail_url}" alt="" />` : `<div class="proj-mini-thumb proj-mini-thumb--empty"></div>`}
-        <div class="proj-mini-info">
-          <span class="proj-mini-name">${p.name || "Untitled"}</span>
-          <span class="proj-mini-meta">${p.bhk || ""} ${p.property_type || ""} ${p.client_name ? "· " + p.client_name : ""}</span>
-          ${p.status !== "active" ? `<span class="badge badge-${p.status}">${p.status}</span>` : ""}
+    const render = (list) => {
+      container.innerHTML = list.slice(0, 20).map(p => `
+        <div class="proj-mini-card" data-id="${p.id}">
+          ${p.thumbnail_url ? `<img class="proj-mini-thumb" src="${p.thumbnail_url}" alt="" />` : `<div class="proj-mini-thumb proj-mini-thumb--empty"></div>`}
+          <div class="proj-mini-info">
+            <span class="proj-mini-name">${escHtml(p.name || "Untitled")}</span>
+            <span class="proj-mini-meta">${escHtml(p.bhk || "")} ${escHtml(p.property_type || "")} ${p.client_name ? "· " + escHtml(p.client_name) : ""}</span>
+            ${p.status !== "active" ? `<span class="badge badge-${p.status}">${p.status}</span>` : ""}
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="advance-pay-btn ${p.advance_payment_done ? "advance-pay-done" : ""}"
+              data-id="${p.id}" data-done="${p.advance_payment_done ? "1" : "0"}"
+              title="${p.advance_payment_done ? "Advance payment received — click to undo" : "Mark advance payment as received"}">
+              ${p.advance_payment_done ? "₹ Advance Paid ✓" : "₹ Mark Advance Paid"}
+            </button>
+            <a class="ghost-sm proj-mini-open" href="/index.html?id=${p.id}">Open →</a>
+          </div>
         </div>
-        <a class="ghost-sm proj-mini-open" href="/index.html?id=${p.id}">Open →</a>
-      </div>
-    `).join("");
+      `).join("");
+
+      container.querySelectorAll(".advance-pay-btn").forEach(btn => {
+        btn.addEventListener("click", () => toggleAdvancePayment(btn, session, list));
+      });
+    };
+
+    render(projects);
   } catch {
     container.innerHTML = `<p class="empty-hint">Failed to load projects.</p>`;
+  }
+}
+
+async function toggleAdvancePayment(btn, session, projects) {
+  const projectId = btn.dataset.id;
+  const currentDone = btn.dataset.done === "1";
+  const newDone = !currentDone;
+
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/project/advance-payment", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ projectId, done: newDone }),
+    });
+    if (!res.ok) throw new Error("Failed");
+
+    // Update local state
+    btn.dataset.done = newDone ? "1" : "0";
+    btn.textContent = newDone ? "₹ Advance Paid ✓" : "₹ Mark Advance Paid";
+    btn.classList.toggle("advance-pay-done", newDone);
+  } catch {
+    alert("Could not update payment status.");
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -123,4 +166,10 @@ async function loadTasks(session, profile) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function roleLabel(role) {
   return { admin: "Admin", sales: "Sales", designer: "Designer", lead_designer: "Lead Designer", ceo: "CEO" }[role] || role;
+}
+
+function escHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

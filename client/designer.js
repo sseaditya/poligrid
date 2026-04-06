@@ -51,6 +51,12 @@ const DRAWING_TYPES = [
     selectProject(urlProjectId);
   }
 
+  // Start screen create-project buttons (designer only)
+  document.getElementById("startCreateBtn")?.addEventListener("click", openCreateModal);
+  document.getElementById("createModalClose")?.addEventListener("click", closeCreateModal);
+  document.getElementById("createModalCancel")?.addEventListener("click", closeCreateModal);
+  document.getElementById("createModalSubmit")?.addEventListener("click", handleCreateProject);
+
   document.getElementById("projectSelect").addEventListener("change", e => selectProject(e.target.value));
   document.getElementById("uploadBtn").addEventListener("click", () => { document.getElementById("uploadModal").hidden = false; });
   document.getElementById("uploadModalClose").addEventListener("click", closeUploadModal);
@@ -89,6 +95,12 @@ async function loadProjects() {
     const { projects } = await res.json();
     if (!projects?.length) {
       select.innerHTML = `<option value="">No projects assigned</option>`;
+      // Show start screen for plain designers
+      if (_profile.role === "designer") {
+        document.getElementById("designerStartScreen").hidden = false;
+        document.getElementById("uploadBtn").disabled = true;
+        document.getElementById("downloadZipBtn").disabled = true;
+      }
       return;
     }
     select.innerHTML =
@@ -628,4 +640,44 @@ function escHtml(str) {
   return String(str || "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// ─── Create project modal (designer start screen) ─────────────────────────────
+function openCreateModal() {
+  document.getElementById("createProjectName").value = "";
+  document.getElementById("createProjectClient").value = "";
+  document.getElementById("createProjectError2").hidden = true;
+  document.getElementById("createProjectModal2").hidden = false;
+}
+
+function closeCreateModal() {
+  document.getElementById("createProjectModal2").hidden = true;
+}
+
+async function handleCreateProject() {
+  const name   = document.getElementById("createProjectName").value.trim();
+  const client = document.getElementById("createProjectClient").value.trim();
+  const errEl  = document.getElementById("createProjectError2");
+  const btn    = document.getElementById("createModalSubmit");
+  errEl.hidden = true;
+
+  if (!name) { errEl.textContent = "Project name is required."; errEl.hidden = false; return; }
+
+  btn.disabled = true;
+  btn.textContent = "Creating…";
+  try {
+    const res = await apiFetch("/api/project/create", {
+      method: "POST",
+      body: JSON.stringify({ name, clientName: client || undefined }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to create project.");
+    // Reload page with the new project selected
+    window.location.href = `/designer.html?projectId=${data.projectId}`;
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.hidden = false;
+    btn.disabled = false;
+    btn.textContent = "Create & Open";
+  }
 }

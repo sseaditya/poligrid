@@ -45,7 +45,42 @@
       </div>
     </div>
 
+    <!-- Designer start screen (no projects assigned) -->
+    <div id="designerStart" hidden>
+      <div class="empty-state-card">
+        <div class="empty-state-icon">✏️</div>
+        <h2 class="empty-state-title">You're not assigned to any projects yet</h2>
+        <p class="empty-state-body">
+          Wait for a lead designer to assign you, or create a new project yourself
+          and start uploading drawings right away.
+        </p>
+        <button class="primary-btn" id="designerCreateBtn">+ Create New Project</button>
+      </div>
+    </div>
+
+    <!-- Lead designer start screen (no projects assigned) -->
+    <div id="leadStart" hidden>
+      <div class="empty-state-card">
+        <div class="empty-state-icon">📐</div>
+        <h2 class="empty-state-title">No projects assigned yet</h2>
+        <p class="empty-state-body">
+          Ask the admin to assign projects to you, or use the Admin panel to assign
+          yourself to existing projects.
+        </p>
+      </div>
+    </div>
+
     <div class="dash-grid" id="dashGrid">
+      <!-- Designer: Actions Required (revision requests) -->
+      <section class="dash-section dash-section--full" id="actionsSection" hidden>
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">Actions Required</h2>
+        </div>
+        <div id="actionsList" class="drawings-list">
+          <p class="loading-hint">Loading…</p>
+        </div>
+      </section>
+
       <!-- Projects section -->
       <section class="dash-section" id="projectsSection">
         <div class="dash-section-head">
@@ -57,7 +92,7 @@
         </div>
       </section>
 
-      <!-- Tasks section -->
+      <!-- Tasks section (hidden for designer — replaced by actionsSection) -->
       <section class="dash-section" id="tasksSection">
         <div class="dash-section-head">
           <h2 class="dash-section-title">My Tasks</h2>
@@ -76,6 +111,31 @@
           <p class="loading-hint">Loading…</p>
         </div>
       </section>
+    </div>
+
+    <!-- Create project modal (designer) -->
+    <div class="modal-overlay" id="createProjectModal" hidden>
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 class="modal-title">New Project</h2>
+          <button class="ghost-sm" id="createProjectClose">✕</button>
+        </div>
+        <div class="modal-body">
+          <label class="field-label">
+            Project name <span style="color:var(--danger)">*</span>
+            <input class="ctx-input" id="newProjectName" type="text" placeholder="e.g. Sharma Residence" />
+          </label>
+          <label class="field-label">
+            Client name (optional)
+            <input class="ctx-input" id="newProjectClient" type="text" placeholder="e.g. Rajesh Sharma" />
+          </label>
+          <div class="auth-error" id="createProjectError" hidden></div>
+          <div class="modal-footer">
+            <button class="ghost-btn" id="createProjectCancel">Cancel</button>
+            <button class="primary-btn" id="createProjectSubmit">Create & Open</button>
+          </div>
+        </div>
+      </div>
     </div>
   </main>
 

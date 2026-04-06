@@ -25,6 +25,8 @@ const {
   projectLoadVersions,
   salesProjectList,
   projectUpdateStatus,
+  projectCreate,
+  projectAdvancePayment,
 } = require("./server/projects");
 const { requireAuth, getAuthProfile } = require("./server/auth");
 const {
@@ -32,6 +34,7 @@ const {
   drawingDownload, drawingDownloadZip,
   drawingUpload, drawingReview,
   drawingAssignmentsList, drawingAssignmentUpsert, drawingAssignmentDelete,
+  drawingsRevisionRequests, drawingProjectSummary,
 } = require("./server/drawings");
 const { tasksList, taskCreate, taskUpdate } = require("./server/tasks");
 const {
@@ -128,6 +131,13 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/drawings/assignments/delete") {
       return sendJson(res, 200, await drawingAssignmentDelete(req, await readJson(req)));
     }
+    if (req.method === "GET" && url.pathname === "/api/drawings/revision-requests") {
+      return sendJson(res, 200, await drawingsRevisionRequests(req));
+    }
+    if (req.method === "GET" && url.pathname === "/api/drawings/project-summary") {
+      const ids = (url.searchParams.get("projectIds") || "").split(",").filter(Boolean);
+      return sendJson(res, 200, await drawingProjectSummary(req, ids));
+    }
 
     // ── Tasks ─────────────────────────────────────────────────────────────────
     if (req.method === "GET" && url.pathname === "/api/tasks/list") {
@@ -194,6 +204,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/project/update-status") {
       const auth = await getAuthProfile(req);
       return sendJson(res, 200, await projectUpdateStatus(await readJson(req), auth));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/create") {
+      return sendJson(res, 200, await projectCreate(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/advance-payment") {
+      return sendJson(res, 200, await projectAdvancePayment(req, await readJson(req)));
     }
     if (req.method === "POST" && url.pathname.startsWith("/api/project/")) {
       const auth   = await getAuthProfile(req);
