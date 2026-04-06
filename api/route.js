@@ -140,6 +140,10 @@ module.exports = async (req, res) => {
       const auth = await getAuthProfileRoute(req);
       return sendJson(res, 200, await projectList(auth));
     }
+    if (req.method === "GET" && url.pathname === "/api/sales/projects") {
+      const auth = await getAuthProfileRoute(req);
+      return sendJson(res, 200, await salesProjectList(auth));
+    }
     if (req.method === "GET" && url.pathname === "/api/project/team") {
       return sendJson(res, 200, await apiProjectTeamGet(req, url.searchParams.get("id")));
     }
@@ -2147,6 +2151,45 @@ async function projectList(auth) {
     };
   }));
   return { projects };
+}
+
+async function salesProjectList(auth) {
+  if (!auth || !["sales", "admin", "ceo"].includes(auth.profile.role)) {
+    throw httpError(403, "Forbidden");
+  }
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const userId = auth.profile.id;
+
+  const { data: allProjects, error } = await sb
+    .from("projects")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, created_at, updated_at, status, client_name, created_by")
+    .order("updated_at", { ascending: false });
+  if (error) throw httpError(500, "Failed to list projects: " + error.message);
+
+  const { data: assigned } = await sb.from("project_assignments").select("project_id").eq("user_id", userId);
+  const assignedIds = new Set((assigned || []).map(a => a.project_id));
+
+  const withThumbs = await Promise.all((allProjects || []).map(async p => {
+    const { data: fps } = await sb
+      .from("floor_plans")
+      .select("storage_path")
+      .eq("project_id", p.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const fp = fps && fps[0];
+    return {
+      ...p,
+      thumbnail_url: fp?.storage_path
+        ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
+        : null
+    };
+  }));
+
+  const mine   = withThumbs.filter(p => p.created_by === userId || assignedIds.has(p.id));
+  const others = withThumbs.filter(p => p.created_by !== userId && !assignedIds.has(p.id));
+
+  return { mine, others };
 }
 
 async function projectLoad(id) {
