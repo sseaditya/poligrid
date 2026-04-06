@@ -58,7 +58,7 @@ const AuthClient = (() => {
       const reason = errData.error || "error";
       const sb = await _getSb();
       await sb.auth.signOut();
-      window.location.href = `/login.html?reason=${encodeURIComponent(reason)}`;
+      window.location.href = `/login?reason=${encodeURIComponent(reason)}`;
       return null;
     }
     const data = await res.json();
@@ -71,11 +71,11 @@ const AuthClient = (() => {
   // Redirects and throws if not authorised (so page code below it won't run).
   async function requireAuth(allowedRoles) {
     const session = await getSession();
-    if (!session) { window.location.href = "/login.html"; throw new Error("unauthenticated"); }
+    if (!session) { window.location.href = "/login"; throw new Error("unauthenticated"); }
     const profile = await getProfile();
     if (!profile) throw new Error("blocked"); // getProfile already triggered redirect
     if (allowedRoles && !allowedRoles.includes(profile.role)) {
-      window.location.href = "/homepage.html";
+      window.location.href = "/homepage";
       throw new Error("unauthorised role");
     }
     return { session, profile };
@@ -87,7 +87,7 @@ const AuthClient = (() => {
     // then routes the user to the right page based on their role.
     return sb.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin + "/login.html" },
+      options: { redirectTo: window.location.origin + "/login" },
     });
   }
 
@@ -95,7 +95,7 @@ const AuthClient = (() => {
     const sb = await _getSb();
     await sb.auth.signOut();
     _profile = null;
-    window.location.href = "/login.html";
+    window.location.href = "/login";
   }
 
   // Helper: returns auth header object for fetch calls

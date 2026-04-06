@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poligrid — Projects</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="dash-body">
+  <div class="noise"></div>
+
+  <header class="top-bar">
+    <div class="top-bar-left">
+      <a href="/homepage" class="logo-link"><span class="logo-text">Poligrid</span></a>
+      <span class="page-title">Projects</span>
+    </div>
+    <nav class="dash-nav" id="dashNav"></nav>
+    <div class="top-bar-right" id="userChipWrap"></div>
+  </header>
+
+  <main class="dash-main">
+    <div class="dash-hero">
+      <h1 class="dash-greeting">All Projects</h1>
+    </div>
+
+    <!-- Toolbar: search + filter + new -->
+    <div class="proj-list-toolbar">
+      <input class="ctx-input proj-list-search" id="searchInput" type="text" placeholder="Search by name or client…" />
+      <select class="ctx-input proj-list-filter" id="statusFilter">
+        <option value="">All statuses</option>
+        <option value="active">Active</option>
+        <option value="advanced_paid">Advance Paid</option>
+        <option value="in_progress">In Progress</option>
+        <option value="completed">Completed</option>
+        <option value="on_hold">On Hold</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+      <button class="primary-btn btn-sm" id="newProjectBtn" hidden>+ New Project</button>
+    </div>
+
+    <!-- Project grid -->
+    <div class="proj-list-grid" id="projectsGrid">
+      <p class="loading-hint">Loading…</p>
+    </div>
+  </main>
+
+  <!-- Create project modal -->
+  <div class="modal-overlay" id="createProjectModal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">New Project</h2>
+        <button class="ghost-sm" id="createProjectClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="field-label">
+          Project name <span style="color:var(--danger)">*</span>
+          <input class="ctx-input" id="newProjectName" type="text" placeholder="e.g. Sharma Residence" />
+        </label>
+        <label class="field-label">
+          Client name (optional)
+          <input class="ctx-input" id="newProjectClient" type="text" placeholder="e.g. Rajesh Sharma" />
+        </label>
+        <div class="auth-error" id="createProjectError" hidden></div>
+        <div class="modal-footer">
+          <button class="ghost-btn" id="createProjectCancel">Cancel</button>
+          <button class="primary-btn" id="createProjectSubmit">Create Project</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="client/auth.js"></script>
+  <script src="client/projects.js"></script>
+</body>
+</html>

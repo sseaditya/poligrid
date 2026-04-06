@@ -54,7 +54,7 @@
 
     // If already signed in, skip the login page
     AuthClient.getSession().then(session => {
-      if (session) window.location.href = "/homepage.html";
+      if (session) window.location.href = "/homepage";
     }).catch(err => {
       const el = document.getElementById("authError");
       el.textContent = err.message || "Configuration error. Contact your administrator.";

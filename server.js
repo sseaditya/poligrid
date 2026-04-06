@@ -27,6 +27,8 @@ const {
   projectUpdateStatus,
   projectCreate,
   projectAdvancePayment,
+  projectDetail,
+  projectUpdate,
 } = require("./server/projects");
 const { requireAuth, getAuthProfile } = require("./server/auth");
 const {
@@ -210,6 +212,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/project/advance-payment") {
       return sendJson(res, 200, await projectAdvancePayment(req, await readJson(req)));
+    }
+    if (req.method === "GET" && url.pathname === "/api/project/detail") {
+      return sendJson(res, 200, await projectDetail(req, url.searchParams.get("id")));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/update") {
+      return sendJson(res, 200, await projectUpdate(req, await readJson(req)));
     }
     if (req.method === "POST" && url.pathname.startsWith("/api/project/")) {
       const auth   = await getAuthProfile(req);

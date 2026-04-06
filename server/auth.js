@@ -3,6 +3,8 @@
 const { getClient } = require("../db");
 const { httpError } = require("./utils");
 
+const VALID_ROLES = ["admin", "sales", "designer", "lead_designer", "ceo"];
+
 // ─── Extract Bearer token from Authorization header ───────────────────────────
 function extractToken(req) {
   const auth = req.headers["authorization"] || "";
@@ -25,34 +27,56 @@ async function requireAuth(req, allowedRoles) {
     .eq("id", user.id)
     .single();
 
-  if (profileError || !profile) {
-    // Check if this email was pre-invited by an admin
+  // Helper: look up invite record + user_metadata to get intended role for this email
+  async function resolveInvite() {
     const { data: invite } = await sb
       .from("invitations")
       .select("role, full_name")
       .eq("email", user.email)
       .maybeSingle();
+    const metaRole = user.user_metadata?.role;
+    const role = invite?.role || (metaRole && VALID_ROLES.includes(metaRole) ? metaRole : null);
+    const fullName = invite?.full_name || user.user_metadata?.full_name || null;
+    return { invite, role, fullName };
+  }
 
-    if (!invite) {
-      throw httpError(403, "not_invited");
-    }
+  // Profile not found — can happen if trigger is disabled or failed
+  if (profileError || !profile) {
+    const { invite, role, fullName } = await resolveInvite();
+    if (!role) throw httpError(403, "not_invited");
 
-    // Consume the invitation and create the profile
     const { data: newProfile, error: upsertError } = await sb.from("profiles").upsert({
-      id: user.id,
-      email: user.email,
-      full_name: invite.full_name || user.user_metadata?.full_name || user.email.split("@")[0],
-      role: invite.role,
-      is_active: true,
+      id: user.id, email: user.email,
+      full_name: fullName || user.email.split("@")[0],
+      role, is_active: true,
     }, { onConflict: "id" }).select().single();
     if (upsertError || !newProfile) throw httpError(500, "Could not create user profile.");
 
-    await sb.from("invitations").delete().eq("email", user.email);
+    if (invite) await sb.from("invitations").delete().eq("email", user.email);
     return { user, profile: newProfile };
   }
 
+  // Profile exists but is inactive.
+  // The DB trigger auto-creates profiles with is_active=false for all new sign-ins.
+  // Invited users arrive here — activate them with the correct role from the invitation.
   if (!profile.is_active) {
-    throw httpError(403, "account_inactive");
+    const { invite, role, fullName } = await resolveInvite();
+    if (!role) throw httpError(403, "account_inactive");
+
+    const { data: activatedProfile, error: updateErr } = await sb.from("profiles")
+      .update({
+        role,
+        full_name: fullName || profile.full_name,
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", user.id)
+      .select()
+      .single();
+    if (updateErr || !activatedProfile) throw httpError(500, "Could not activate user profile.");
+
+    if (invite) await sb.from("invitations").delete().eq("email", user.email);
+    return { user, profile: activatedProfile };
   }
 
   if (allowedRoles && !allowedRoles.includes(profile.role)) {

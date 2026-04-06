@@ -5,7 +5,7 @@ let _session, _profile;
 (async () => {
   try {
     ({ session: _session, profile: _profile } = await AuthClient.requireAuth());
-  } catch { window.location.href = "/login.html"; return; }
+  } catch { window.location.href = "/login"; return; }
 
   AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
   renderNav(_profile);
@@ -37,7 +37,7 @@ let _session, _profile;
       const wrap = document.getElementById("projectsAction");
       wrap.innerHTML = `<button class="primary-btn btn-sm" id="newProjectBtn">+ New Project</button>`;
       document.getElementById("newProjectBtn").addEventListener("click", () => {
-        window.location.href = "/index.html?new=1";
+        window.location.href = "/index?new=1";
       });
     }
     loadProjects();
@@ -81,20 +81,21 @@ async function setupLeadDashboard() {
 // ─── Nav links per role ───────────────────────────────────────────────────────
 function renderNav(profile) {
   const nav = document.getElementById("dashNav");
-  const links = [{ href: "/homepage.html", label: "Home", active: true }];
+  const links = [{ href: "/homepage", label: "Home", active: true }];
+  links.push({ href: "/projects", label: "Projects" });
 
-  if (["sales", "admin"].includes(profile.role)) {
-    links.push({ href: "/index.html", label: "Fitout Planner" });
+  if (["sales", "admin", "lead_designer"].includes(profile.role)) {
+    links.push({ href: "/index", label: "Fitout Planner" });
   }
   if (["designer", "lead_designer", "admin"].includes(profile.role)) {
-    links.push({ href: "/designer.html", label: "Drawings" });
+    links.push({ href: "/designer", label: "Drawings" });
   }
   if (profile.role === "admin") {
-    links.push({ href: "/admin.html", label: "Admin" });
-    links.push({ href: "/ceo.html", label: "Dashboard" });
+    links.push({ href: "/admin", label: "Admin" });
+    links.push({ href: "/ceo", label: "Dashboard" });
   }
   if (profile.role === "ceo") {
-    links.push({ href: "/ceo.html", label: "Dashboard" });
+    links.push({ href: "/ceo", label: "Dashboard" });
   }
 
   nav.innerHTML = links.map(l =>
@@ -135,8 +136,8 @@ async function loadProjects() {
           <span class="proj-mini-meta">${escHtml(p.bhk || "")} ${escHtml(p.property_type || "")} ${p.client_name ? "· " + escHtml(p.client_name) : ""}</span>
           ${p.status !== "active" ? `<span class="badge badge-${p.status}">${p.status}</span>` : ""}
         </div>
-        ${["sales", "admin"].includes(_profile.role) ? `<a class="ghost-sm proj-mini-open" href="/index.html?id=${p.id}">Open →</a>` : ""}
-        ${["designer", "lead_designer"].includes(_profile.role) ? `<a class="ghost-sm proj-mini-open" href="/designer.html?projectId=${p.id}">Drawings →</a>` : ""}
+        ${["sales", "admin"].includes(_profile.role) ? `<a class="ghost-sm proj-mini-open" href="/index?id=${p.id}">Open →</a>` : ""}
+        ${["designer", "lead_designer"].includes(_profile.role) ? `<a class="ghost-sm proj-mini-open" href="/designer?projectId=${p.id}">Drawings →</a>` : ""}
       </div>
     `).join("");
 
@@ -174,7 +175,7 @@ async function loadLeadProjects() {
     } catch { /* progress bars will show 0 */ }
 
     const wrap = document.getElementById("projectsAction");
-    wrap.innerHTML = `<a class="ghost-btn btn-sm" href="/designer.html">All Drawings →</a>`;
+    wrap.innerHTML = `<a class="ghost-btn btn-sm" href="/designer">All Drawings →</a>`;
 
     container.innerHTML = projects.map(p => {
       const s = summary[p.id] || { total: 0, approved: 0, pending_review: 0, revision_requested: 0 };
@@ -192,7 +193,7 @@ async function loadLeadProjects() {
             <div style="display:flex;align-items:center;gap:8px">
               ${p.advance_payment_done ? `<span class="badge badge-success" title="Advance payment received">₹ Paid</span>` : ""}
               ${p.status !== "active" ? `<span class="badge badge-${p.status}">${p.status}</span>` : ""}
-              <a class="ghost-sm" href="/designer.html?projectId=${p.id}">Open →</a>
+              <a class="ghost-sm" href="/designer?projectId=${p.id}">Open →</a>
             </div>
           </div>
           ${s.total > 0 ? `
@@ -248,7 +249,7 @@ async function loadRevisionRequests() {
               </span>` : ""}
           </div>
           <span class="badge badge-drawing-revision_requested">🔁 Revision Needed</span>
-          <a class="primary-btn btn-sm" href="/designer.html?projectId=${d.project_id}">Upload Revision →</a>
+          <a class="primary-btn btn-sm" href="/designer?projectId=${d.project_id}">Upload Revision →</a>
         </div>`;
     }).join("");
   } catch {
@@ -329,7 +330,7 @@ async function loadReviewQueue() {
           </span>
         </div>
         <span class="badge badge-drawing-pending_review">⏳ Pending</span>
-        <a class="ghost-sm review-queue-link" href="/designer.html?projectId=${d.project_id}">Review →</a>
+        <a class="ghost-sm review-queue-link" href="/designer?projectId=${d.project_id}">Review →</a>
       </div>
     `).join("");
   } catch {
@@ -378,7 +379,7 @@ async function handleCreateProject() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to create project.");
-    window.location.href = `/designer.html?projectId=${data.projectId}`;
+    window.location.href = `/designer?projectId=${data.projectId}`;
   } catch (err) {
     errEl.textContent = err.message;
     errEl.hidden = false;

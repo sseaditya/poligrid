@@ -6,7 +6,7 @@ let _session, _profile, _allProjects = [];
   try {
     ({ session: _session, profile: _profile } =
       await AuthClient.requireAuth(["admin", "ceo"]));
-  } catch { window.location.href = '/login.html'; return; }
+  } catch { window.location.href = '/login'; return; }
 
   AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
   renderNav(_profile);
@@ -20,13 +20,14 @@ let _session, _profile, _allProjects = [];
 function renderNav(profile) {
   const nav = document.getElementById("dashNav");
   const links = [
-    { href: "/homepage.html", label: "Home" },
-    { href: "/ceo.html", label: "Dashboard", active: true },
+    { href: "/homepage", label: "Home" },
+    { href: "/projects", label: "Projects" },
+    { href: "/ceo", label: "Dashboard", active: true },
   ];
   if (profile.role === "admin") {
-    links.push({ href: "/index.html", label: "Fitout Planner" });
-    links.push({ href: "/designer.html", label: "Drawings" });
-    links.push({ href: "/admin.html", label: "Admin" });
+    links.push({ href: "/index", label: "Fitout Planner" });
+    links.push({ href: "/designer", label: "Drawings" });
+    links.push({ href: "/admin", label: "Admin" });
   }
   nav.innerHTML = links.map(l =>
     `<a class="dash-nav-link${l.active ? " active" : ""}" href="${l.href}">${l.label}</a>`
@@ -103,8 +104,8 @@ function renderTable() {
       </td>
       <td class="td-center ${pendingTasks > 0 ? "warn-text" : ""}">${pendingTasks > 0 ? "⚠ " + pendingTasks : pendingTasks}</td>
       <td class="td-actions">
-        <a class="ghost-sm" href="/index.html?id=${p.project_id}" title="Fitout Planner">Plan</a>
-        <a class="ghost-sm" href="/designer.html?projectId=${p.project_id}" title="View drawings">Drawings</a>
+        <a class="ghost-sm" href="/index?id=${p.project_id}" title="Fitout Planner">Plan</a>
+        <a class="ghost-sm" href="/designer?projectId=${p.project_id}" title="View drawings">Drawings</a>
       </td>
     </tr>`;
   }).join("");

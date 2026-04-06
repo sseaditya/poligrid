@@ -1602,3 +1602,118 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 
 /* ── text-dim utility ────────────────────────────────────────────────────── */
 .text-dim { color:var(--text-dim); }
+
+/* ── Projects list page ───────────────────────────────────────────────────── */
+.proj-list-toolbar {
+  display:flex; align-items:center; gap:10px; margin-bottom:24px; flex-wrap:wrap;
+}
+.proj-list-search { flex:1; min-width:180px; max-width:320px; }
+.proj-list-filter { min-width:150px; }
+
+.proj-list-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(340px, 1fr));
+  gap:16px;
+}
+
+.proj-list-card {
+  background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius);
+  overflow:hidden; cursor:pointer; transition:border-color 0.15s, box-shadow 0.15s;
+  display:flex; flex-direction:column;
+}
+.proj-list-card:hover { border-color:var(--accent); box-shadow:0 4px 16px var(--accent-glow); }
+
+.proj-list-thumb {
+  height:120px; background:var(--bg3);
+  display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0;
+}
+.proj-list-thumb img { width:100%; height:100%; object-fit:cover; }
+.proj-list-thumb-empty { font-size:32px; opacity:0.35; }
+
+.proj-list-body { padding:14px; display:flex; flex-direction:column; gap:6px; }
+.proj-list-top  { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.proj-list-name { font-weight:600; font-size:14px; }
+.proj-list-client { font-size:12px; color:var(--accent); font-weight:500; margin-top:2px; }
+.proj-list-badges { display:flex; flex-wrap:wrap; gap:4px; flex-shrink:0; }
+.proj-list-meta { font-size:12px; color:var(--text-dim); }
+.proj-list-footer { display:flex; align-items:center; justify-content:space-between; margin-top:6px; }
+.proj-list-date { font-size:11px; color:var(--text-dim); }
+.proj-list-actions { display:flex; gap:6px; flex-wrap:wrap; }
+.proj-list-actions a { text-decoration:none; }
+
+/* Status badge variants missing from original */
+.badge-proj-advanced_paid { background:rgba(58,106,90,0.12); color:var(--accent); border-color:var(--accent); }
+.badge-proj-in_progress   { background:rgba(40,80,184,0.1); color:#3a5ab8; border-color:rgba(40,80,184,0.3); }
+.badge-advance { background:rgba(40,167,69,0.12); color:var(--success); border-color:rgba(40,167,69,0.3); }
+
+/* ── Project detail page ──────────────────────────────────────────────────── */
+.page-title-link {
+  font-size:13px; color:var(--text-dim); text-decoration:none; padding:2px 6px;
+  border-radius:6px; transition:color 0.15s;
+}
+.page-title-link:hover { color:var(--text); }
+
+.proj-detail-hero {
+  margin-bottom:20px; padding:20px 24px; background:var(--bg2);
+  border:1px solid var(--border); border-radius:var(--radius);
+}
+.proj-detail-title-row {
+  display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;
+  margin-bottom:8px;
+}
+.proj-detail-name   { font-family:var(--font-serif); font-size:28px; line-height:1.2; }
+.proj-detail-client { font-size:14px; color:var(--accent); font-weight:500; margin-top:4px; }
+.proj-detail-meta   { font-size:13px; color:var(--text-dim); margin-top:4px; }
+.proj-detail-dates  { font-size:11px; color:var(--text-dim); margin-top:6px; }
+.proj-detail-hero-actions {
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex-shrink:0;
+}
+.proj-detail-status-wrap { display:flex; align-items:center; }
+.status-inline-select { font-size:12px; padding:4px 8px; }
+
+.proj-detail-actions-bar {
+  display:flex; gap:10px; flex-wrap:wrap; margin-bottom:20px;
+}
+
+.proj-detail-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:20px;
+}
+@media (max-width: 860px) { .proj-detail-grid { grid-template-columns:1fr; } }
+
+.proj-detail-section { margin-bottom:0; }
+.proj-detail-floorplan {
+  width:100%; border-radius:8px; object-fit:contain; max-height:240px; background:var(--bg3);
+}
+
+.proj-info-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; margin-top:12px;
+}
+.proj-info-item { display:flex; flex-direction:column; gap:2px; }
+.proj-info-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-dim); }
+.proj-info-value { font-size:14px; font-weight:500; }
+
+/* Drawing stats section */
+.draw-stat-summary { margin-bottom:12px; }
+.draw-progress-track {
+  height:6px; background:var(--bg3); border-radius:3px; overflow:hidden;
+  display:flex;
+}
+.draw-progress-fill-approved { background:var(--success); height:100%; transition:width 0.4s; }
+.draw-progress-fill-pending  { background:var(--text-dim); height:100%; transition:width 0.4s; }
+
+.draw-stat-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.draw-stat-chip {
+  font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px;
+  border:1px solid transparent;
+}
+.draw-stat-chip.approved { background:rgba(40,167,69,0.1); color:var(--success); border-color:rgba(40,167,69,0.3); }
+.draw-stat-chip.pending  { background:var(--bg3); color:var(--text-dim); }
+.draw-stat-chip.revision { background:rgba(184,109,53,0.1); color:var(--gold); border-color:rgba(184,109,53,0.3); }
+.draw-stat-chip.rejected { background:rgba(184,64,64,0.1); color:var(--danger); border-color:rgba(184,64,64,0.3); }
+.draw-stat-chip.total    { background:var(--bg3); color:var(--text); }
+
+.draw-type-list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+.draw-type-row  { display:flex; align-items:center; gap:8px; font-size:13px; }
+.draw-type-label { min-width:100px; font-weight:500; }
+.draw-type-items { display:flex; flex-wrap:wrap; gap:4px; flex:1; }
+.draw-type-count { font-size:11px; color:var(--text-dim); white-space:nowrap; }

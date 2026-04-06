@@ -668,6 +668,69 @@ async function projectAdvancePayment(req, body) {
   return { ok: true };
 }
 
+// ─── Project detail (lightweight — includes team + drawing stats) ─────────────
+async function projectDetail(req, id) {
+  await requireAuth(req);
+  if (!id) throw httpError(400, "Missing id");
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+
+  const [
+    { data: project },
+    { data: team },
+    { data: drawings },
+    { data: fps },
+    { data: renders },
+  ] = await Promise.all([
+    sb.from("projects").select("*").eq("id", id).single(),
+    sb.from("project_assignments").select("*, profile:profiles(id, full_name, email, role)").eq("project_id", id),
+    sb.from("drawings").select("id, status, drawing_type, title, file_name, created_at, uploaded_by").eq("project_id", id).order("created_at", { ascending: false }),
+    sb.from("floor_plans").select("storage_path").eq("project_id", id).order("created_at", { ascending: false }).limit(1),
+    sb.from("renders").select("id").eq("project_id", id),
+  ]);
+
+  if (!project) throw httpError(404, "Project not found");
+
+  const drawingList = drawings || [];
+  const drawingStats = {
+    total: drawingList.length,
+    approved: drawingList.filter(d => d.status === "approved").length,
+    pending: drawingList.filter(d => d.status === "pending_review").length,
+    revision: drawingList.filter(d => d.status === "revision_requested").length,
+    rejected: drawingList.filter(d => d.status === "rejected").length,
+  };
+
+  const fp = fps && fps[0];
+  const thumbnailUrl = fp?.storage_path
+    ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
+    : null;
+
+  return { project, team: team || [], drawings: drawingList, drawingStats, thumbnailUrl, rendersCount: (renders || []).length };
+}
+
+// ─── Update editable project fields ──────────────────────────────────────────
+async function projectUpdate(req, body) {
+  await requireAuth(req, ["admin", "lead_designer", "sales", "designer"]);
+  const { projectId, name, clientName, propertyType, bhk, bhkType, totalAreaM2, globalBrief } = body;
+  if (!projectId) throw httpError(400, "projectId required.");
+
+  const updates = {};
+  if (name          !== undefined) updates.name            = name?.trim() || null;
+  if (clientName    !== undefined) updates.client_name     = clientName?.trim() || null;
+  if (propertyType  !== undefined) updates.property_type   = propertyType || null;
+  if (bhk           !== undefined) updates.bhk             = bhk;
+  if (bhkType       !== undefined) updates.bhk_type        = bhkType || null;
+  if (totalAreaM2   !== undefined) updates.total_area_m2   = totalAreaM2;
+  if (globalBrief   !== undefined) updates.global_brief    = globalBrief?.trim() || null;
+  if (!Object.keys(updates).length) throw httpError(400, "Nothing to update.");
+  updates.updated_at = new Date().toISOString();
+
+  const sb = db.getClient();
+  const { error } = await sb.from("projects").update(updates).eq("id", projectId);
+  if (error) throw httpError(500, error.message);
+  return { ok: true };
+}
+
 module.exports = {
   handleProjectAction,
   projectList,
@@ -677,4 +740,6 @@ module.exports = {
   projectUpdateStatus,
   projectCreate,
   projectAdvancePayment,
+  projectDetail,
+  projectUpdate,
 };

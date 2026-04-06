@@ -368,6 +368,19 @@ left join drawings d                on p.id = d.project_id
 left join tasks t                   on p.id = t.project_id
 group by p.id, p.name, p.status, p.client_name, p.created_at, creator.full_name;
 
+-- ─── Invitations (pre-invite before first login) ─────────────────────────────
+-- Admin adds an email here. When the user signs in via Google OAuth, requireAuth
+-- reads this table to set the correct role + activate the profile automatically.
+-- Also supports auth.admin.createUser() path where role is stored in user_metadata.
+
+create table if not exists invitations (
+  email       text primary key,
+  role        text not null,
+  full_name   text,
+  invited_by  uuid references profiles(id),
+  invited_at  timestamptz not null default now()
+);
+
 -- ─── Storage Bucket Note ─────────────────────────────────────────────────────
 -- Create the following bucket manually in Supabase Dashboard → Storage:
 --   Name: poligrid-drawings

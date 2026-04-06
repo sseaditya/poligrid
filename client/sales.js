@@ -4,7 +4,7 @@
   let session, profile;
   try {
     ({ session, profile } = await AuthClient.requireAuth(["sales", "admin"]));
-  } catch { window.location.href = "/login.html"; return; }
+  } catch { window.location.href = "/login"; return; }
 
   // Render user chip + role-based nav
   AuthClient.renderUserChip(profile, document.getElementById("userChipWrap"));
@@ -20,7 +20,7 @@
   const wrap = document.getElementById("projectsAction");
   wrap.innerHTML = `<button class="primary-btn btn-sm" id="newProjectBtn">+ New Project</button>`;
   document.getElementById("newProjectBtn").addEventListener("click", () => {
-    window.location.href = "/index.html?new=1";
+    window.location.href = "/index?new=1";
   });
 
   loadProjects(session, profile);
@@ -33,11 +33,12 @@ function renderNav(profile) {
   const slug = profile.full_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
   const links = [
     { href: `/sales/${slug}`, label: "Home", active: true },
-    { href: "/index.html", label: "Fitout Planner" },
+    { href: "/projects", label: "Projects" },
+    { href: "/index", label: "Fitout Planner" },
   ];
   if (profile.role === "admin") {
-    links.push({ href: "/admin.html", label: "Admin" });
-    links.push({ href: "/ceo.html", label: "Dashboard" });
+    links.push({ href: "/admin", label: "Admin" });
+    links.push({ href: "/ceo", label: "Dashboard" });
   }
   nav.innerHTML = links.map(l =>
     `<a class="dash-nav-link${l.active ? " active" : ""}" href="${l.href}">${l.label}</a>`
@@ -72,7 +73,7 @@ async function loadProjects(session, profile) {
               title="${p.advance_payment_done ? "Advance payment received — click to undo" : "Mark advance payment as received"}">
               ${p.advance_payment_done ? "₹ Advance Paid ✓" : "₹ Mark Advance Paid"}
             </button>
-            <a class="ghost-sm proj-mini-open" href="/index.html?id=${p.id}">Open →</a>
+            <a class="ghost-sm proj-mini-open" href="/index?id=${p.id}">Open →</a>
           </div>
         </div>
       `).join("");

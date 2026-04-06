@@ -14,8 +14,24 @@ async function userInvite(req, body) {
   if (!role || !VALID_ROLES.includes(role)) throw httpError(400, `Role must be one of: ${VALID_ROLES.join(", ")}.`);
 
   const sb = db.getClient();
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // Pre-create user in Supabase auth with role in user_metadata.
+  // This makes the invite work for users who have never logged in before —
+  // when they sign in via Google OAuth, requireAuth reads user_metadata.role
+  // to create their profile automatically.
+  const { error: createErr } = await sb.auth.admin.createUser({
+    email: normalizedEmail,
+    email_confirm: true,
+    user_metadata: { role, full_name: fullName || normalizedEmail.split("@")[0] },
+  });
+  if (createErr && !createErr.message?.toLowerCase().includes("already registered")) {
+    console.warn("[invite] auth.admin.createUser:", createErr.message);
+  }
+
+  // Also store in invitations table as a record and fallback
   const { error } = await sb.from("invitations").upsert(
-    { email: email.toLowerCase().trim(), role, full_name: fullName || null, invited_by: admin.id },
+    { email: normalizedEmail, role, full_name: fullName || null, invited_by: admin.id },
     { onConflict: "email" }
   );
   if (error) throw httpError(500, error.message);

@@ -23,7 +23,7 @@ const DRAWING_TYPES = [
   try {
     ({ session: _session, profile: _profile } =
       await AuthClient.requireAuth(["admin", "designer", "lead_designer"]));
-  } catch { window.location.href = "/login.html"; return; }
+  } catch { window.location.href = "/login"; return; }
 
   AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
   renderNav(_profile);
@@ -73,14 +73,14 @@ const DRAWING_TYPES = [
 // ─── Nav ─────────────────────────────────────────────────────────────────────
 function renderNav(profile) {
   const nav = document.getElementById("dashNav");
-  const links = [{ href: "/homepage.html", label: "Home" }];
+  const links = [{ href: "/homepage", label: "Home" }, { href: "/projects", label: "Projects" }];
   if (["sales", "admin", "lead_designer"].includes(profile.role)) {
-    links.push({ href: "/index.html", label: "Fitout Planner" });
+    links.push({ href: "/index", label: "Fitout Planner" });
   }
-  links.push({ href: "/designer.html", label: "Drawings", active: true });
+  links.push({ href: "/designer", label: "Drawings", active: true });
   if (profile.role === "admin") {
-    links.push({ href: "/admin.html", label: "Admin" });
-    links.push({ href: "/ceo.html",   label: "Dashboard" });
+    links.push({ href: "/admin", label: "Admin" });
+    links.push({ href: "/ceo",   label: "Dashboard" });
   }
   nav.innerHTML = links.map(l =>
     `<a class="dash-nav-link${l.active ? " active" : ""}" href="${l.href}">${l.label}</a>`
@@ -673,7 +673,7 @@ async function handleCreateProject() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to create project.");
     // Reload page with the new project selected
-    window.location.href = `/designer.html?projectId=${data.projectId}`;
+    window.location.href = `/designer?projectId=${data.projectId}`;
   } catch (err) {
     errEl.textContent = err.message;
     errEl.hidden = false;

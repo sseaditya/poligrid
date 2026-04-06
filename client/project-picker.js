@@ -70,7 +70,7 @@ function renderProjectCards(projects) {
         <div class="proj-card-footer">
           <span class="proj-card-date">${date}</span>
           ${showAdvPaidBtn ? `<button class="ghost-sm adv-paid-btn" data-id="${p.id}">Mark Advanced Paid</button>` : ""}
-          <a class="ghost-sm" href="/designer.html?projectId=${p.id}" onclick="event.stopPropagation()">Drawings</a>
+          <a class="ghost-sm" href="/designer?projectId=${p.id}" onclick="event.stopPropagation()">Drawings</a>
         </div>
       </div>
     `;
