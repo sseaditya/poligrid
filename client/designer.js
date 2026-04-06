@@ -1,19 +1,50 @@
 // ─── Designer Portal ──────────────────────────────────────────────────────────
 
-let _session, _profile, _currentProjectId, _reviewDrawingId;
+let _session, _profile;
+let _currentProjectId = null;
+let _reviewDrawingId  = null;
+let _allDesigners     = [];    // profiles with role=designer
 
+const DRAWING_TYPES = [
+  { value: "civil",         label: "Civil" },
+  { value: "electrical",    label: "Electrical" },
+  { value: "plumbing",      label: "Plumbing" },
+  { value: "hvac",          label: "HVAC" },
+  { value: "firefighting",  label: "Fire Fighting" },
+  { value: "architectural", label: "Architectural" },
+  { value: "structural",    label: "Structural" },
+  { value: "interior",      label: "Interior" },
+  { value: "landscape",     label: "Landscape" },
+  { value: "other",         label: "Other" },
+];
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
   try {
     ({ session: _session, profile: _profile } =
       await AuthClient.requireAuth(["admin", "designer", "lead_designer"]));
-  } catch { window.location.href = '/login.html'; return; }
+  } catch { window.location.href = "/login.html"; return; }
 
   AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
   renderNav(_profile);
 
-  await loadProjects();
+  const isLead = ["lead_designer", "admin"].includes(_profile.role);
 
-  // Pre-select project from URL
+  await Promise.all([
+    loadProjects(),
+    isLead ? loadDesigners() : Promise.resolve(),
+  ]);
+
+  // Show assignment panel for lead/admin
+  if (isLead) {
+    document.getElementById("assignmentPanel").hidden = false;
+    document.getElementById("addAssignmentBtn").addEventListener("click", openAssignModal);
+    document.getElementById("assignModalClose").addEventListener("click", closeAssignModal);
+    document.getElementById("assignCancelBtn").addEventListener("click", closeAssignModal);
+    document.getElementById("assignSaveBtn").addEventListener("click", handleAssignSave);
+  }
+
+  // Pre-select from URL
   const urlProjectId = new URLSearchParams(location.search).get("projectId");
   if (urlProjectId) {
     document.getElementById("projectSelect").value = urlProjectId;
@@ -21,28 +52,22 @@ let _session, _profile, _currentProjectId, _reviewDrawingId;
   }
 
   document.getElementById("projectSelect").addEventListener("change", e => selectProject(e.target.value));
-
-  document.getElementById("uploadBtn").addEventListener("click", () => {
-    document.getElementById("uploadModal").hidden = false;
-  });
-
+  document.getElementById("uploadBtn").addEventListener("click", () => { document.getElementById("uploadModal").hidden = false; });
   document.getElementById("uploadModalClose").addEventListener("click", closeUploadModal);
   document.getElementById("uploadCancelBtn").addEventListener("click", closeUploadModal);
   document.getElementById("uploadForm").addEventListener("submit", handleUpload);
-
-  document.getElementById("reviewModalClose").addEventListener("click", () => {
-    document.getElementById("reviewModal").hidden = true;
-  });
+  document.getElementById("reviewModalClose").addEventListener("click", () => { document.getElementById("reviewModal").hidden = true; });
   document.getElementById("reviewApproveBtn").addEventListener("click",  () => submitReview("approved"));
   document.getElementById("reviewRevisionBtn").addEventListener("click", () => submitReview("revision_requested"));
   document.getElementById("reviewRejectBtn").addEventListener("click",   () => submitReview("rejected"));
+  document.getElementById("downloadZipBtn").addEventListener("click", handleZipDownload);
+  document.getElementById("fileViewerClose").addEventListener("click", () => { document.getElementById("fileViewerModal").hidden = true; });
 })();
 
 // ─── Nav ─────────────────────────────────────────────────────────────────────
 function renderNav(profile) {
   const nav = document.getElementById("dashNav");
   const links = [{ href: "/homepage.html", label: "Home" }];
-
   if (["sales", "admin", "lead_designer"].includes(profile.role)) {
     links.push({ href: "/index.html", label: "Fitout Planner" });
   }
@@ -51,7 +76,6 @@ function renderNav(profile) {
     links.push({ href: "/admin.html", label: "Admin" });
     links.push({ href: "/ceo.html",   label: "Dashboard" });
   }
-
   nav.innerHTML = links.map(l =>
     `<a class="dash-nav-link${l.active ? " active" : ""}" href="${l.href}">${l.label}</a>`
   ).join("");
@@ -61,9 +85,7 @@ function renderNav(profile) {
 async function loadProjects() {
   const select = document.getElementById("projectSelect");
   try {
-    const res = await fetch("/api/project/list", {
-      headers: { Authorization: `Bearer ${_session.access_token}` },
-    });
+    const res = await apiFetch("/api/project/list");
     const { projects } = await res.json();
     if (!projects?.length) {
       select.innerHTML = `<option value="">No projects assigned</option>`;
@@ -79,16 +101,186 @@ async function loadProjects() {
   }
 }
 
+// ─── Load designers (for assignment modal) ────────────────────────────────────
+async function loadDesigners() {
+  try {
+    const res = await apiFetch("/api/users/list");
+    const { users } = await res.json();
+    _allDesigners = (users || []).filter(u =>
+      ["designer", "lead_designer", "admin"].includes(u.role) && u.is_active
+    );
+    const sel = document.getElementById("assignDesignerSelect");
+    sel.innerHTML = `<option value="">Select designer…</option>` +
+      _allDesigners.map(u =>
+        `<option value="${u.id}">${u.full_name} (${ROLE_LABELS[u.role] || u.role})</option>`
+      ).join("");
+  } catch { /* silently ignore */ }
+}
+
+const ROLE_LABELS = {
+  sales: "Sales", designer: "Designer",
+  lead_designer: "Lead Designer", admin: "Admin", ceo: "CEO",
+};
+
 function selectProject(projectId) {
   _currentProjectId = projectId;
   document.getElementById("uploadBtn").disabled = !projectId;
+  document.getElementById("downloadZipBtn").disabled = !projectId;
+  document.getElementById("progressWrap").hidden = !projectId;
+
   if (!projectId) {
     document.getElementById("drawingsHint").textContent = "Select a project to view drawings.";
     document.getElementById("drawingsHint").hidden = false;
     document.getElementById("drawingsByType").innerHTML = "";
+    document.getElementById("assignmentList").innerHTML = `<p class="loading-hint">No drawing types assigned yet.</p>`;
+    updateProgress([]);
     return;
   }
-  loadDrawings(projectId);
+  loadAll(projectId);
+}
+
+async function loadAll(projectId) {
+  const isLead = ["lead_designer", "admin"].includes(_profile.role);
+  await Promise.all([
+    loadDrawings(projectId),
+    isLead ? loadAssignments(projectId) : loadProgressOnly(projectId),
+  ]);
+}
+
+// Progress bar for non-lead roles (read-only, no assignment panel)
+async function loadProgressOnly(projectId) {
+  try {
+    const res = await apiFetch(`/api/drawings/assignments?projectId=${projectId}`);
+    const { assignments } = await res.json();
+    updateProgress(assignments);
+  } catch { updateProgress([]); }
+}
+
+// ─── Progress bar ─────────────────────────────────────────────────────────────
+function updateProgress(assignments) {
+  const total    = assignments.length;
+  const approved = assignments.filter(a => a.status === "approved").length;
+  const review   = assignments.filter(a => a.status === "pending_review").length;
+
+  const fracEl   = document.getElementById("progressFraction");
+  const fillApp  = document.getElementById("progressFillApproved");
+  const fillRev  = document.getElementById("progressFillReview");
+
+  fracEl.textContent = `${approved} / ${total} approved`;
+  fillApp.style.width = total ? `${(approved / total) * 100}%` : "0%";
+  fillRev.style.width = total ? `${(review  / total) * 100}%` : "0%";
+
+  // Complete project badge
+  if (total > 0 && approved === total) {
+    fracEl.textContent = `✓ All ${total} drawings approved`;
+    fracEl.style.color = "var(--success)";
+  } else {
+    fracEl.style.color = "";
+  }
+}
+
+// ─── Assignments ──────────────────────────────────────────────────────────────
+async function loadAssignments(projectId) {
+  if (!["lead_designer", "admin"].includes(_profile.role)) return;
+  const wrap = document.getElementById("assignmentList");
+  try {
+    const res = await apiFetch(`/api/drawings/assignments?projectId=${projectId}`);
+    const { assignments } = await res.json();
+
+    updateProgress(assignments);
+
+    if (!assignments.length) {
+      wrap.innerHTML = `<p class="loading-hint">No drawing types assigned yet. Use "+ Assign Drawing Type" to get started.</p>`;
+      return;
+    }
+
+    wrap.innerHTML = `<div class="assignment-table">
+      <div class="assignment-header">
+        <span>Type</span><span>Designer</span><span>Deadline</span><span>Status</span><span></span>
+      </div>
+      ${assignments.map(a => assignmentRow(a)).join("")}
+    </div>`;
+
+    wrap.querySelectorAll(".delete-assignment-btn").forEach(btn => {
+      btn.addEventListener("click", () => deleteAssignment(btn.dataset.id));
+    });
+  } catch {
+    wrap.innerHTML = `<p class="loading-hint">Failed to load assignments.</p>`;
+  }
+}
+
+function assignmentRow(a) {
+  const { icon, label, cls } = assignmentStatusMeta(a.status);
+  const deadline = a.deadline
+    ? new Date(a.deadline + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+    : "—";
+  const isOverdue = a.deadline && a.status !== "approved" && new Date(a.deadline) < new Date();
+  return `
+    <div class="assignment-row">
+      <span class="assignment-type">${capitalize(a.drawing_type)}</span>
+      <span class="assignment-designer">${escHtml(a.assignee?.full_name || "Unassigned")}</span>
+      <span class="assignment-deadline${isOverdue ? " overdue" : ""}">${deadline}${isOverdue ? " ⚠" : ""}</span>
+      <span class="badge ${cls}">${icon} ${label}</span>
+      <button class="ghost-sm danger-sm delete-assignment-btn" data-id="${a.id}" title="Remove assignment">✕</button>
+    </div>`;
+}
+
+async function deleteAssignment(assignmentId) {
+  if (!confirm("Remove this drawing assignment?")) return;
+  try {
+    await apiFetch("/api/drawings/assignments/delete", {
+      method: "POST",
+      body: JSON.stringify({ assignmentId }),
+    });
+    loadAssignments(_currentProjectId);
+  } catch (err) {
+    alert("Failed to remove: " + err.message);
+  }
+}
+
+// ─── Assign modal ─────────────────────────────────────────────────────────────
+function openAssignModal() {
+  document.getElementById("assignDrawingType").value = "";
+  document.getElementById("assignDesignerSelect").value = "";
+  document.getElementById("assignDeadline").value = "";
+  document.getElementById("assignNotes").value = "";
+  document.getElementById("assignError").hidden = true;
+  document.getElementById("assignModal").hidden = false;
+}
+
+function closeAssignModal() {
+  document.getElementById("assignModal").hidden = true;
+}
+
+async function handleAssignSave() {
+  const drawingType  = document.getElementById("assignDrawingType").value;
+  const assignedTo   = document.getElementById("assignDesignerSelect").value || null;
+  const deadline     = document.getElementById("assignDeadline").value || null;
+  const notes        = document.getElementById("assignNotes").value.trim() || null;
+  const errEl        = document.getElementById("assignError");
+  const btn          = document.getElementById("assignSaveBtn");
+  errEl.hidden = true;
+
+  if (!drawingType) { errEl.textContent = "Please select a drawing type."; errEl.hidden = false; return; }
+
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  try {
+    const res = await apiFetch("/api/drawings/assignments/upsert", {
+      method: "POST",
+      body: JSON.stringify({ projectId: _currentProjectId, drawingType, assignedTo, deadline, notes }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed");
+    closeAssignModal();
+    loadAssignments(_currentProjectId);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Save Assignment";
+  }
 }
 
 // ─── Drawings list ────────────────────────────────────────────────────────────
@@ -100,13 +292,11 @@ async function loadDrawings(projectId) {
   wrap.innerHTML = "";
 
   try {
-    const res = await fetch(`/api/drawings/list?projectId=${projectId}`, {
-      headers: { Authorization: `Bearer ${_session.access_token}` },
-    });
+    const res = await apiFetch(`/api/drawings/list?projectId=${projectId}`);
     const { drawings } = await res.json();
 
     if (!drawings?.length) {
-      hint.textContent = "No drawings yet. Upload the first one.";
+      hint.textContent = "No drawings uploaded yet.";
       return;
     }
     hint.hidden = true;
@@ -120,16 +310,14 @@ async function loadDrawings(projectId) {
     wrap.innerHTML = Object.entries(byType).map(([type, items]) => `
       <div class="drawings-group">
         <h3 class="drawings-group-title">${capitalize(type)}</h3>
-        <div class="drawings-group-list">${items.map(drawingCard).join("")}</div>
+        <div class="drawings-group-list">${items.map(d => drawingCard(d)).join("")}</div>
       </div>
     `).join("");
 
-    // Wire "View file" buttons (fetch signed URL then open)
     wrap.querySelectorAll(".view-file-btn").forEach(btn => {
-      btn.addEventListener("click", () => openFile(btn.dataset.path, btn));
+      btn.addEventListener("click", () => openFileViewer(btn.dataset.path, btn.dataset.name, btn.dataset.mime));
     });
 
-    // Wire review buttons (lead_designer / admin only)
     if (["lead_designer", "admin"].includes(_profile.role)) {
       wrap.querySelectorAll(".review-btn").forEach(btn => {
         btn.addEventListener("click", () => openReviewModal(btn.dataset.id, btn.dataset.title));
@@ -142,9 +330,10 @@ async function loadDrawings(projectId) {
 
 function drawingCard(d) {
   const canReview = ["lead_designer", "admin"].includes(_profile.role) && d.status === "pending_review";
-  // Most recent review comment (reviews are ordered desc in the query)
   const latestReview = d.drawing_reviews?.[0];
   const { icon, label, cls } = statusMeta(d.status);
+  const ext = (d.file_name || "").split(".").pop().toLowerCase();
+  const mimeHint = ext === "pdf" ? "application/pdf" : (["png","jpg","jpeg"].includes(ext) ? "image/" + ext : "binary");
 
   return `
     <div class="drawing-card status-border-${d.status}">
@@ -170,35 +359,133 @@ function drawingCard(d) {
         </div>` : ""}
 
       <div class="drawing-card-actions">
-        <button class="ghost-sm view-file-btn" data-path="${escHtml(d.file_path)}">
-          ↗ View file
+        <button class="ghost-sm view-file-btn"
+          data-path="${escHtml(d.file_path)}"
+          data-name="${escHtml(d.file_name || d.title)}"
+          data-mime="${mimeHint}">
+          ↗ View / Download
         </button>
         ${canReview ? `
-          <button class="primary-btn btn-sm review-btn" data-id="${d.id}" data-title="${escHtml(d.title)}">
-            Review drawing
+          <button class="primary-btn btn-sm review-btn"
+            data-id="${d.id}"
+            data-title="${escHtml(d.title)}">
+            Review
           </button>` : ""}
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
-// ─── File viewing (fetches signed URL with auth, opens in new tab) ────────────
-async function openFile(filePath, btn) {
-  const orig = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "Opening…";
+// ─── File viewer ──────────────────────────────────────────────────────────────
+async function openFileViewer(filePath, fileName, mimeHint) {
+  const modal   = document.getElementById("fileViewerModal");
+  const titleEl = document.getElementById("fileViewerTitle");
+  const bodyEl  = document.getElementById("fileViewerBody");
+  const loadEl  = document.getElementById("fileViewerLoading");
+  const dlLink  = document.getElementById("fileViewerDownload");
+
+  titleEl.textContent = fileName || "Drawing";
+  bodyEl.innerHTML = "";
+  loadEl.style.display = "block";
+  loadEl.textContent = "Opening file…";
+  modal.hidden = false;
+
   try {
-    const res = await fetch(`/api/drawings/signed-url?path=${encodeURIComponent(filePath)}`, {
-      headers: { Authorization: `Bearer ${_session.access_token}` },
-    });
-    if (!res.ok) throw new Error("Could not generate link.");
+    const res = await apiFetch(`/api/drawings/signed-url?path=${encodeURIComponent(filePath)}`);
     const { url } = await res.json();
-    window.open(url, "_blank", "noreferrer");
+    loadEl.style.display = "none";
+
+    const ext = (fileName || "").split(".").pop().toLowerCase();
+
+    // Set download link
+    dlLink.href = url;
+    dlLink.download = fileName || "drawing";
+
+    if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = fileName;
+      img.className = "file-viewer-image";
+      bodyEl.appendChild(img);
+    } else if (ext === "pdf") {
+      const iframe = document.createElement("iframe");
+      iframe.src = url;
+      iframe.className = "file-viewer-iframe";
+      iframe.title = fileName;
+      bodyEl.appendChild(iframe);
+    } else {
+      // DWG, DXF, or other — just offer download
+      bodyEl.innerHTML = `
+        <div class="file-viewer-download-prompt">
+          <div class="file-viewer-icon">📄</div>
+          <p>${escHtml(fileName)}</p>
+          <p class="text-dim">This file type cannot be previewed in the browser.</p>
+          <a class="primary-btn" href="${url}" download="${escHtml(fileName)}">↓ Download File</a>
+        </div>`;
+    }
   } catch (err) {
-    alert("Could not open file: " + err.message);
+    loadEl.textContent = "Could not open file: " + err.message;
+  }
+}
+
+// ─── ZIP download ─────────────────────────────────────────────────────────────
+async function handleZipDownload() {
+  if (!_currentProjectId) return;
+  const btn = document.getElementById("downloadZipBtn");
+  btn.disabled = true;
+  btn.textContent = "Preparing ZIP…";
+
+  try {
+    // 1. Get all drawings for the project
+    const res = await apiFetch(`/api/drawings/list?projectId=${_currentProjectId}`);
+    const { drawings } = await res.json();
+    if (!drawings?.length) { alert("No drawings to download."); return; }
+
+    // 2. Batch signed URLs
+    const filePaths = drawings.map(d => d.file_path);
+    const urlRes = await apiFetch("/api/drawings/signed-urls", {
+      method: "POST",
+      body: JSON.stringify({ filePaths }),
+    });
+    const { urls } = await urlRes.json();
+
+    // Build path→url map
+    const urlMap = {};
+    for (const u of (urls || [])) urlMap[u.path] = u.signedUrl;
+
+    // 3. Download and zip
+    const zip = new JSZip();
+    let downloaded = 0;
+    btn.textContent = `Downloading (0/${drawings.length})…`;
+
+    await Promise.all(drawings.map(async d => {
+      const signedUrl = urlMap[d.file_path];
+      if (!signedUrl) return;
+      try {
+        const fileRes = await fetch(signedUrl);
+        const blob = await fileRes.blob();
+        const folder = capitalize(d.drawing_type);
+        const safeTitle = (d.title || "drawing").replace(/[^a-z0-9_\-\.]/gi, "_");
+        const ext = (d.file_name || "file").split(".").pop();
+        zip.folder(folder).file(`v${d.version_number}_${safeTitle}.${ext}`, blob);
+        downloaded++;
+        btn.textContent = `Downloading (${downloaded}/${drawings.length})…`;
+      } catch { /* skip failed files */ }
+    }));
+
+    btn.textContent = "Generating ZIP…";
+    const projectName = document.getElementById("projectSelect").selectedOptions[0]?.text || "project";
+    const safeProjectName = projectName.replace(/[^a-z0-9_\-]/gi, "_");
+    const content = await zip.generateAsync({ type: "blob" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(content);
+    a.download = `${safeProjectName}_drawings.zip`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (err) {
+    alert("ZIP download failed: " + err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = orig;
+    btn.textContent = "↓ Download ZIP";
   }
 }
 
@@ -222,9 +509,8 @@ async function handleUpload(e) {
     if (!file) throw new Error("No file selected.");
     const fileBase64 = await fileToBase64(file);
 
-    const res = await fetch("/api/drawings/upload", {
+    const res = await apiFetch("/api/drawings/upload", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
       body: JSON.stringify({
         projectId:      _currentProjectId,
         drawingType:    document.getElementById("drawingType").value,
@@ -242,7 +528,7 @@ async function handleUpload(e) {
     }
 
     closeUploadModal();
-    loadDrawings(_currentProjectId);
+    loadAll(_currentProjectId);
   } catch (err) {
     errEl.textContent = err.message;
     errEl.hidden = false;
@@ -269,9 +555,8 @@ async function submitReview(status) {
   btns.forEach(b => b.disabled = true);
 
   try {
-    const res = await fetch("/api/drawings/review", {
+    const res = await apiFetch("/api/drawings/review", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
       body: JSON.stringify({
         drawingId: _reviewDrawingId,
         status,
@@ -283,7 +568,7 @@ async function submitReview(status) {
       throw new Error(error || "Review failed.");
     }
     document.getElementById("reviewModal").hidden = true;
-    loadDrawings(_currentProjectId);
+    loadAll(_currentProjectId);
   } catch (err) {
     errEl.textContent = err.message;
     errEl.hidden = false;
@@ -292,12 +577,33 @@ async function submitReview(status) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function apiFetch(url, opts = {}) {
+  return fetch(url, {
+    ...opts,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${_session.access_token}`,
+      ...(opts.headers || {}),
+    },
+  });
+}
+
 function statusMeta(status) {
   return {
-    pending_review:     { icon: "⏳", label: "Pending Review",   cls: "badge-drawing-pending_review" },
-    approved:           { icon: "✅", label: "Approved",          cls: "badge-drawing-approved" },
-    rejected:           { icon: "❌", label: "Rejected",          cls: "badge-drawing-rejected" },
-    revision_requested: { icon: "🔁", label: "Revision Needed",   cls: "badge-drawing-revision_requested" },
+    pending_review:     { icon: "⏳", label: "Pending Review",  cls: "badge-drawing-pending_review" },
+    approved:           { icon: "✅", label: "Approved",         cls: "badge-drawing-approved" },
+    rejected:           { icon: "❌", label: "Rejected",         cls: "badge-drawing-rejected" },
+    revision_requested: { icon: "🔁", label: "Revision Needed",  cls: "badge-drawing-revision_requested" },
+  }[status] || { icon: "·", label: status, cls: "" };
+}
+
+function assignmentStatusMeta(status) {
+  return {
+    assigned:           { icon: "📋", label: "Not Uploaded",    cls: "badge-drawing-pending_review" },
+    pending_review:     { icon: "⏳", label: "Under Review",    cls: "badge-drawing-pending_review" },
+    approved:           { icon: "✅", label: "Approved",         cls: "badge-drawing-approved" },
+    rejected:           { icon: "❌", label: "Rejected",         cls: "badge-drawing-rejected" },
+    revision_requested: { icon: "🔁", label: "Revision Needed",  cls: "badge-drawing-revision_requested" },
   }[status] || { icon: "·", label: status, cls: "" };
 }
 

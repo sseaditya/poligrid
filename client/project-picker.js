@@ -23,6 +23,15 @@ async function loadProjectList() {
   }
 }
 
+const PROJ_STATUS_META = {
+  active:        { label: "Active",         cls: "badge-proj-active" },
+  advanced_paid: { label: "Advanced Paid",  cls: "badge-proj-adv-paid" },
+  in_progress:   { label: "In Progress",    cls: "badge-proj-active" },
+  completed:     { label: "Completed",      cls: "badge-proj-completed" },
+  on_hold:       { label: "On Hold",        cls: "badge-proj-on_hold" },
+  cancelled:     { label: "Cancelled",      cls: "badge-proj-cancelled" },
+};
+
 function renderProjectCards(projects) {
   const list = el("projectPickerList");
   if (!projects.length) {
@@ -30,24 +39,80 @@ function renderProjectCards(projects) {
     return;
   }
   list.innerHTML = "";
+  const profile = window._authProfile;
+  const isSalesOrAdmin = profile && ["sales", "admin"].includes(profile.role);
+
   for (const p of projects) {
     const card = document.createElement("div");
     card.className = "proj-card";
     card.dataset.id = p.id;
     const date = new Date(p.updated_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
     const meta = [p.property_type, p.bhk_type || p.bhk, p.total_area_m2 ? p.total_area_m2 + " m²" : null].filter(Boolean).join(" · ");
+    const statusMeta = PROJ_STATUS_META[p.status] || null;
+
+    // "Mark Advanced Paid" shown to sales/admin if not already advanced_paid or completed
+    const showAdvPaidBtn = isSalesOrAdmin &&
+      p.status !== "advanced_paid" &&
+      p.status !== "completed" &&
+      p.status !== "cancelled";
+
     card.innerHTML = `
       <div class="proj-card-thumb">
         ${p.thumbnail_url ? `<img src="${p.thumbnail_url}" alt="" loading="lazy" />` : '<div class="proj-card-thumb-empty">🏠</div>'}
       </div>
       <div class="proj-card-body">
-        <div class="proj-card-name">${escapeHtml(p.name || "Untitled project")}</div>
+        <div class="proj-card-name-row">
+          <span class="proj-card-name">${escapeHtml(p.name || "Untitled project")}</span>
+          ${statusMeta ? `<span class="badge ${statusMeta.cls} proj-status-badge">${statusMeta.label}</span>` : ""}
+        </div>
         <div class="proj-card-meta">${escapeHtml(meta)}</div>
         ${p.summary ? `<div class="proj-card-summary">${escapeHtml(p.summary)}</div>` : ""}
-        <div class="proj-card-date">${date}</div>
+        <div class="proj-card-footer">
+          <span class="proj-card-date">${date}</span>
+          ${showAdvPaidBtn ? `<button class="ghost-sm adv-paid-btn" data-id="${p.id}">Mark Advanced Paid</button>` : ""}
+          <a class="ghost-sm" href="/designer.html?projectId=${p.id}" onclick="event.stopPropagation()">Drawings</a>
+        </div>
       </div>
     `;
+
     card.addEventListener("click", () => loadProject(p.id));
+
+    // "Mark Advanced Paid" should NOT open the project
+    card.querySelectorAll(".adv-paid-btn").forEach(btn => {
+      btn.addEventListener("click", async e => {
+        e.stopPropagation();
+        btn.disabled = true;
+        btn.textContent = "Saving…";
+        try {
+          const headers = await AuthClient.authHeader();
+          const res = await fetch("/api/project/update-status", {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({ projectId: p.id, status: "advanced_paid" }),
+          });
+          if (!res.ok) throw new Error((await res.json()).error);
+          p.status = "advanced_paid";
+          // Re-render just this card's badge and button
+          const badgeEl = card.querySelector(".proj-status-badge");
+          const footerMeta = PROJ_STATUS_META["advanced_paid"];
+          if (badgeEl) {
+            badgeEl.className = `badge ${footerMeta.cls} proj-status-badge`;
+            badgeEl.textContent = footerMeta.label;
+          } else {
+            card.querySelector(".proj-card-name-row").insertAdjacentHTML(
+              "beforeend",
+              `<span class="badge ${footerMeta.cls} proj-status-badge">${footerMeta.label}</span>`
+            );
+          }
+          btn.remove();
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = "Mark Advanced Paid";
+          alert("Failed: " + err.message);
+        }
+      });
+    });
+
     list.appendChild(card);
   }
 }

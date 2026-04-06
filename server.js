@@ -23,10 +23,15 @@ const {
   projectList,
   projectLoad,
   projectLoadVersions,
-  salesProjectList
+  salesProjectList,
+  projectUpdateStatus,
 } = require("./server/projects");
 const { requireAuth, getAuthProfile } = require("./server/auth");
-const { drawingsList, drawingsPending, drawingSignedUrl, drawingUpload, drawingReview } = require("./server/drawings");
+const {
+  drawingsList, drawingsPending, drawingSignedUrl, drawingSignedUrlBatch,
+  drawingUpload, drawingReview,
+  drawingAssignmentsList, drawingAssignmentUpsert, drawingAssignmentDelete,
+} = require("./server/drawings");
 const { tasksList, taskCreate, taskUpdate } = require("./server/tasks");
 const {
   userInvite, usersList, userUpdateRole,
@@ -98,11 +103,23 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/drawings/signed-url") {
       return sendJson(res, 200, await drawingSignedUrl(req, url.searchParams.get("path")));
     }
+    if (req.method === "POST" && url.pathname === "/api/drawings/signed-urls") {
+      return sendJson(res, 200, await drawingSignedUrlBatch(req, (await readJson(req)).filePaths));
+    }
     if (req.method === "POST" && url.pathname === "/api/drawings/upload") {
       return sendJson(res, 200, await drawingUpload(req, await readJson(req)));
     }
     if (req.method === "POST" && url.pathname === "/api/drawings/review") {
       return sendJson(res, 200, await drawingReview(req, await readJson(req)));
+    }
+    if (req.method === "GET" && url.pathname === "/api/drawings/assignments") {
+      return sendJson(res, 200, await drawingAssignmentsList(req, url.searchParams.get("projectId")));
+    }
+    if (req.method === "POST" && url.pathname === "/api/drawings/assignments/upsert") {
+      return sendJson(res, 200, await drawingAssignmentUpsert(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/drawings/assignments/delete") {
+      return sendJson(res, 200, await drawingAssignmentDelete(req, await readJson(req)));
     }
 
     // ── Tasks ─────────────────────────────────────────────────────────────────
@@ -167,6 +184,10 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, await salesProjectList(auth));
     }
 
+    if (req.method === "POST" && url.pathname === "/api/project/update-status") {
+      const auth = await getAuthProfile(req);
+      return sendJson(res, 200, await projectUpdateStatus(await readJson(req), auth));
+    }
     if (req.method === "POST" && url.pathname.startsWith("/api/project/")) {
       const auth   = await getAuthProfile(req);
       const body   = await readJson(req);

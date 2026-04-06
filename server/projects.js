@@ -581,6 +581,21 @@ async function projectSaveBrief(body) {
   return { ok: true };
 }
 
+async function projectUpdateStatus(body, auth) {
+  const { projectId, status } = body;
+  if (!projectId || !status) throw httpError(400, "projectId, status required.");
+
+  const VALID = ["active", "advanced_paid", "in_progress", "completed", "on_hold", "cancelled"];
+  if (!VALID.includes(status)) throw httpError(400, `Invalid status. Must be: ${VALID.join(", ")}`);
+
+  const sb = db.getClient();
+  const { error } = await sb.from("projects")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", projectId);
+  if (error) throw httpError(500, "Status update failed: " + error.message);
+  return { ok: true };
+}
+
 // ─── Sales-specific: all projects split into mine vs others ───────────────────
 async function salesProjectList(auth) {
   const sb = db.getClient();
@@ -614,5 +629,6 @@ module.exports = {
   projectList,
   projectLoad,
   projectLoadVersions,
-  salesProjectList
+  salesProjectList,
+  projectUpdateStatus,
 };

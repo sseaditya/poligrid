@@ -23,18 +23,51 @@
 
   <main class="dash-main">
 
-    <!-- Project selector -->
+    <!-- ── Toolbar ──────────────────────────────────────────────────────────── -->
     <div class="dash-toolbar">
-      <label class="field-label" style="flex:1;max-width:320px">
+      <label class="field-label" style="flex:1;max-width:340px">
         Project
         <select class="ctx-input" id="projectSelect">
           <option value="">Loading projects…</option>
         </select>
       </label>
       <button class="primary-btn btn-sm" id="uploadBtn" disabled>+ Upload Drawing</button>
+      <button class="ghost-btn btn-sm" id="downloadZipBtn" disabled title="Download all drawings as ZIP">↓ Download ZIP</button>
     </div>
 
-    <!-- Drawings list per type -->
+    <!-- ── Progress bar (visible once project selected) ─────────────────────── -->
+    <div id="progressWrap" hidden>
+      <div class="drawing-progress-section">
+        <div class="drawing-progress-header">
+          <span class="drawing-progress-label">Drawing Progress</span>
+          <span class="drawing-progress-fraction" id="progressFraction">0 / 0 approved</span>
+        </div>
+        <div class="drawing-progress-track">
+          <div class="drawing-progress-fill approved" id="progressFillApproved" style="width:0%"></div>
+          <div class="drawing-progress-fill review" id="progressFillReview" style="width:0%"></div>
+        </div>
+        <div class="drawing-progress-legend">
+          <span class="dpleg approved">Approved</span>
+          <span class="dpleg review">Under Review</span>
+          <span class="dpleg pending">Not Uploaded</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Assignment panel (lead_designer / admin only) ────────────────────── -->
+    <div id="assignmentPanel" hidden>
+      <section class="dash-section" style="margin-bottom:28px">
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">Drawing Assignments</h2>
+          <button class="primary-btn btn-sm" id="addAssignmentBtn">+ Assign Drawing Type</button>
+        </div>
+        <div id="assignmentList">
+          <p class="loading-hint">No drawing types assigned yet.</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- ── Drawings list ─────────────────────────────────────────────────────── -->
     <div id="drawingsWrap">
       <p class="loading-hint" id="drawingsHint">Select a project to view drawings.</p>
       <div id="drawingsByType"></div>
@@ -42,7 +75,7 @@
 
   </main>
 
-  <!-- Upload modal -->
+  <!-- ── Upload modal ──────────────────────────────────────────────────────── -->
   <div class="modal-overlay" id="uploadModal" hidden>
     <div class="modal-card">
       <div class="modal-header">
@@ -87,7 +120,7 @@
     </div>
   </div>
 
-  <!-- Review modal (lead_designer / admin) -->
+  <!-- ── Review modal (lead_designer / admin) ──────────────────────────────── -->
   <div class="modal-overlay" id="reviewModal" hidden>
     <div class="modal-card">
       <div class="modal-header">
@@ -110,7 +143,71 @@
     </div>
   </div>
 
+  <!-- ── Add assignment modal (lead_designer / admin) ──────────────────────── -->
+  <div class="modal-overlay" id="assignModal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Assign Drawing Type</h2>
+        <button class="ghost-sm" id="assignModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="field-label">
+          Drawing type
+          <select class="ctx-input" id="assignDrawingType" required>
+            <option value="">Select type…</option>
+            <option value="civil">Civil</option>
+            <option value="electrical">Electrical</option>
+            <option value="plumbing">Plumbing</option>
+            <option value="hvac">HVAC</option>
+            <option value="firefighting">Fire Fighting</option>
+            <option value="architectural">Architectural</option>
+            <option value="structural">Structural</option>
+            <option value="interior">Interior</option>
+            <option value="landscape">Landscape</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label class="field-label">
+          Assign to designer
+          <select class="ctx-input" id="assignDesignerSelect">
+            <option value="">Select designer…</option>
+          </select>
+        </label>
+        <label class="field-label">
+          Deadline
+          <input class="ctx-input" id="assignDeadline" type="date" />
+        </label>
+        <label class="field-label">
+          Notes (optional)
+          <textarea class="ctx-textarea" id="assignNotes" rows="2" placeholder="Any specific instructions…"></textarea>
+        </label>
+        <div class="auth-error" id="assignError" hidden></div>
+        <div class="modal-footer">
+          <button type="button" class="ghost-btn" id="assignCancelBtn">Cancel</button>
+          <button type="button" class="primary-btn" id="assignSaveBtn">Save Assignment</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── File viewer modal ─────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="fileViewerModal" hidden>
+    <div class="modal-card file-viewer-card">
+      <div class="modal-header">
+        <h2 class="modal-title file-viewer-title" id="fileViewerTitle">Drawing</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <a class="ghost-sm" id="fileViewerDownload" href="#" download title="Download file">↓ Download</a>
+          <button class="ghost-sm" id="fileViewerClose">✕</button>
+        </div>
+      </div>
+      <div class="file-viewer-body" id="fileViewerBody">
+        <div class="file-viewer-loading" id="fileViewerLoading">Opening file…</div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="client/auth.js"></script>
   <script src="client/designer.js"></script>
 </body>
