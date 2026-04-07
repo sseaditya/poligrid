@@ -153,6 +153,24 @@ module.exports = async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/project/unassign-user") {
       return sendJson(res, 200, await apiProjectUnassignUser(req, await readJson(req)));
     }
+    if (req.method === "GET" && url.pathname === "/api/project/detail") {
+      return sendJson(res, 200, await apiProjectDetail(req, url.searchParams.get("id")));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/update-status") {
+      return sendJson(res, 200, await apiProjectUpdateStatus(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/create") {
+      return sendJson(res, 200, await apiProjectCreate(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/advance-payment") {
+      return sendJson(res, 200, await apiProjectAdvancePayment(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/update") {
+      return sendJson(res, 200, await apiProjectUpdate(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/generate-boq") {
+      return sendJson(res, 200, await generateStructuralBoqWithOpenAi(await readJson(req)));
+    }
 
     if (req.method === "POST" && url.pathname.startsWith("/api/project/")) {
       const action = url.pathname.slice("/api/project/".length);
@@ -2113,7 +2131,7 @@ async function projectList(auth) {
 
   let query = sb
     .from("projects")
-    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by, advance_payment_done")
     .order("updated_at", { ascending: false });
 
   if (auth && !["admin", "ceo"].includes(auth.profile.role)) {
@@ -2163,7 +2181,7 @@ async function salesProjectList(auth) {
 
   const { data: allProjects, error } = await sb
     .from("projects")
-    .select("id, name, property_type, bhk, bhk_type, total_area_m2, created_at, updated_at, status, client_name, created_by")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, created_at, updated_at, status, client_name, created_by, advance_payment_done")
     .order("updated_at", { ascending: false });
   if (error) throw httpError(500, "Failed to list projects: " + error.message);
 
@@ -2522,6 +2540,102 @@ async function apiProjectUnassignUser(req, body) {
   const sb = db.getClient();
   const { error } = await sb.from("project_assignments").delete()
     .eq("project_id", projectId).eq("user_id", userId);
+  if (error) throw httpError(500, error.message);
+  return { ok: true };
+}
+
+async function apiProjectDetail(req, id) {
+  await requireAuthRoute(req);
+  if (!id) throw httpError(400, "Missing id");
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+
+  const [
+    { data: project },
+    { data: team },
+    { data: drawings },
+    { data: fps },
+    { data: renders },
+  ] = await Promise.all([
+    sb.from("projects").select("*").eq("id", id).single(),
+    sb.from("project_assignments").select("*, profile:profiles(id, full_name, email, role)").eq("project_id", id),
+    sb.from("drawings").select("id, status, drawing_type, title, file_name, created_at, uploaded_by").eq("project_id", id).order("created_at", { ascending: false }),
+    sb.from("floor_plans").select("storage_path").eq("project_id", id).order("created_at", { ascending: false }).limit(1),
+    sb.from("renders").select("id").eq("project_id", id),
+  ]);
+
+  if (!project) throw httpError(404, "Project not found");
+
+  const drawingList = drawings || [];
+  const drawingStats = {
+    total: drawingList.length,
+    approved: drawingList.filter(d => d.status === "approved").length,
+    pending: drawingList.filter(d => d.status === "pending_review").length,
+    revision: drawingList.filter(d => d.status === "revision_requested").length,
+    rejected: drawingList.filter(d => d.status === "rejected").length,
+  };
+
+  const fp = fps && fps[0];
+  const thumbnailUrl = fp?.storage_path
+    ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
+    : null;
+
+  return { project, team: team || [], drawings: drawingList, drawingStats, thumbnailUrl, rendersCount: (renders || []).length };
+}
+
+async function apiProjectUpdateStatus(req, body) {
+  await requireAuthRoute(req);
+  const { projectId, status } = body;
+  if (!projectId || !status) throw httpError(400, "projectId, status required.");
+  const VALID = ["active", "advanced_paid", "in_progress", "completed", "on_hold", "cancelled"];
+  if (!VALID.includes(status)) throw httpError(400, `Invalid status. Must be: ${VALID.join(", ")}`);
+  const sb = db.getClient();
+  const { error } = await sb.from("projects").update({ status, updated_at: new Date().toISOString() }).eq("id", projectId);
+  if (error) throw httpError(500, "Status update failed: " + error.message);
+  return { ok: true };
+}
+
+async function apiProjectCreate(req, body) {
+  const { profile } = await requireAuthRoute(req, ["designer", "lead_designer", "admin", "sales"]);
+  const { name, clientName } = body;
+  if (!name || !name.trim()) throw httpError(400, "Project name required.");
+  const sb = db.getClient();
+  const newId = require("crypto").randomUUID();
+  const { error } = await sb.from("projects").insert({
+    id: newId, name: name.trim(), client_name: clientName?.trim() || null,
+    created_by: profile.id, status: "active",
+  });
+  if (error) throw httpError(500, error.message);
+  await sb.from("project_assignments").insert({ project_id: newId, user_id: profile.id, assigned_by: profile.id });
+  return { projectId: newId };
+}
+
+async function apiProjectAdvancePayment(req, body) {
+  await requireAuthRoute(req, ["sales", "admin"]);
+  const { projectId, done } = body;
+  if (!projectId) throw httpError(400, "projectId required.");
+  const sb = db.getClient();
+  const { error } = await sb.from("projects").update({ advance_payment_done: !!done, updated_at: new Date().toISOString() }).eq("id", projectId);
+  if (error) throw httpError(500, error.message);
+  return { ok: true };
+}
+
+async function apiProjectUpdate(req, body) {
+  await requireAuthRoute(req, ["admin", "lead_designer", "sales", "designer"]);
+  const { projectId, name, clientName, propertyType, bhk, bhkType, totalAreaM2, globalBrief } = body;
+  if (!projectId) throw httpError(400, "projectId required.");
+  const updates = {};
+  if (name         !== undefined) updates.name          = name?.trim() || null;
+  if (clientName   !== undefined) updates.client_name   = clientName?.trim() || null;
+  if (propertyType !== undefined) updates.property_type = propertyType || null;
+  if (bhk          !== undefined) updates.bhk           = bhk;
+  if (bhkType      !== undefined) updates.bhk_type      = bhkType || null;
+  if (totalAreaM2  !== undefined) updates.total_area_m2 = totalAreaM2;
+  if (globalBrief  !== undefined) updates.global_brief  = globalBrief?.trim() || null;
+  if (!Object.keys(updates).length) throw httpError(400, "Nothing to update.");
+  updates.updated_at = new Date().toISOString();
+  const sb = db.getClient();
+  const { error } = await sb.from("projects").update(updates).eq("id", projectId);
   if (error) throw httpError(500, error.message);
   return { ok: true };
 }
