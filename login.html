@@ -3,26 +3,254 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Poligrid — Sign In</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
-</head>
-<body class="auth-body">
-  <div class="noise"></div>
+  <title>Poligrid — Design Studio Portal</title>
+  <link rel="stylesheet" href="theme.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  <div class="auth-wrap">
-    <div class="auth-card">
-      <div class="auth-logo">
-        <span class="logo-text">Poligrid</span>
-        <span class="logo-sub">Interior Design Platform</span>
-      </div>
+    body {
+      font-family: var(--font-body);
+      background: var(--color-surface);
+      color: var(--color-on-surface);
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Background ─────────────────────────────── */
+    .login-bg {
+      position: fixed; inset: 0; z-index: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(213,231,218,0.55) 100%);
+    }
+    .login-bg__blob {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.35;
+      pointer-events: none;
+    }
+    .login-bg__blob--tl {
+      width: 420px; height: 420px;
+      background: var(--color-primary-container);
+      top: -120px; left: -120px;
+    }
+    .login-bg__blob--br {
+      width: 420px; height: 420px;
+      background: var(--color-tertiary-fixed-dim);
+      bottom: -120px; right: -120px;
+    }
+
+    /* ── Layout ──────────────────────────────────── */
+    .login-layout {
+      position: relative; z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    /* ── Brand ───────────────────────────────────── */
+    .login-brand {
+      margin-bottom: 3rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .login-brand__name {
+      font-family: var(--font-headline);
+      font-weight: 900;
+      font-size: 1.5rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--color-on-surface);
+    }
+    .login-brand__sub {
+      font-family: var(--font-label);
+      font-size: 0.625rem;
+      letter-spacing: 0.4em;
+      text-transform: uppercase;
+      color: var(--color-outline);
+    }
+
+    /* ── Card ────────────────────────────────────── */
+    .login-card {
+      width: 100%;
+      max-width: 440px;
+      background: var(--color-surface-container-lowest);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-ambient);
+      padding: 2.5rem 2.5rem 2rem;
+    }
+    @media (min-width: 640px) {
+      .login-card { padding: 3.5rem 3.5rem 2.5rem; }
+    }
+
+    .login-card__heading {
+      font-family: var(--font-headline);
+      font-weight: 800;
+      font-size: 1.875rem;
+      letter-spacing: -0.02em;
+      color: var(--color-on-surface);
+      margin-bottom: 0.75rem;
+      line-height: 1.2;
+    }
+    .login-card__sub {
+      font-size: 0.875rem;
+      color: var(--color-on-surface-variant);
+      line-height: 1.6;
+      max-width: 300px;
+      margin-bottom: 2.5rem;
+    }
+
+    /* ── Error banner ────────────────────────────── */
+    .auth-error {
+      background: var(--color-error-container);
+      color: var(--color-on-error-container);
+      font-size: 0.8125rem;
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius-md);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+
+    /* ── Google button ───────────────────────────── */
+    .google-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      width: 100%;
+      height: 3.25rem;
+      background: var(--color-on-background);
+      color: var(--color-surface-container-lowest);
+      font-family: var(--font-headline);
+      font-weight: 700;
+      font-size: 0.8125rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border: none;
+      border-radius: var(--radius-lg);
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(45, 52, 53, 0.12);
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .google-btn:hover  { opacity: 0.88; }
+    .google-btn:active { transform: scale(0.98); }
+    .google-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .google-btn svg { flex-shrink: 0; width: 20px; height: 20px; }
+
+    /* ── Invitation note ─────────────────────────── */
+    .invite-note {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.6875rem;
+      letter-spacing: 0.08em;
+      color: var(--color-outline);
+      line-height: 1.6;
+    }
+    .invite-note strong {
+      display: block;
+      font-weight: 600;
+      color: var(--color-on-surface-variant);
+      margin-bottom: 0.15rem;
+    }
+
+    /* ── Footer ──────────────────────────────────── */
+    .login-footer {
+      margin-top: 4rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .login-footer__copy {
+      font-size: 0.5625rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: rgba(117,124,125,0.5);
+    }
+    .login-footer__links {
+      display: flex;
+      gap: 1.5rem;
+    }
+    .login-footer__links a {
+      font-size: 0.5625rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(117,124,125,0.35);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .login-footer__links a:hover { color: var(--color-outline); }
+
+    /* ── Right decorative panel ──────────────────── */
+    .login-deco {
+      display: none;
+    }
+    @media (min-width: 1024px) {
+      .login-deco {
+        display: flex;
+        position: fixed;
+        right: 0; top: 0;
+        height: 100%; width: 22%;
+        z-index: 0;
+        background: var(--color-surface-container-low);
+        opacity: 0.5;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .login-deco__text {
+        transform: rotate(90deg);
+        white-space: nowrap;
+        font-family: var(--font-headline);
+        font-weight: 900;
+        font-size: 7.5rem;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        color: var(--color-surface-dim);
+        user-select: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Background blobs -->
+  <div class="login-bg" aria-hidden="true">
+    <div class="login-bg__blob login-bg__blob--tl"></div>
+    <div class="login-bg__blob login-bg__blob--br"></div>
+  </div>
+
+  <!-- Decorative side panel -->
+  <div class="login-deco" aria-hidden="true">
+    <span class="login-deco__text">STUDIO PORTAL</span>
+  </div>
+
+  <!-- Main layout -->
+  <main class="login-layout">
+
+    <!-- Brand anchor -->
+    <div class="login-brand">
+      <span class="login-brand__name">Poligrid</span>
+      <span class="login-brand__sub">Design Studio Portal</span>
+    </div>
+
+    <!-- Login card -->
+    <div class="login-card">
+      <h2 class="login-card__heading">Welcome to the<br>Design Studio Portal</h2>
+      <p class="login-card__sub">Sign in to manage your projects, specifications, and design workflows.</p>
 
       <div class="auth-error" id="authError" hidden></div>
 
       <button class="google-btn" id="googleBtn">
-        <svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
           <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
           <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
@@ -31,9 +259,22 @@
         Continue with Google
       </button>
 
-      <p class="auth-footer-note">Access is by invitation only. Contact your administrator.</p>
+      <p class="invite-note">
+        <strong>Access is by invitation only.</strong>
+        Contact your administrator to request access.
+      </p>
     </div>
-  </div>
+
+    <!-- Footer -->
+    <footer class="login-footer">
+      <p class="login-footer__copy">&copy; 2024 Poligrid Systems. Architectural Precision.</p>
+      <div class="login-footer__links">
+        <a href="#">Privacy Policy</a>
+        <a href="#">Terms of Service</a>
+      </div>
+    </footer>
+
+  </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="client/auth.js"></script>
@@ -73,7 +314,7 @@
         errEl.textContent = error.message || "Could not start Google sign-in.";
         errEl.hidden = false;
         btn.disabled = false;
-        btn.innerHTML = `<svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>Continue with Google`;
+        btn.innerHTML = `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>Continue with Google`;
       }
       // On success, Supabase redirects to Google — no further action needed here
     });
