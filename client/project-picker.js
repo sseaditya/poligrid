@@ -228,8 +228,6 @@ async function loadProject(id) {
     dom.analysisSummaryText.textContent = proj.summary || "";
     dom.analysisSummaryWrap.hidden = !proj.summary;
 
-    advancePhase(2);
-
     // Restore planner and pins if camera pins exist
     if (data.cameraPins && data.cameraPins.length > 0) {
       dom.roomEditorCanvas.hidden = true;
@@ -286,19 +284,22 @@ async function loadProject(id) {
       if (dom.chatPanel) dom.chatPanel.hidden = false;
       if (proj.global_brief) dom.globalBrief.value = proj.global_brief;
 
-      // Advance to phase 4 (generate panel) so all phase pills are enabled
-      advancePhase(4);
-
-      // If the project has saved versions with renders, show results view
+      // If the project has saved versions with renders, go straight to results — no phase flashes
       const versions = data.versions || [];
       const hasRenders = versions.some(v => v.renders && v.renders.length > 0);
       if (versions.length > 0 && hasRenders) {
+        advancePhase(4);
         showResultsView();
         renderVersionsUI(versions, data.cameraPins);
-        // Show the latest version
         const latest = versions[versions.length - 1];
         showVersion(latest);
+      } else {
+        // No renders yet — land on phase 4 (generate panel)
+        advancePhase(4);
       }
+    } else {
+      // No camera pins yet — land on phase 2 (room editing)
+      advancePhase(2);
     }
 
   } catch (err) {

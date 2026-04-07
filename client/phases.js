@@ -304,8 +304,13 @@ function init() {
     advancePhase(1);
   });
 
-  // Show project picker on load instead of jumping straight to phase 1
-  showProjectPicker();
+  // Auto-load project from URL param (?id=), otherwise show picker
+  const _preloadId = new URLSearchParams(location.search).get("id");
+  if (_preloadId) {
+    loadProject(_preloadId);
+  } else {
+    showProjectPicker();
+  }
 }
 
 // ─── Phase 1: Upload + Analyse ─────────────────────────────────────────────────
