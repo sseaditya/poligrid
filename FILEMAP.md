@@ -6,7 +6,7 @@
 |------|------|
 | `server.js` | Express dev server — serves static files + mounts `api/route.js` |
 | `vercel.json` | Vercel config — rewrites all `/api/*` to `api/route.js` (serverless) |
-| `api/route.js` | **Single serverless function** — all API routing + all AI logic (2641 lines, see split plan below) |
+| `api/route.js` | **Single serverless function** — thin router only (~289 lines), imports all logic from `server/*` |
 
 ## HTML Pages
 | File | Who sees it | Client JS |
@@ -124,8 +124,16 @@ POST /api/project/create-version
 GET  /api/drawings/list?projectId=
 GET  /api/drawings/pending
 GET  /api/drawings/signed-url?path=
+POST /api/drawings/signed-urls          → batch signed URLs (body: { filePaths })
+GET  /api/drawings/download?path=&name= → stream file download
+GET  /api/drawings/download-zip?projectId= → zip all drawings for a project
 POST /api/drawings/upload
 POST /api/drawings/review
+GET  /api/drawings/assignments?projectId=
+POST /api/drawings/assignments/upsert
+POST /api/drawings/assignments/delete
+GET  /api/drawings/revision-requests
+GET  /api/drawings/project-summary?projectIds=
 
 GET  /api/tasks/list
 POST /api/tasks/create
@@ -133,6 +141,9 @@ POST /api/tasks/update
 
 GET  /api/users/list
 POST /api/users/update-role
+POST /api/users/invite
+GET  /api/users/invitations
+POST /api/users/invitations/cancel
 
 GET  /api/ceo/dashboard
 GET  /api/ceo/team-stats

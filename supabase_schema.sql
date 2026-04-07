@@ -185,6 +185,7 @@ create index if not exists idx_renders_version_id on renders(version_id);
 
 -- 3. Link furniture BOQ items to a version
 alter table boq_items add column if not exists version_id uuid references project_versions(id) on delete set null;
+create index if not exists idx_boq_items_version_id on boq_items(version_id);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Migration: Role-Based Access Control (run after initial schema)

@@ -84,11 +84,27 @@ async function projectLoadVersions(projectId) {
     sb.from("inspiration_images").select("*").eq("project_id", projectId).order("sort_order", { ascending: true })
   ]);
 
-  const versionsWithData = await Promise.all((versions || []).map(async v => {
-    const [{ data: renders }, { data: boq }] = await Promise.all([
-      sb.from("renders").select("*").eq("version_id", v.id).order("created_at", { ascending: true }),
-      sb.from("boq_items").select("*").eq("version_id", v.id)
-    ]);
+  // Batch-fetch renders + BOQ for all versions in 2 queries (avoids N+1)
+  const versionIds = (versions || []).map(v => v.id);
+  const [allRendersRes, allBoqRes] = versionIds.length
+    ? await Promise.all([
+        sb.from("renders").select("*").in("version_id", versionIds).order("created_at", { ascending: true }),
+        sb.from("boq_items").select("*").in("version_id", versionIds)
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  const rendersByVersion = {};
+  const boqByVersion = {};
+  for (const r of allRendersRes.data || []) {
+    (rendersByVersion[r.version_id] = rendersByVersion[r.version_id] || []).push(r);
+  }
+  for (const b of allBoqRes.data || []) {
+    (boqByVersion[b.version_id] = boqByVersion[b.version_id] || []).push(b);
+  }
+
+  const versionsWithData = (versions || []).map(v => {
+    const renders = rendersByVersion[v.id] || [];
+    const boq = boqByVersion[v.id] || [];
     // Version-specific inspiration overrides project-level inspiration
     const inspPaths = v.regen_inspiration_paths;
     const inspUrls = inspPaths
@@ -96,11 +112,11 @@ async function projectLoadVersions(projectId) {
       : (insps || []).map(i => pubUrl("poligrid-inspiration", i.storage_path));
     return {
       ...v,
-      renders: (renders || []).map(r => ({ ...r, url: pubUrl("poligrid-renders", r.storage_path) })),
-      boqItems: boq || [],
+      renders: renders.map(r => ({ ...r, url: pubUrl("poligrid-renders", r.storage_path) })),
+      boqItems: boq,
       inspirationUrls: inspUrls.filter(Boolean)
     };
-  }));
+  });
 
   return { versions: versionsWithData };
 }
@@ -528,23 +544,38 @@ async function projectLoad(id) {
   if (!project) throw httpError(404, "Project not found");
   const fp = fps && fps[0] ? { ...fps[0], url: pubUrl("poligrid-floor-plans", fps[0].storage_path) } : null;
 
-  // For each version, fetch its renders and BOQ in parallel
-  const versionsWithData = await Promise.all((versions || []).map(async v => {
-    const [{ data: renders }, { data: boq }] = await Promise.all([
-      sb.from("renders").select("*").eq("version_id", v.id).order("created_at", { ascending: true }),
-      sb.from("boq_items").select("*").eq("version_id", v.id)
-    ]);
+  // Batch-fetch renders + BOQ for all versions in 2 queries (avoids N+1)
+  const versionIds = (versions || []).map(v => v.id);
+  const [allRendersRes, allBoqRes] = versionIds.length
+    ? await Promise.all([
+        sb.from("renders").select("*").in("version_id", versionIds).order("created_at", { ascending: true }),
+        sb.from("boq_items").select("*").in("version_id", versionIds)
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  const rendersByVersion = {};
+  const boqByVersion = {};
+  for (const r of allRendersRes.data || []) {
+    (rendersByVersion[r.version_id] = rendersByVersion[r.version_id] || []).push(r);
+  }
+  for (const b of allBoqRes.data || []) {
+    (boqByVersion[b.version_id] = boqByVersion[b.version_id] || []).push(b);
+  }
+
+  const versionsWithData = (versions || []).map(v => {
+    const renders = rendersByVersion[v.id] || [];
+    const boq = boqByVersion[v.id] || [];
     const inspPaths = v.regen_inspiration_paths;
     const inspUrls = inspPaths
       ? inspPaths.map(p => pubUrl("poligrid-inspiration", p))
       : (inspirationImages || []).map(i => pubUrl("poligrid-inspiration", i.storage_path));
     return {
       ...v,
-      renders: (renders || []).map(r => ({ ...r, url: pubUrl("poligrid-renders", r.storage_path) })),
-      boqItems: boq || [],
+      renders: renders.map(r => ({ ...r, url: pubUrl("poligrid-renders", r.storage_path) })),
+      boqItems: boq,
       inspirationUrls: inspUrls.filter(Boolean)
     };
-  }));
+  });
 
   return {
     project,
@@ -603,13 +634,8 @@ async function salesProjectList(auth) {
   const supabaseUrl = process.env.SUPABASE_URL;
   const userId = auth.profile.id;
 
-  const { data, error } = await sb
-    .from("projects")
-    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by, floor_plans(storage_path)")
-    .order("updated_at", { ascending: false });
-  if (error) throw httpError(500, "Failed to list projects: " + error.message);
-
-  const projects = (data || []).map(({ floor_plans, ...p }) => {
+  const FIELDS = "id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by, floor_plans(storage_path)";
+  const toProject = ({ floor_plans, ...p }) => {
     const fp = Array.isArray(floor_plans) ? floor_plans[0] : floor_plans;
     return {
       ...p,
@@ -617,11 +643,17 @@ async function salesProjectList(auth) {
         ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
         : null
     };
-  });
+  };
+
+  const [{ data: mine, error: e1 }, { data: others, error: e2 }] = await Promise.all([
+    sb.from("projects").select(FIELDS).eq("created_by", userId).order("updated_at", { ascending: false }),
+    sb.from("projects").select(FIELDS).neq("created_by", userId).order("updated_at", { ascending: false }),
+  ]);
+  if (e1 || e2) throw httpError(500, "Failed to list projects: " + (e1 || e2).message);
 
   return {
-    mine:   projects.filter(p => p.created_by === userId),
-    others: projects.filter(p => p.created_by !== userId)
+    mine:   (mine   || []).map(toProject),
+    others: (others || []).map(toProject),
   };
 }
 
