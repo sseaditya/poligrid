@@ -6,8 +6,16 @@
     }
   },
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/route" },
-    { "src": "/sales/(.*)", "dest": "/sales.html" },
-    { "src": "/", "dest": "/login.html" }
+    { "src": "^/api/(.*)",      "dest": "/api/route" },
+    { "src": "^/sales/(.*)",    "dest": "/sales.html" },
+    { "src": "^/login$",        "dest": "/login.html" },
+    { "src": "^/homepage$",     "dest": "/homepage.html" },
+    { "src": "^/projects$",     "dest": "/projects.html" },
+    { "src": "^/project$",      "dest": "/project.html" },
+    { "src": "^/index$",        "dest": "/index.html" },
+    { "src": "^/designer$",     "dest": "/designer.html" },
+    { "src": "^/admin$",        "dest": "/admin.html" },
+    { "src": "^/ceo$",          "dest": "/ceo.html" },
+    { "src": "^/$",             "dest": "/login.html" }
   ]
 }

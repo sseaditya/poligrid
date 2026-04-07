@@ -880,7 +880,7 @@ function onPinFieldChange() {
   try {
     ({ profile } = await AuthClient.requireAuth(['sales', 'lead_designer', 'admin']));
   } catch {
-    window.location.href = '/login.html';
+    window.location.href = '/login';
     return;
   }
 
