@@ -21,6 +21,7 @@
   --radius:      10px;
   --sidebar-w:   290px;
   --topbar-h:    52px;
+  --subheader-h: 42px;
   --output-w:    440px;
   --font:        'Space Grotesk', system-ui, sans-serif;
   --font-serif:  'DM Serif Display', serif;
@@ -51,6 +52,25 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .logo-text { font-family: var(--font-serif); font-size: 22px; color: var(--accent); letter-spacing: -0.5px; }
 .logo-sub  { font-size: 11px; color: var(--text-dim); letter-spacing: 0.05em; }
 .top-bar-actions { display: flex; gap: 8px; margin-left: auto; }
+
+/* ── Step Sub-Header ────────────────────────────────────────────────────────── */
+.step-sub-header {
+  position: fixed; top: var(--topbar-h); left: 0; right: 0; height: var(--subheader-h);
+  z-index: 99;
+  background: rgba(13,13,26,0.95);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 20px;
+}
+.step-sub-header-label {
+  font-family: var(--font-serif); font-size: 15px;
+  color: var(--accent); letter-spacing: -0.2px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.step-sub-header-divider {
+  width: 1px; height: 20px; background: var(--border); flex-shrink: 0;
+}
 
 /* ── Phase Bar ──────────────────────────────────────────────────────────────── */
 .phase-bar { display: flex; align-items: center; gap: 0; flex: 1; justify-content: center; }
@@ -83,7 +103,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 
 /* ── Layout ──────────────────────────────────────────────────────────────────── */
 .workspace {
-  display: flex; height: 100vh; padding-top: var(--topbar-h);
+  display: flex; height: 100vh; padding-top: calc(var(--topbar-h) + var(--subheader-h));
   position: relative;
 }
 
@@ -784,7 +804,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 
 /* ── Results View (full-screen overlay) ─────────────────────────────────────── */
 .results-view {
-  position: fixed; inset: 0; top: 56px; z-index: 90;
+  position: fixed; inset: 0; top: calc(var(--topbar-h) + var(--subheader-h)); z-index: 90;
   background: var(--bg0);
   display: flex; flex-direction: column;
   overflow: hidden;
@@ -792,7 +812,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .results-view[hidden] { display: none !important; }
 
 .results-header {
-  height: 56px; flex-shrink: 0;
+  height: 48px; flex-shrink: 0;
   background: rgba(13,13,26,0.97);
   backdrop-filter: blur(24px);
   border-bottom: 1px solid rgba(255,255,255,0.06);
@@ -803,11 +823,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .results-back-btn {
   flex-shrink: 0;
 }
-.results-title {
-  flex: 1;
-  font-family: var(--font-serif); font-size: 20px;
-  color: var(--accent); letter-spacing: -0.3px;
-}
+.results-title { display: none; }
 .results-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .deck-btn { border-color: var(--gold) !important; color: var(--gold) !important; font-weight: 600; }
 .deck-btn:hover:not(:disabled) { background: rgba(184,109,53,0.08) !important; border-color: var(--gold) !important; }

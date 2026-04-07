@@ -44,7 +44,13 @@
         <input id="projectNameInput" class="project-name-input" type="text" placeholder="Untitled project" maxlength="80" spellcheck="false" />
       </div>
       <nav class="dash-nav" id="dashNav"></nav>
-      <!-- Phase progress bar -->
+      <div class="top-bar-right" id="userChipWrap"></div>
+    </header>
+
+    <!-- ── STEP SUB-HEADER ────────────────────────────────────────────────── -->
+    <div class="step-sub-header">
+      <span class="step-sub-header-label">Renders &amp; BOQ</span>
+      <div class="step-sub-header-divider"></div>
       <nav class="phase-bar" id="phaseBar">
         <button class="phase-pill active" data-phase="1" id="pill1">
           <span class="pill-num">1</span><span class="pill-label">Context</span>
@@ -59,15 +65,14 @@
         </button>
         <div class="phase-connector" id="conn34"></div>
         <button class="phase-pill" data-phase="4" id="pill4">
-          <span class="pill-num">4</span><span class="pill-label">Brief & Generate</span>
+          <span class="pill-num">4</span><span class="pill-label">Brief &amp; Generate</span>
         </button>
         <div class="phase-connector" id="conn45"></div>
         <button class="phase-pill" data-phase="5" id="pill5">
           <span class="pill-num">5</span><span class="pill-label">Results</span>
         </button>
       </nav>
-      <div class="top-bar-right" id="userChipWrap"></div>
-    </header>
+    </div>
 
     <div class="workspace">
 
