@@ -72,6 +72,15 @@
           <span class="pill-num">5</span><span class="pill-label">Results</span>
         </button>
       </nav>
+      <!-- Results actions — shown only when results view is open -->
+      <div class="subheader-results-actions" id="subheaderResultsActions" hidden>
+        <div class="step-sub-header-divider"></div>
+        <button class="ghost-sm results-back-btn" id="closeOutput">← Back to Edit</button>
+        <button id="downloadScene" class="ghost-sm" disabled>↓ Scene JSON</button>
+        <button id="downloadBoq"   class="ghost-sm" disabled>↓ BOQ CSV</button>
+        <button id="downloadDeckBtn" class="ghost-sm deck-btn" disabled>✦ Client Deck PDF</button>
+        <span id="deckProgressMsg" class="deck-progress-msg"></span>
+      </div>
     </div>
 
     <div class="workspace">
@@ -270,18 +279,6 @@
 
     <!-- ── RESULTS VIEW (Full-screen overlay) ─────────────────────────────── -->
     <div class="results-view" id="resultsView" hidden>
-
-      <!-- Sticky header -->
-      <header class="results-header">
-        <button class="ghost-sm results-back-btn" id="closeOutput">← Back to Edit</button>
-        <h1 class="results-title">Renders &amp; BOQ</h1>
-        <div class="results-header-actions">
-          <button id="downloadScene" class="ghost-sm" disabled>↓ Scene JSON</button>
-          <button id="downloadBoq"   class="ghost-sm" disabled>↓ BOQ CSV</button>
-          <button id="downloadDeckBtn" class="ghost-sm deck-btn" disabled>✦ Client Deck PDF</button>
-          <span id="deckProgressMsg" class="deck-progress-msg"></span>
-        </div>
-      </header>
 
       <!-- Scrollable content -->
       <div class="results-scroll" id="resultsScroll">

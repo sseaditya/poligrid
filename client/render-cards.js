@@ -2,6 +2,8 @@
 
 function showResultsView() {
   el("resultsView").hidden = false;
+  const acts = el("subheaderResultsActions");
+  if (acts) acts.hidden = false;
   // Pre-fill regen brief with current global brief
   const regenBriefInput = el("regenBriefInput");
   if (regenBriefInput) regenBriefInput.value = dom.globalBrief?.value || "";
@@ -12,6 +14,8 @@ function showResultsView() {
 
 function hideResultsView() {
   el("resultsView").hidden = true;
+  const acts = el("subheaderResultsActions");
+  if (acts) acts.hidden = true;
 }
 
 // ─── Version UI ────────────────────────────────────────────────────────────────

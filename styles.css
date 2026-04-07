@@ -811,20 +811,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 }
 .results-view[hidden] { display: none !important; }
 
-.results-header {
-  height: 48px; flex-shrink: 0;
-  background: rgba(13,13,26,0.97);
-  backdrop-filter: blur(24px);
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  display: flex; align-items: center; gap: 16px;
-  padding: 0 28px;
-  box-shadow: 0 1px 0 var(--border);
+.subheader-results-actions {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto;
 }
-.results-back-btn {
-  flex-shrink: 0;
-}
-.results-title { display: none; }
-.results-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.subheader-results-actions[hidden] { display: none !important; }
 .deck-btn { border-color: var(--gold) !important; color: var(--gold) !important; font-weight: 600; }
 .deck-btn:hover:not(:disabled) { background: rgba(184,109,53,0.08) !important; border-color: var(--gold) !important; }
 .deck-btn:disabled { opacity: 0.35; cursor: not-allowed; }
