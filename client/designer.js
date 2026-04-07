@@ -22,7 +22,7 @@ const DRAWING_TYPES = [
 (async () => {
   try {
     ({ session: _session, profile: _profile } =
-      await AuthClient.requireAuth(["admin", "designer", "lead_designer"]));
+      await AuthClient.requireAuth(["admin", "designer", "lead_designer", "ceo"]));
   } catch { window.location.href = "/login"; return; }
 
   AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));

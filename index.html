@@ -426,7 +426,7 @@
     <script src="client/auth.js"></script>
     <script>
       // Gate fitout planner to sales, lead_designer, admin
-      AuthClient.requireAuth(["sales", "lead_designer", "admin"]).then(({ profile }) => {
+      AuthClient.requireAuth(["sales", "lead_designer", "admin", "ceo"]).then(({ profile }) => {
         AuthClient.renderUserChip(profile, document.getElementById("userChipWrap"));
         // Expose session for project picker API calls
         window._authProfile = profile;
