@@ -114,9 +114,14 @@ const AuthClient = (() => {
       ceo: "CEO",
     }[profile.role] || profile.role;
 
+    const profileSlug = profile.email.toLowerCase()
+      .replace(/@/g, "-at-")
+      .replace(/\./g, "-")
+      .replace(/[^a-z0-9-]/g, "");
+
     container.innerHTML = `
       <div class="user-chip">
-        <span class="user-chip-name">${profile.full_name}</span>
+        <a class="user-chip-name" href="/profile/${profileSlug}">${profile.full_name}</a>
         <span class="user-chip-role role-${profile.role}">${roleLabel}</span>
         <button class="ghost-sm user-chip-logout" id="logoutBtn">Sign out</button>
       </div>`;

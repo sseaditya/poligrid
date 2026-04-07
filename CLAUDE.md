@@ -1,3 +1,5 @@
+> For file structure, API endpoints, and module purposes — see **FILEMAP.md** in this directory.
+
 This is a platform that helps my interior design firm give initial designs + quotation to clients using their inspiration images (from pinterest), their floor plan and their design brief.
 We use the following structure
     1. Client adds the floor plan, we process it and understand it assigning the overlay of rooms on the floor plan, the user can adjust it

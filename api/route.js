@@ -91,6 +91,35 @@ module.exports = async (req, res) => {
       return sendJson(res, 200, { profile: auth.profile });
     }
 
+    // ── Profile ──────────────────────────────────────────────────────────────
+    if (req.method === "POST" && url.pathname === "/api/profile/update") {
+      const { user } = await requireAuthRoute(req);
+      const body = await readJson(req);
+      const { full_name, phone } = body;
+      if (!full_name || !full_name.trim()) return sendJson(res, 400, { error: "Name is required." });
+      const sb = db.getClient();
+      const { data: updated, error } = await sb.from("profiles")
+        .update({ full_name: full_name.trim(), phone: (phone || "").trim() || null })
+        .eq("id", user.id)
+        .select()
+        .single();
+      if (error) return sendJson(res, 500, { error: error.message });
+      return sendJson(res, 200, { profile: updated });
+    }
+    if (req.method === "GET" && url.pathname === "/api/profile/by-slug") {
+      await requireAuthRoute(req, ["admin"]);
+      const slug = url.searchParams.get("slug") || "";
+      const sb = db.getClient();
+      const { data: users, error } = await sb.from("profiles").select("*");
+      if (error) return sendJson(res, 500, { error: error.message });
+      function emailToSlug(email) {
+        return email.toLowerCase().replace(/@/g, "-at-").replace(/\./g, "-").replace(/[^a-z0-9-]/g, "");
+      }
+      const found = (users || []).find(u => emailToSlug(u.email) === slug);
+      if (!found) return sendJson(res, 404, { error: "User not found." });
+      return sendJson(res, 200, { profile: found });
+    }
+
     // ── Drawings ────────────────────────────────────────────────────────────
     if (req.method === "GET" && url.pathname === "/api/drawings/list") {
       return sendJson(res, 200, await apiDrawingsList(req, url.searchParams.get("projectId")));

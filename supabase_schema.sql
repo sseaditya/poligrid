@@ -216,11 +216,15 @@ create table if not exists profiles (
   id          uuid primary key references auth.users(id) on delete cascade,
   full_name   text not null,
   email       text not null unique,
+  phone       text,                             -- optional contact number, editable via profile page
   role        user_role not null default 'sales',
   is_active   boolean not null default false,  -- blocked until admin activates
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+
+-- Migration: add phone column if deploying to an existing DB
+-- alter table profiles add column if not exists phone text;
 
 create trigger update_profiles_updated_at before update on profiles
   for each row execute function update_updated_at_column();

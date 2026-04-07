@@ -99,6 +99,34 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { profile: auth.profile });
     }
 
+    // ── Profile ───────────────────────────────────────────────────────────────
+    if (req.method === "POST" && url.pathname === "/api/profile/update") {
+      const { user } = await requireAuth(req);
+      const { full_name, phone } = await readJson(req);
+      if (!full_name || !full_name.trim()) return sendJson(res, 400, { error: "Name is required." });
+      const sb = require("./db").getClient();
+      const { data: updated, error } = await sb.from("profiles")
+        .update({ full_name: full_name.trim(), phone: (phone || "").trim() || null })
+        .eq("id", user.id)
+        .select()
+        .single();
+      if (error) return sendJson(res, 500, { error: error.message });
+      return sendJson(res, 200, { profile: updated });
+    }
+    if (req.method === "GET" && url.pathname === "/api/profile/by-slug") {
+      await requireAuth(req, ["admin"]);
+      const slug = url.searchParams.get("slug") || "";
+      const sb = require("./db").getClient();
+      const { data: users, error } = await sb.from("profiles").select("*");
+      if (error) return sendJson(res, 500, { error: error.message });
+      function emailToSlug(email) {
+        return email.toLowerCase().replace(/@/g, "-at-").replace(/\./g, "-").replace(/[^a-z0-9-]/g, "");
+      }
+      const found = (users || []).find(u => emailToSlug(u.email) === slug);
+      if (!found) return sendJson(res, 404, { error: "User not found." });
+      return sendJson(res, 200, { profile: found });
+    }
+
     // ── Drawings ──────────────────────────────────────────────────────────────
     if (req.method === "GET" && url.pathname === "/api/drawings/list") {
       return sendJson(res, 200, await drawingsList(req, url.searchParams.get("projectId")));
@@ -228,6 +256,10 @@ const server = http.createServer(async (req, res) => {
     // Serve sales dashboard for /sales/:name paths
     if (req.method === "GET" && url.pathname.startsWith("/sales/")) {
       return serveStatic("/sales.html", false, res);
+    }
+    // Serve profile page for /profile/:slug paths
+    if (req.method === "GET" && url.pathname.startsWith("/profile/")) {
+      return serveStatic("/profile.html", false, res);
     }
     if (req.method === "GET" || req.method === "HEAD") {
       return serveStatic(url.pathname, req.method === "HEAD", res);

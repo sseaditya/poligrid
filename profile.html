@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poligrid — Profile</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="dash-body">
+  <div class="noise"></div>
+
+  <header class="top-bar">
+    <div class="top-bar-left">
+      <a href="/homepage" class="logo-link"><span class="logo-text">Poligrid</span></a>
+      <span class="page-title">Profile</span>
+    </div>
+    <nav class="dash-nav" id="dashNav"></nav>
+    <div class="top-bar-right" id="userChipWrap"></div>
+  </header>
+
+  <main class="dash-main">
+
+    <!-- Profile header -->
+    <div class="profile-header">
+      <div class="profile-avatar" id="profileAvatar"></div>
+      <div class="profile-header-info">
+        <h1 class="profile-name" id="profileName">—</h1>
+        <div class="profile-meta-row">
+          <span class="profile-role-badge" id="profileRoleBadge"></span>
+          <span class="profile-email" id="profileEmail"></span>
+        </div>
+        <p class="profile-member-since" id="profileMemberSince"></p>
+      </div>
+    </div>
+
+    <!-- Viewing own profile: editable form -->
+    <div id="ownProfileSection">
+      <section class="dash-section profile-card">
+        <div class="dash-section-head">
+          <div>
+            <h2 class="dash-section-title">Your Information</h2>
+            <p class="dash-section-hint">Update your display name and contact details.</p>
+          </div>
+        </div>
+
+        <div class="profile-form">
+          <label class="field-label">
+            Full Name
+            <input type="text" class="ctx-input" id="fieldName" placeholder="Your full name" />
+          </label>
+
+          <label class="field-label">
+            Phone Number
+            <input type="tel" class="ctx-input" id="fieldPhone" placeholder="9876543210" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" />
+          </label>
+
+          <label class="field-label">
+            Email
+            <input type="email" class="ctx-input" id="fieldEmail" disabled />
+          </label>
+
+          <label class="field-label">
+            Role
+            <input type="text" class="ctx-input" id="fieldRole" disabled />
+          </label>
+
+          <div class="profile-form-actions">
+            <button class="primary-btn" id="saveProfileBtn">Save Changes</button>
+            <span class="profile-save-status" id="saveStatus"></span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Viewing another user's profile: read-only -->
+    <div id="otherProfileSection" hidden>
+      <section class="dash-section profile-card">
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">Contact</h2>
+        </div>
+        <dl class="profile-dl">
+          <dt>Email</dt><dd id="viewEmail">—</dd>
+          <dt>Phone</dt><dd id="viewPhone">—</dd>
+          <dt>Role</dt><dd id="viewRole">—</dd>
+          <dt>Member since</dt><dd id="viewMemberSince">—</dd>
+        </dl>
+      </section>
+    </div>
+
+    <!-- Error state -->
+    <div id="profileError" hidden>
+      <div class="empty-state-card">
+        <div class="empty-state-icon">🔍</div>
+        <h2 class="empty-state-title">User not found</h2>
+        <p class="empty-state-body">No profile matches this URL.</p>
+        <a class="primary-btn" href="/homepage">Go Home</a>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="client/auth.js"></script>
+  <script src="client/profile.js"></script>
+</body>
+</html>
