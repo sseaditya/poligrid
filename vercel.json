@@ -8,6 +8,7 @@
   "routes": [
     { "src": "^/api/(.*)",      "dest": "/api/route" },
     { "src": "^/sales/(.*)",    "dest": "/sales.html" },
+    { "src": "^/profile/(.*)", "dest": "/profile.html" },
     { "src": "^/login$",        "dest": "/login.html" },
     { "src": "^/homepage$",     "dest": "/homepage.html" },
     { "src": "^/projects$",     "dest": "/projects.html" },

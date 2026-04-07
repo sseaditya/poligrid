@@ -114,10 +114,8 @@ const AuthClient = (() => {
       ceo: "CEO",
     }[profile.role] || profile.role;
 
-    const profileSlug = profile.email.toLowerCase()
-      .replace(/@/g, "-at-")
-      .replace(/\./g, "-")
-      .replace(/[^a-z0-9-]/g, "");
+    const profileSlug = profile.email.split("@")[0].toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-");
 
     container.innerHTML = `
       <div class="user-chip">

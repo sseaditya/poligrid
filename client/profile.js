@@ -32,10 +32,8 @@ let _session, _profile;
 // ─── Slug helpers ─────────────────────────────────────────────────────────────
 
 function emailToSlug(email) {
-  return email.toLowerCase()
-    .replace(/@/g, "-at-")
-    .replace(/\./g, "-")
-    .replace(/[^a-z0-9-]/g, "");
+  return email.split("@")[0].toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-");
 }
 
 function getPageSlug() {

@@ -120,7 +120,7 @@ const server = http.createServer(async (req, res) => {
       const { data: users, error } = await sb.from("profiles").select("*");
       if (error) return sendJson(res, 500, { error: error.message });
       function emailToSlug(email) {
-        return email.toLowerCase().replace(/@/g, "-at-").replace(/\./g, "-").replace(/[^a-z0-9-]/g, "");
+        return email.split("@")[0].toLowerCase().replace(/[^a-z0-9-]/g, "-");
       }
       const found = (users || []).find(u => emailToSlug(u.email) === slug);
       if (!found) return sendJson(res, 404, { error: "User not found." });
