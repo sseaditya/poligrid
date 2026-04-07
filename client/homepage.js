@@ -37,7 +37,7 @@ let _session, _profile;
       const wrap = document.getElementById("projectsAction");
       wrap.innerHTML = `<button class="primary-btn btn-sm" id="newProjectBtn">+ New Project</button>`;
       document.getElementById("newProjectBtn").addEventListener("click", () => {
-        window.location.href = "/index?new=1";
+        window.location.href = "/projects";
       });
     }
     loadProjects();
@@ -85,7 +85,7 @@ function renderNav(profile) {
   links.push({ href: "/projects", label: "Projects" });
 
   if (["sales", "admin", "lead_designer"].includes(profile.role)) {
-    links.push({ href: "/index", label: "Fitout Planner" });
+    links.push({ href: "/projects", label: "Fitout Planner" });
   }
   if (["designer", "lead_designer", "admin"].includes(profile.role)) {
     links.push({ href: "/designer", label: "Drawings" });

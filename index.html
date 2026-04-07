@@ -40,9 +40,10 @@
     <!-- ── TOP BAR ──────────────────────────────────────────────────────────── -->
     <header class="top-bar">
       <div class="top-bar-left">
-        <button class="ghost-sm" id="backToProjects" title="All projects">← Projects</button>
+        <a href="/homepage" class="logo-link"><span class="logo-text">Poligrid</span></a>
         <input id="projectNameInput" class="project-name-input" type="text" placeholder="Untitled project" maxlength="80" spellcheck="false" />
       </div>
+      <nav class="dash-nav" id="dashNav"></nav>
       <!-- Phase progress bar -->
       <nav class="phase-bar" id="phaseBar">
         <button class="phase-pill active" data-phase="1" id="pill1">
@@ -427,6 +428,28 @@
         AuthClient.renderUserChip(profile, document.getElementById("userChipWrap"));
         // Expose session for project picker API calls
         window._authProfile = profile;
+        // Render standard nav
+        const nav = document.getElementById("dashNav");
+        if (nav) {
+          const links = [
+            { href: "/homepage", label: "Home" },
+            { href: "/projects", label: "Projects" },
+            { href: "/projects", label: "Fitout Planner", active: true },
+          ];
+          if (["designer", "lead_designer", "admin"].includes(profile.role)) {
+            links.push({ href: "/designer", label: "Drawings" });
+          }
+          if (profile.role === "admin") {
+            links.push({ href: "/admin", label: "Admin" });
+            links.push({ href: "/ceo", label: "Dashboard" });
+          }
+          if (profile.role === "ceo") {
+            links.push({ href: "/ceo", label: "Dashboard" });
+          }
+          nav.innerHTML = links.map(l =>
+            `<a class="dash-nav-link${l.active ? " active" : ""}" href="${l.href}">${l.label}</a>`
+          ).join("");
+        }
       }).catch(() => {});
     </script>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>

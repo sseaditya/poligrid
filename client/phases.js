@@ -244,7 +244,7 @@ function init() {
   });
 
   // Back to projects
-  el("backToProjects")?.addEventListener("click", showProjectPicker);
+  el("backToProjects")?.addEventListener("click", () => { window.location.href = "/projects"; });
 
   // New project button
   el("newProjectBtn")?.addEventListener("click", () => {
@@ -893,12 +893,10 @@ function onPinFieldChange() {
   const params = new URLSearchParams(location.search);
   const projectId = params.get('id');
   if (projectId) {
-    // Linked directly to a project (e.g. from homepage)
+    // Linked directly to a project (e.g. from projects page)
     await loadProject(projectId);
-  } else if (params.get('new')) {
-    // "New project" shortcut — skip the picker and start fresh
-    el('newProjectBtn')?.click();
   } else {
-    showProjectPicker();
+    // No project selected — send to projects list
+    window.location.href = '/projects';
   }
 })();

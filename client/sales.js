@@ -20,7 +20,7 @@
   const wrap = document.getElementById("projectsAction");
   wrap.innerHTML = `<button class="primary-btn btn-sm" id="newProjectBtn">+ New Project</button>`;
   document.getElementById("newProjectBtn").addEventListener("click", () => {
-    window.location.href = "/index?new=1";
+    window.location.href = "/projects";
   });
 
   loadProjects(session, profile);
@@ -34,7 +34,7 @@ function renderNav(profile) {
   const links = [
     { href: `/sales/${slug}`, label: "Home", active: true },
     { href: "/projects", label: "Projects" },
-    { href: "/index", label: "Fitout Planner" },
+    { href: "/projects", label: "Fitout Planner" },
   ];
   if (profile.role === "admin") {
     links.push({ href: "/admin", label: "Admin" });

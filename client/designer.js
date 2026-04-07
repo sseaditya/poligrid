@@ -75,7 +75,7 @@ function renderNav(profile) {
   const nav = document.getElementById("dashNav");
   const links = [{ href: "/homepage", label: "Home" }, { href: "/projects", label: "Projects" }];
   if (["sales", "admin", "lead_designer"].includes(profile.role)) {
-    links.push({ href: "/index", label: "Fitout Planner" });
+    links.push({ href: "/projects", label: "Fitout Planner" });
   }
   links.push({ href: "/designer", label: "Drawings", active: true });
   if (profile.role === "admin") {

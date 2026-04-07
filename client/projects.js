@@ -48,7 +48,7 @@ function renderNav(profile) {
     { href: "/projects", label: "Projects", active: true },
   ];
   if (["sales", "admin", "lead_designer"].includes(profile.role)) {
-    links.push({ href: "/index", label: "Fitout Planner" });
+    links.push({ href: "/projects", label: "Fitout Planner" });
   }
   if (["designer", "lead_designer", "admin"].includes(profile.role)) {
     links.push({ href: "/designer", label: "Drawings" });

@@ -25,7 +25,7 @@ function renderNav(profile) {
     { href: "/ceo", label: "Dashboard", active: true },
   ];
   if (profile.role === "admin") {
-    links.push({ href: "/index", label: "Fitout Planner" });
+    links.push({ href: "/projects", label: "Fitout Planner" });
     links.push({ href: "/designer", label: "Drawings" });
     links.push({ href: "/admin", label: "Admin" });
   }
