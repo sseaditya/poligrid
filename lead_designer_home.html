@@ -293,7 +293,12 @@
   } catch { return; }
 
   // Dynamic profile links
-  const slug = (profile.full_name || '').toLowerCase().replace(/\s+/g, '-');
+  const slug = (profile.full_name || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // strip diacritics
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')  // non-alphanumeric → hyphen
+    .replace(/^-+|-+$/g, '');     // trim leading/trailing hyphens
   if (slug) {
     document.getElementById('settingsLink').href = `/profile/${slug}`;
     document.getElementById('userAvatarLink').href = `/profile/${slug}`;
