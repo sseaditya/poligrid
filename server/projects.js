@@ -763,6 +763,44 @@ async function projectUpdate(req, body) {
   return { ok: true };
 }
 
+// ─── Paid projects not yet assigned to the requesting lead_designer ───────────
+async function projectListAvailable(req) {
+  const { profile } = await requireAuth(req, ["lead_designer", "admin"]);
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+
+  // All assignments for this user
+  const { data: assigned } = await sb
+    .from("project_assignments")
+    .select("project_id")
+    .eq("user_id", profile.id);
+  const assignedIds = (assigned || []).map(a => a.project_id);
+
+  let query = sb
+    .from("projects")
+    .select("id, name, property_type, bhk, bhk_type, client_name, status, created_at, advance_payment_done, floor_plans(storage_path)")
+    .eq("advance_payment_done", true)
+    .order("updated_at", { ascending: false });
+
+  const { data, error } = await query;
+  if (error) throw httpError(500, error.message);
+
+  // Exclude already-assigned projects
+  const available = (data || [])
+    .filter(p => !assignedIds.includes(p.id))
+    .map(({ floor_plans, ...p }) => {
+      const fp = Array.isArray(floor_plans) ? floor_plans[0] : floor_plans;
+      return {
+        ...p,
+        thumbnail_url: fp?.storage_path
+          ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
+          : null,
+      };
+    });
+
+  return { projects: available };
+}
+
 module.exports = {
   handleProjectAction,
   projectList,
@@ -774,4 +812,5 @@ module.exports = {
   projectAdvancePayment,
   projectDetail,
   projectUpdate,
+  projectListAvailable,
 };

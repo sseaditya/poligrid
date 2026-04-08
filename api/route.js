@@ -31,6 +31,7 @@ const {
   projectAdvancePayment,
   projectDetail,
   projectUpdate,
+  projectListAvailable,
 } = require("../server/projects");
 
 const {
@@ -153,6 +154,9 @@ module.exports = async (req, res) => {
     if (req.method === "GET" && pathname === "/api/project/list") {
       const auth = await getAuthProfile(req);
       return sendJson(res, 200, await projectList(auth));
+    }
+    if (req.method === "GET" && pathname === "/api/project/available") {
+      return sendJson(res, 200, await projectListAvailable(req));
     }
     if (req.method === "GET" && pathname === "/api/project/load") {
       return sendJson(res, 200, await projectLoad(url.searchParams.get("id")));

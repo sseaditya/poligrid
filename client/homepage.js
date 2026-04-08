@@ -65,16 +65,111 @@ async function setupDesignerDashboard() {
 
 // ─── Lead designer dashboard ──────────────────────────────────────────────────
 async function setupLeadDashboard() {
-  document.getElementById("statRow").hidden = false;
-  document.getElementById("reviewSection").hidden = false;
   document.getElementById("tasksSection").hidden = true;
 
-  loadReviewQueue();
-
   const projects = await loadLeadProjects();
+
   if (!projects?.length) {
+    // Welcome / empty state
     document.getElementById("leadStart").hidden = false;
     document.getElementById("dashGrid").hidden = true;
+    document.getElementById("statRow").hidden = true;
+    await setupLeadWelcome();
+  } else {
+    // Active dashboard
+    document.getElementById("statRow").hidden = false;
+    document.getElementById("reviewSection").hidden = false;
+    document.getElementById("leadStart").hidden = true;
+    document.getElementById("dashGrid").hidden = false;
+    loadReviewQueue();
+    // Wire modals for active state
+    document.getElementById("browseProjectsClose")?.addEventListener("click", () => {
+      document.getElementById("browseProjectsModal").hidden = true;
+    });
+    document.getElementById("createProjectClose")?.addEventListener("click", closeCreateModal);
+    document.getElementById("createProjectCancel")?.addEventListener("click", closeCreateModal);
+    document.getElementById("createProjectSubmit")?.addEventListener("click", handleCreateProject);
+  }
+}
+
+// ─── Lead welcome screen wiring ───────────────────────────────────────────────
+async function setupLeadWelcome() {
+  // Load available paid projects (not assigned to self)
+  try {
+    const res = await apiFetch("/api/project/available");
+    const { projects } = await res.json();
+    const badge = document.getElementById("leadAvailableBadge");
+    if (projects?.length) {
+      badge.textContent = `${projects.length} available`;
+      badge.hidden = false;
+    }
+  } catch { /* silent */ }
+
+  // Browse paid projects modal
+  document.getElementById("leadBrowseBtn").addEventListener("click", openBrowseModal);
+  document.getElementById("browseProjectsClose").addEventListener("click", () => {
+    document.getElementById("browseProjectsModal").hidden = true;
+  });
+
+  // Create project modal
+  document.getElementById("leadCreateBtn").addEventListener("click", openCreateModal);
+  document.getElementById("createProjectClose")?.addEventListener("click", closeCreateModal);
+  document.getElementById("createProjectCancel")?.addEventListener("click", closeCreateModal);
+  document.getElementById("createProjectSubmit")?.addEventListener("click", handleCreateProject);
+}
+
+async function openBrowseModal() {
+  document.getElementById("browseProjectsModal").hidden = false;
+  const container = document.getElementById("browseProjectsList");
+  container.innerHTML = `<p class="loading-hint">Loading…</p>`;
+
+  try {
+    const res = await apiFetch("/api/project/available");
+    const { projects } = await res.json();
+
+    if (!projects?.length) {
+      container.innerHTML = `<p class="empty-hint">No paid projects available right now. Check back later.</p>`;
+      return;
+    }
+
+    container.innerHTML = projects.map(p => `
+      <div class="proj-mini-card" data-id="${p.id}">
+        ${p.thumbnail_url
+          ? `<img class="proj-mini-thumb" src="${p.thumbnail_url}" alt="" />`
+          : `<div class="proj-mini-thumb proj-mini-thumb--empty"></div>`}
+        <div class="proj-mini-info">
+          <span class="proj-mini-name">${escHtml(p.name || "Untitled")}</span>
+          <span class="proj-mini-meta">
+            ${escHtml(p.bhk || "")} ${escHtml(p.property_type || "")}
+            ${p.client_name ? "· " + escHtml(p.client_name) : ""}
+          </span>
+          <span class="badge badge-success" style="margin-top:4px">₹ Advance Paid</span>
+        </div>
+        <button class="primary-btn btn-sm lead-self-assign-btn" data-id="${p.id}">Assign to Me</button>
+      </div>
+    `).join("");
+
+    container.querySelectorAll(".lead-self-assign-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "Assigning…";
+        try {
+          const r = await apiFetch("/api/project/assign-user", {
+            method: "POST",
+            body: JSON.stringify({ projectId: btn.dataset.id, userId: _profile.id }),
+          });
+          if (!r.ok) throw new Error();
+          btn.textContent = "✓ Assigned";
+          btn.style.background = "var(--success)";
+          setTimeout(() => { window.location.href = `/designer?projectId=${btn.dataset.id}`; }, 800);
+        } catch {
+          btn.disabled = false;
+          btn.textContent = "Assign to Me";
+        }
+      });
+    });
+  } catch {
+    container.innerHTML = `<p class="empty-hint">Failed to load projects.</p>`;
   }
 }
 
@@ -175,7 +270,14 @@ async function loadLeadProjects() {
     } catch { /* progress bars will show 0 */ }
 
     const wrap = document.getElementById("projectsAction");
-    wrap.innerHTML = `<a class="ghost-btn btn-sm" href="/designer">All Drawings →</a>`;
+    wrap.innerHTML = `
+      <button class="ghost-btn btn-sm" id="leadPickupBtn" style="margin-right:8px">+ Pick Up Project</button>
+      <button class="primary-btn btn-sm" id="leadNewProjectBtn">+ New Project</button>
+    `;
+    document.getElementById("leadPickupBtn")?.addEventListener("click", openBrowseModal);
+    document.getElementById("leadNewProjectBtn")?.addEventListener("click", () => {
+      document.getElementById("createProjectModal").hidden = false;
+    });
 
     container.innerHTML = projects.map(p => {
       const s = summary[p.id] || { total: 0, approved: 0, pending_review: 0, revision_requested: 0 };

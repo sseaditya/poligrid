@@ -1563,6 +1563,31 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .empty-state-title { font-family:var(--serif); font-size:22px; margin:0; }
 .empty-state-body  { font-size:14px; color:var(--text-dim); line-height:1.6; margin:0; max-width:380px; }
 
+/* ── Lead designer welcome screen ────────────────────────────────────────── */
+.lead-welcome { padding:8px 0 32px; }
+.lead-welcome-sub {
+  font-size:15px; color:var(--text-dim); margin-bottom:24px;
+}
+.lead-action-grid {
+  display:grid; grid-template-columns:1fr 1fr; gap:20px;
+}
+@media (max-width:700px) { .lead-action-grid { grid-template-columns:1fr; } }
+.lead-action-card {
+  display:flex; flex-direction:column; gap:16px;
+  padding:28px 24px; background:var(--bg1);
+  border:1px solid var(--border); border-radius:16px;
+  transition:border-color 0.15s, box-shadow 0.15s;
+}
+.lead-action-card:hover {
+  border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow);
+}
+.lead-action-icon { font-size:36px; line-height:1; }
+.lead-action-body { flex:1; display:flex; flex-direction:column; gap:6px; }
+.lead-action-title {
+  font-family:var(--font-serif); font-size:18px; color:var(--text);
+}
+.lead-action-desc { font-size:13px; color:var(--text-dim); line-height:1.6; }
+
 /* ── Lead designer project cards with progress ───────────────────────────── */
 .proj-progress-card {
   padding:14px 16px; background:var(--bg1); border:1px solid var(--border);
