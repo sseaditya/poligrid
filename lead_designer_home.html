@@ -92,6 +92,21 @@
   .signature-cta {
     background: linear-gradient(135deg, #526258 0%, #46564c 100%);
   }
+  /* Progress bar */
+  .drawing-bar-track {
+    height: 4px;
+    background: #e4e9ea;
+    border-radius: 2px;
+    overflow: hidden;
+    display: flex;
+  }
+  .drawing-bar-approved { background: #526258; }
+  .drawing-bar-review   { background: #a8c5b0; }
+  /* Skeleton pulse */
+  .skeleton { background: linear-gradient(90deg, #e4e9ea 25%, #f2f4f4 50%, #e4e9ea 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 4px; }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  /* Action cards urgency ring */
+  .action-card-urgent { box-shadow: 0 0 0 1.5px rgba(159,64,61,0.2); }
 </style>
 </head>
 <body class="bg-background text-on-background font-body antialiased min-h-screen">
@@ -123,7 +138,7 @@
 <aside class="fixed left-0 top-16 bottom-0 w-64 bg-surface-container-lowest border-r border-outline-variant/10 hidden md:flex flex-col z-40">
   <nav class="flex-1 py-6 px-4 space-y-2">
     <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary bg-primary/5 font-bold transition-all border-r-2 border-primary" href="/lead_designer_home">
-      <span class="material-symbols-outlined" data-weight="fill">dashboard</span>
+      <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">dashboard</span>
       <span class="text-sm">Command Center</span>
     </a>
     <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all" href="/projects">
@@ -143,115 +158,205 @@
   </div>
 </aside>
 
-<!-- Main Content Area -->
+<!-- ═══════════════════════════════════════════════════════
+     MAIN CONTENT
+     ═══════════════════════════════════════════════════════ -->
 <main class="pt-24 pb-12 px-8 lg:px-12 min-h-screen blueprint-grid md:ml-64">
   <div class="max-w-6xl mx-auto">
 
-    <!-- Hero Section -->
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-16 items-center">
-      <div class="lg:col-span-7 space-y-6">
-        <h1 class="font-headline font-extrabold text-5xl lg:text-7xl text-on-background leading-tight tracking-tighter">
-          Welcome to your <br/>Command Center, <span class="text-primary" id="welcomeName">Design Lead.</span>
-        </h1>
-        <p class="font-body text-lg text-on-surface-variant max-w-xl leading-relaxed">
-          Your environment is ready for Stage 2 management. Currently, no projects are assigned to your studio for verification.
-        </p>
-      </div>
-      <div class="lg:col-span-5 relative">
-        <div class="aspect-square w-full rounded-xl purple-gradient-glow p-1 shadow-2xl shadow-purple-500/10">
-          <div class="w-full h-full rounded-[calc(0.5rem-1px)] bg-surface-container-lowest overflow-hidden flex items-center justify-center relative">
-            <img alt="Architectural Blueprint Graphic" class="w-full h-full object-cover opacity-90 mix-blend-multiply"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3xJPxOyj6IKgQOHdKkg_47GUUw3fGvLbSywLzDLdqNAQKmqRIDZwH6eOGKqDNsLEbT4fWwRn90iLadlHlHJf2PdC97zAvwF8K5H1VstZwOIfgW1Hmiuus1u9VcD4b3TzHaiBiqZlyBBlYHmxftXeNXK24N569D74RlGX6DXCpj1kkgjScaHtQwGpOUcJ2kkgZM64Q"/>
-            <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+    <!-- ─── EMPTY STATE (no projects assigned) ─────────────────── -->
+    <div id="emptyState">
+
+      <!-- Hero Section -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-16 items-center">
+        <div class="lg:col-span-7 space-y-6">
+          <h1 class="font-headline font-extrabold text-5xl lg:text-7xl text-on-background leading-tight tracking-tighter">
+            Welcome to your <br/>Command Center, <span class="text-primary" id="welcomeName">Design Lead.</span>
+          </h1>
+          <p class="font-body text-lg text-on-surface-variant max-w-xl leading-relaxed">
+            Your environment is ready for Stage 2 management. Currently, no projects are assigned to your studio for verification.
+          </p>
+        </div>
+        <div class="lg:col-span-5 relative">
+          <div class="aspect-square w-full rounded-xl purple-gradient-glow p-1 shadow-2xl shadow-purple-500/10">
+            <div class="w-full h-full rounded-[calc(0.5rem-1px)] bg-surface-container-lowest overflow-hidden flex items-center justify-center relative">
+              <img alt="Architectural Blueprint Graphic" class="w-full h-full object-cover opacity-90 mix-blend-multiply"
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3xJPxOyj6IKgQOHdKkg_47GUUw3fGvLbSywLzDLdqNAQKmqRIDZwH6eOGKqDNsLEbT4fWwRn90iLadlHlHJf2PdC97zAvwF8K5H1VstZwOIfgW1Hmiuus1u9VcD4b3TzHaiBiqZlyBBlYHmxftXeNXK24N569D74RlGX6DXCpj1kkgjScaHtQwGpOUcJ2kkgZM64Q"/>
+              <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Operational Workflow -->
-    <section class="mb-16">
-      <div class="flex items-center gap-4 mb-8">
-        <div class="h-px flex-1 bg-outline-variant/20"></div>
-        <h2 class="font-headline font-bold text-sm tracking-[0.2em] text-on-surface-variant uppercase">Operational Workflow</h2>
-        <div class="h-px flex-1 bg-outline-variant/20"></div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <!-- Step 1 -->
-        <a href="/projects" class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 group hover:translate-y-[-4px] transition-transform duration-300 no-underline">
-          <div class="w-12 h-12 rounded-lg bg-primary-container flex items-center justify-center">
-            <span class="material-symbols-outlined text-primary" data-weight="fill">assignment_turned_in</span>
-          </div>
-          <div class="space-y-3">
-            <h3 class="font-headline font-bold text-xl text-on-background">Project Intake &amp; Assignment</h3>
-            <p class="font-body text-sm text-on-surface-variant leading-relaxed">Once a project clears Stage 1, it appears here. Allocate tasks to your team of Associate Designers.</p>
-          </div>
-        </a>
-        <!-- Step 2 -->
-        <a href="/projects" class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 group hover:translate-y-[-4px] transition-transform duration-300 no-underline">
-          <div class="w-12 h-12 rounded-lg bg-secondary-container flex items-center justify-center">
-            <span class="material-symbols-outlined text-secondary" data-weight="fill">monitoring</span>
-          </div>
-          <div class="space-y-3">
-            <h3 class="font-headline font-bold text-xl text-on-background">Real-time Monitoring</h3>
-            <p class="font-body text-sm text-on-surface-variant leading-relaxed">Track daily updates and progress from your team. Identify blockers immediately with automated tracking.</p>
-          </div>
-        </a>
-        <!-- Step 3 -->
-        <a href="/designer" class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 group hover:translate-y-[-4px] transition-transform duration-300 no-underline">
-          <div class="w-12 h-12 rounded-lg bg-tertiary-container flex items-center justify-center">
-            <span class="material-symbols-outlined text-tertiary" data-weight="fill">verified</span>
-          </div>
-          <div class="space-y-3">
-            <h3 class="font-headline font-bold text-xl text-on-background">Verification &amp; Approval</h3>
-            <p class="font-body text-sm text-on-surface-variant leading-relaxed">Review technical drawings and BOMs. Your sign-off triggers Stage 3 execution and procurement.</p>
-          </div>
-        </a>
-      </div>
-    </section>
-
-    <!-- Bottom Cards -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      <!-- Status Card -->
-      <div class="bg-surface-container-low p-8 rounded-xl border border-outline-variant/10 flex flex-col justify-between">
-        <div class="space-y-4">
-          <div class="flex items-center gap-2">
-            <span class="relative flex h-3 w-3">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-            </span>
-            <span class="font-label font-bold text-xs text-primary uppercase tracking-widest">Active Sync</span>
-          </div>
-          <h4 class="font-headline font-extrabold text-2xl text-on-background">Awaiting New Projects</h4>
-          <p class="font-body text-sm text-on-surface-variant">The system is currently scanning the Sales platform for Stage 1 completions. Estimated wait time for next sync: <span class="font-bold text-on-background">14 mins</span></p>
+      <!-- Operational Workflow -->
+      <section class="mb-16">
+        <div class="flex items-center gap-4 mb-8">
+          <div class="h-px flex-1 bg-outline-variant/20"></div>
+          <h2 class="font-headline font-bold text-sm tracking-[0.2em] text-on-surface-variant uppercase">Operational Workflow</h2>
+          <div class="h-px flex-1 bg-outline-variant/20"></div>
         </div>
-        <div class="mt-8 pt-8 border-t border-outline-variant/10 flex items-center justify-between">
-          <span class="font-body text-xs text-on-surface-variant italic">Source: Poligrid Global Sales API</span>
-          <button onclick="location.reload()" class="text-primary font-bold text-sm flex items-center gap-1 hover:gap-2 transition-all">
-            Refresh Feed <span class="material-symbols-outlined text-[18px]">sync</span>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <a href="/projects" class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 group hover:translate-y-[-4px] transition-transform duration-300 no-underline">
+            <div class="w-12 h-12 rounded-lg bg-primary-container flex items-center justify-center">
+              <span class="material-symbols-outlined text-primary">assignment_turned_in</span>
+            </div>
+            <div class="space-y-3">
+              <h3 class="font-headline font-bold text-xl text-on-background">Project Intake &amp; Assignment</h3>
+              <p class="font-body text-sm text-on-surface-variant leading-relaxed">Once a project clears Stage 1, it appears here. Allocate tasks to your team of Associate Designers.</p>
+            </div>
+          </a>
+          <a href="/projects" class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 group hover:translate-y-[-4px] transition-transform duration-300 no-underline">
+            <div class="w-12 h-12 rounded-lg bg-secondary-container flex items-center justify-center">
+              <span class="material-symbols-outlined text-secondary">monitoring</span>
+            </div>
+            <div class="space-y-3">
+              <h3 class="font-headline font-bold text-xl text-on-background">Real-time Monitoring</h3>
+              <p class="font-body text-sm text-on-surface-variant leading-relaxed">Track daily updates and progress from your team. Identify blockers immediately with automated tracking.</p>
+            </div>
+          </a>
+          <a href="/designer" class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 group hover:translate-y-[-4px] transition-transform duration-300 no-underline">
+            <div class="w-12 h-12 rounded-lg bg-tertiary-container flex items-center justify-center">
+              <span class="material-symbols-outlined text-tertiary">verified</span>
+            </div>
+            <div class="space-y-3">
+              <h3 class="font-headline font-bold text-xl text-on-background">Verification &amp; Approval</h3>
+              <p class="font-body text-sm text-on-surface-variant leading-relaxed">Review technical drawings and BOMs. Your sign-off triggers Stage 3 execution and procurement.</p>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      <!-- Bottom Cards -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div class="bg-surface-container-low p-8 rounded-xl flex flex-col justify-between">
+          <div class="space-y-4">
+            <div class="flex items-center gap-2">
+              <span class="relative flex h-3 w-3">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+              </span>
+              <span class="font-label font-bold text-xs text-primary uppercase tracking-widest">Active Sync</span>
+            </div>
+            <h4 class="font-headline font-extrabold text-2xl text-on-background">Awaiting New Projects</h4>
+            <p class="font-body text-sm text-on-surface-variant">The system is scanning the Sales platform for Stage 1 completions. Pick up a paid project or create a new one to get started.</p>
+          </div>
+          <div class="mt-8 pt-8 border-t border-outline-variant/10 flex items-center justify-between">
+            <span class="font-body text-xs text-on-surface-variant italic">Source: Poligrid Global Sales API</span>
+            <button onclick="location.reload()" class="text-primary font-bold text-sm flex items-center gap-1 hover:gap-2 transition-all">
+              Refresh Feed <span class="material-symbols-outlined text-[18px]">sync</span>
+            </button>
+          </div>
+        </div>
+        <div class="purple-gradient-glow p-8 rounded-xl text-white shadow-xl shadow-purple-500/20 relative overflow-hidden group">
+          <div class="absolute -right-12 -top-12 w-48 h-48 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-colors duration-500"></div>
+          <div class="relative z-10 space-y-6 flex flex-col h-full justify-between">
+            <div class="space-y-2">
+              <span class="font-label text-[10px] uppercase tracking-[0.3em] font-bold text-white/70">Lead Development</span>
+              <h4 class="font-headline font-extrabold text-3xl">Pick Up a Paid Project</h4>
+              <p class="font-body text-sm text-white/80 leading-relaxed max-w-md">
+                Browse projects approved by the sales team and assign yourself to start design work immediately.
+              </p>
+            </div>
+            <div class="flex gap-3">
+              <button id="emptyBrowseBtn" class="inline-flex items-center gap-3 bg-white text-[#6b46c1] px-8 py-3 rounded-lg font-bold text-sm shadow-lg hover:shadow-white/20 transition-all active:scale-95">
+                Browse Projects
+                <span class="material-symbols-outlined text-[18px]">east</span>
+              </button>
+              <button id="emptyCreateBtn" class="inline-flex items-center gap-2 bg-white/15 border border-white/30 text-white px-6 py-3 rounded-lg font-bold text-sm hover:bg-white/20 transition-all active:scale-95">
+                + New Project
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /#emptyState -->
+
+
+    <!-- ─── ACTIVE DASHBOARD (projects assigned) ───────────────── -->
+    <div id="activeDashboard" style="display:none">
+
+      <!-- Page header -->
+      <div class="flex items-start justify-between mb-10">
+        <div>
+          <h1 class="font-headline font-extrabold text-4xl lg:text-5xl text-on-background leading-tight tracking-tighter">
+            Command Center, <span class="text-primary" id="activeName">Lead.</span>
+          </h1>
+          <p class="font-body text-sm text-on-surface-variant mt-2" id="activeDateLine">Today's overview</p>
+        </div>
+        <div class="flex items-center gap-3 mt-1">
+          <button id="pickupBtn" class="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-surface-container-lowest text-on-background text-sm font-semibold hover:bg-surface-container-high transition-all">
+            <span class="material-symbols-outlined text-[18px]">add_circle</span>
+            Pick Up Project
+          </button>
+          <button id="newProjectBtn" class="flex items-center gap-2 px-5 py-2.5 rounded-lg signature-cta text-on-primary text-sm font-bold hover:opacity-90 transition-all">
+            <span class="material-symbols-outlined text-[18px]">add</span>
+            New Project
           </button>
         </div>
       </div>
 
-      <!-- Onboarding Card -->
-      <div class="purple-gradient-glow p-8 rounded-xl text-white shadow-xl shadow-purple-500/20 relative overflow-hidden group">
-        <div class="absolute -right-12 -top-12 w-48 h-48 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-colors duration-500"></div>
-        <div class="relative z-10 space-y-6 flex flex-col h-full justify-between">
-          <div class="space-y-2">
-            <span class="font-label text-[10px] uppercase tracking-[0.3em] font-bold text-white/70">Lead Development</span>
-            <h4 class="font-headline font-extrabold text-3xl">Master the GOD'S EYE Standards</h4>
-            <p class="font-body text-sm text-white/80 leading-relaxed max-w-md">
-              Refresh your knowledge on verified BOM structures and the new architectural compliance protocols for Stage 2 sign-offs.
-            </p>
-          </div>
-          <div>
-            <a href="/designer" class="inline-flex items-center gap-3 bg-white text-[#6b46c1] px-8 py-3 rounded-lg font-bold text-sm shadow-lg hover:shadow-white/20 transition-all active:scale-95">
-              Start Onboarding
-              <span class="material-symbols-outlined text-[18px]">east</span>
-            </a>
-          </div>
+      <!-- Stats Row -->
+      <div class="grid grid-cols-3 gap-5 mb-10">
+        <div class="bg-surface-container-lowest rounded-xl p-6 flex flex-col gap-1">
+          <span class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Active Projects</span>
+          <span class="font-headline font-extrabold text-4xl text-on-background" id="statActiveProjects">—</span>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-6 flex flex-col gap-1">
+          <span class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Drawings to Review</span>
+          <span class="font-headline font-extrabold text-4xl text-on-background" id="statPendingReview">—</span>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-6 flex flex-col gap-1">
+          <span class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Revisions Needed</span>
+          <span class="font-headline font-extrabold text-4xl text-on-background" id="statRevisions">—</span>
         </div>
       </div>
-    </div>
+
+      <!-- ─── ACTION CARDS ──────────────────────────────────────── -->
+      <section class="mb-10">
+        <div class="flex items-center gap-4 mb-6">
+          <div class="h-px flex-1 bg-outline-variant/20"></div>
+          <h2 class="font-headline font-bold text-xs tracking-[0.2em] text-on-surface-variant uppercase">Actions Required</h2>
+          <div class="h-px flex-1 bg-outline-variant/20"></div>
+        </div>
+        <div id="actionCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <!-- Injected by JS -->
+          <div class="skeleton h-32 rounded-xl"></div>
+          <div class="skeleton h-32 rounded-xl"></div>
+          <div class="skeleton h-32 rounded-xl"></div>
+        </div>
+      </section>
+
+      <!-- ─── PROJECT LIST ──────────────────────────────────────── -->
+      <section class="mb-10">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="font-headline font-bold text-lg text-on-background">My Projects</h2>
+          <a href="/projects" class="text-primary font-semibold text-sm flex items-center gap-1 hover:gap-2 transition-all">
+            View all <span class="material-symbols-outlined text-[16px]">east</span>
+          </a>
+        </div>
+        <div id="projectListContainer" class="space-y-3">
+          <div class="skeleton h-20 rounded-xl"></div>
+          <div class="skeleton h-20 rounded-xl"></div>
+          <div class="skeleton h-20 rounded-xl"></div>
+        </div>
+      </section>
+
+      <!-- ─── REVIEW QUEUE ──────────────────────────────────────── -->
+      <section class="mb-10">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="font-headline font-bold text-lg text-on-background">Drawings Awaiting Review</h2>
+          <a href="/designer" class="text-primary font-semibold text-sm flex items-center gap-1 hover:gap-2 transition-all">
+            Open Reviewer <span class="material-symbols-outlined text-[16px]">east</span>
+          </a>
+        </div>
+        <div id="reviewQueueContainer" class="space-y-2">
+          <div class="skeleton h-16 rounded-xl"></div>
+          <div class="skeleton h-16 rounded-xl"></div>
+        </div>
+      </section>
+
+    </div><!-- /#activeDashboard -->
 
     <!-- Footer -->
     <footer class="mt-16 pt-12 pb-8 border-t border-outline-variant/10 flex justify-between items-center opacity-40">
@@ -263,13 +368,13 @@
       </div>
     </footer>
 
-  </div>
+  </div><!-- /.max-w-6xl -->
 </main>
 
-<!-- Mobile Navigation (Teams & Reports removed) -->
+<!-- Mobile Navigation -->
 <nav class="md:hidden fixed bottom-0 left-0 w-full bg-[#f9f9f9]/90 backdrop-blur-md px-6 py-4 flex justify-around items-center z-50 border-t border-outline-variant/10">
   <a href="/lead_designer_home" class="flex flex-col items-center gap-1 text-primary no-underline">
-    <span class="material-symbols-outlined" data-weight="fill">dashboard</span>
+    <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">dashboard</span>
     <span class="text-[10px] font-bold uppercase tracking-tighter">Home</span>
   </a>
   <a href="/projects" class="flex flex-col items-center gap-1 text-on-surface-variant/60 no-underline">
@@ -282,37 +387,449 @@
   </a>
 </nav>
 
+<!-- Browse paid projects modal -->
+<div id="browseModal" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.35);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px">
+  <div style="background:#fff;border-radius:12px;max-width:600px;width:100%;max-height:80vh;overflow-y:auto;box-shadow:0 24px 48px rgba(0,0,0,0.12)">
+    <div style="padding:24px 24px 0;display:flex;justify-content:space-between;align-items:center">
+      <h2 style="font-family:Manrope;font-weight:800;font-size:20px;color:#2d3435;margin:0">Paid Projects Available</h2>
+      <button id="browseModalClose" style="background:none;border:none;cursor:pointer;font-size:20px;color:#5a6061;padding:4px">✕</button>
+    </div>
+    <div style="padding:16px 24px 24px">
+      <p style="font-size:13px;color:#5a6061;margin-bottom:16px">Projects marked as advance paid by the sales team. Assign yourself to take ownership.</p>
+      <div id="browseProjectsList">
+        <p style="font-size:13px;color:#757c7d">Loading…</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create project modal -->
+<div id="createModal" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.35);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px">
+  <div style="background:#fff;border-radius:12px;max-width:480px;width:100%;box-shadow:0 24px 48px rgba(0,0,0,0.12)">
+    <div style="padding:24px 24px 0;display:flex;justify-content:space-between;align-items:center">
+      <h2 style="font-family:Manrope;font-weight:800;font-size:20px;color:#2d3435;margin:0">New Project</h2>
+      <button id="createModalClose" style="background:none;border:none;cursor:pointer;font-size:20px;color:#5a6061;padding:4px">✕</button>
+    </div>
+    <div style="padding:20px 24px 24px;display:flex;flex-direction:column;gap:14px">
+      <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#2d3435">
+        Project name *
+        <input id="cpName" type="text" placeholder="e.g. Sharma Residence" style="padding:10px 14px;border:none;background:#f2f4f4;border-radius:6px;font-size:14px;outline:none;font-family:Inter"/>
+      </label>
+      <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#2d3435">
+        Client name (optional)
+        <input id="cpClient" type="text" placeholder="e.g. Rajesh Sharma" style="padding:10px 14px;border:none;background:#f2f4f4;border-radius:6px;font-size:14px;outline:none;font-family:Inter"/>
+      </label>
+      <div id="cpError" style="display:none;color:#9f403d;font-size:13px;padding:10px 14px;background:#fff0f0;border-radius:6px"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+        <button id="createModalCancel" style="padding:10px 20px;background:#f2f4f4;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;font-family:Inter">Cancel</button>
+        <button id="cpSubmit" style="padding:10px 20px;background:linear-gradient(135deg,#526258,#46564c);color:#eafcef;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:Inter">Create &amp; Open</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="/client/auth.js"></script>
 <script>
 (async () => {
-  let profile;
+  let session, profile;
   try {
-    const { profile: p } = await AuthClient.requireAuth(['lead_designer', 'admin']);
-    profile = p;
+    const auth = await AuthClient.requireAuth(['lead_designer', 'admin']);
+    session = auth.session;
+    profile = auth.profile;
   } catch { return; }
 
-  // Dynamic profile links
+  // ── Profile UI ─────────────────────────────────────────────────────────────
   const slug = (profile.full_name || '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // strip diacritics
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')  // non-alphanumeric → hyphen
-    .replace(/^-+|-+$/g, '');     // trim leading/trailing hyphens
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   if (slug) {
-    document.getElementById('settingsLink').href = `/profile/${slug}`;
+    document.getElementById('settingsLink').href  = `/profile/${slug}`;
     document.getElementById('userAvatarLink').href = `/profile/${slug}`;
   }
-
-  // Avatar
-  if (profile.avatar_url) {
-    document.getElementById('userAvatarImg').src = profile.avatar_url;
-  }
+  if (profile.avatar_url) document.getElementById('userAvatarImg').src = profile.avatar_url;
   document.getElementById('userAvatarImg').alt = profile.full_name || 'User';
 
-  // Personalised welcome
-  const firstName = (profile.full_name || 'Design Lead').split(' ')[0];
-  document.getElementById('welcomeName').textContent = firstName + '.';
+  const firstName = (profile.full_name || 'Lead').split(' ')[0];
+  document.getElementById('welcomeName').textContent  = firstName + '.';
+  document.getElementById('activeName').textContent   = firstName + '.';
+
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  document.getElementById('activeDateLine').textContent =
+    `${greeting} — ${now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}`;
+
+  // ── Fetch projects ─────────────────────────────────────────────────────────
+  let projects = [];
+  try {
+    const res = await apiFetch('/api/project/list');
+    const data = await res.json();
+    projects = data.projects || [];
+  } catch { /* show empty state on failure */ }
+
+  if (!projects.length) {
+    // ── Empty state ──────────────────────────────────────────────────────────
+    document.getElementById('emptyState').style.display = '';
+    document.getElementById('activeDashboard').style.display = 'none';
+    wireEmptyState();
+    return;
+  }
+
+  // ── Active dashboard ───────────────────────────────────────────────────────
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('activeDashboard').style.display = '';
+
+  document.getElementById('statActiveProjects').textContent = projects.length;
+
+  // Wire header buttons
+  document.getElementById('pickupBtn').addEventListener('click', openBrowseModal);
+  document.getElementById('newProjectBtn').addEventListener('click', openCreateModal);
+
+  // Load all data in parallel
+  const [summary, reviewData] = await Promise.all([
+    fetchDrawingSummary(projects.map(p => p.id)),
+    fetchPendingReview(),
+  ]);
+
+  renderStats(summary, reviewData);
+  renderActionCards(projects, summary, reviewData);
+  renderProjects(projects, summary);
+  renderReviewQueue(reviewData);
+
+  // ── Wire modals ────────────────────────────────────────────────────────────
+  document.getElementById('browseModalClose').addEventListener('click',  closeBrowseModal);
+  document.getElementById('createModalClose').addEventListener('click',  closeCreateModal);
+  document.getElementById('createModalCancel').addEventListener('click', closeCreateModal);
+  document.getElementById('cpSubmit').addEventListener('click', handleCreateProject);
+
+  // ── Empty state wiring ─────────────────────────────────────────────────────
+  function wireEmptyState() {
+    document.getElementById('emptyBrowseBtn')?.addEventListener('click', openBrowseModal);
+    document.getElementById('emptyCreateBtn')?.addEventListener('click', openCreateModal);
+    document.getElementById('browseModalClose').addEventListener('click',  closeBrowseModal);
+    document.getElementById('createModalClose').addEventListener('click',  closeCreateModal);
+    document.getElementById('createModalCancel').addEventListener('click', closeCreateModal);
+    document.getElementById('cpSubmit').addEventListener('click', handleCreateProject);
+  }
+
+  // ── Stats ──────────────────────────────────────────────────────────────────
+  function renderStats(summary, reviewData) {
+    let totalPending = reviewData?.drawings?.length ?? 0;
+    let totalRevisions = 0;
+    Object.values(summary).forEach(s => { totalRevisions += (s.revision_requested || 0); });
+    document.getElementById('statPendingReview').textContent = totalPending;
+    document.getElementById('statRevisions').textContent     = totalRevisions;
+  }
+
+  // ── Action Cards ───────────────────────────────────────────────────────────
+  function renderActionCards(projects, summary, reviewData) {
+    const grid = document.getElementById('actionCardsGrid');
+    const cards = [];
+
+    const pendingCount = reviewData?.drawings?.length ?? 0;
+    let revisionCount = 0;
+    Object.values(summary).forEach(s => { revisionCount += (s.revision_requested || 0); });
+
+    // Card 1: Drawings to review
+    if (pendingCount > 0) {
+      cards.push({
+        icon: 'rate_review',
+        iconBg: 'bg-primary-container',
+        iconColor: 'text-primary',
+        label: 'Drawings to Review',
+        value: pendingCount,
+        desc: `${pendingCount} drawing${pendingCount !== 1 ? 's' : ''} awaiting your approval`,
+        cta: 'Review Now',
+        href: '/designer',
+        urgent: pendingCount > 3,
+      });
+    }
+
+    // Card 2: Revision requests
+    if (revisionCount > 0) {
+      cards.push({
+        icon: 'sync_problem',
+        iconBg: 'bg-[#fff0f0]',
+        iconColor: 'text-error',
+        label: 'Revision Requests',
+        value: revisionCount,
+        desc: `${revisionCount} drawing${revisionCount !== 1 ? 's' : ''} sent back for revision`,
+        cta: 'View Revisions',
+        href: '/designer',
+        urgent: true,
+      });
+    }
+
+    // Card 3: Projects with no drawings yet
+    const noDrawingsProjects = projects.filter(p => {
+      const s = summary[p.id];
+      return !s || s.total === 0;
+    });
+    if (noDrawingsProjects.length > 0) {
+      cards.push({
+        icon: 'pending_actions',
+        iconBg: 'bg-tertiary-container',
+        iconColor: 'text-tertiary',
+        label: 'Awaiting Drawings',
+        value: noDrawingsProjects.length,
+        desc: `${noDrawingsProjects.length} project${noDrawingsProjects.length !== 1 ? 's' : ''} with no drawings uploaded yet`,
+        cta: 'Assign Drawings',
+        href: '/projects',
+        urgent: false,
+      });
+    }
+
+    // Card 4: Pick up new paid project (always visible)
+    cards.push({
+      icon: 'add_task',
+      iconBg: 'bg-secondary-container',
+      iconColor: 'text-secondary',
+      label: 'Available Projects',
+      value: null,
+      desc: 'Pick up a new paid project from the sales queue',
+      cta: 'Browse',
+      onclick: openBrowseModal,
+      urgent: false,
+    });
+
+    if (!cards.length) {
+      grid.innerHTML = `<div class="col-span-3 bg-surface-container-lowest rounded-xl p-8 flex flex-col items-center gap-3 text-center">
+        <span class="material-symbols-outlined text-4xl text-primary">task_alt</span>
+        <p class="font-headline font-bold text-on-background">All clear! No actions required.</p>
+        <p class="font-body text-sm text-on-surface-variant">Your team is on track. Check back later.</p>
+      </div>`;
+      return;
+    }
+
+    grid.innerHTML = cards.map(c => `
+      <div class="bg-surface-container-lowest rounded-xl p-6 flex flex-col gap-4 ${c.urgent ? 'action-card-urgent' : ''}">
+        <div class="flex items-start justify-between">
+          <div class="w-10 h-10 rounded-lg ${c.iconBg} flex items-center justify-center flex-shrink-0">
+            <span class="material-symbols-outlined ${c.iconColor} text-[20px]">${c.icon}</span>
+          </div>
+          ${c.value !== null ? `<span class="font-headline font-extrabold text-3xl text-on-background leading-none">${c.value}</span>` : ''}
+        </div>
+        <div class="flex-1">
+          <p class="font-label font-bold text-[10px] uppercase tracking-widest text-on-surface-variant mb-1">${c.label}</p>
+          <p class="font-body text-sm text-on-surface-variant leading-snug">${c.desc}</p>
+        </div>
+        ${c.href
+          ? `<a href="${c.href}" class="inline-flex items-center gap-1.5 text-primary font-bold text-sm hover:gap-2.5 transition-all">
+               ${c.cta} <span class="material-symbols-outlined text-[16px]">east</span>
+             </a>`
+          : `<button data-action="browse" class="inline-flex items-center gap-1.5 text-primary font-bold text-sm hover:gap-2.5 transition-all text-left">
+               ${c.cta} <span class="material-symbols-outlined text-[16px]">east</span>
+             </button>`}
+      </div>
+    `).join('');
+
+    // Wire action buttons that can't use href
+    grid.querySelectorAll('[data-action="browse"]').forEach(btn => {
+      btn.addEventListener('click', openBrowseModal);
+    });
+  }
+
+  // ── Project list ───────────────────────────────────────────────────────────
+  function renderProjects(projects, summary) {
+    const container = document.getElementById('projectListContainer');
+    container.innerHTML = projects.slice(0, 8).map(p => {
+      const s = summary[p.id] || { total: 0, approved: 0, pending_review: 0, revision_requested: 0 };
+      const approvedPct = s.total ? Math.round((s.approved / s.total) * 100) : 0;
+      const reviewPct   = s.total ? Math.round((s.pending_review / s.total) * 100) : 0;
+      const allDone     = s.total > 0 && s.approved === s.total;
+      return `
+        <div class="bg-surface-container-lowest rounded-xl p-5 flex flex-col gap-3">
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0">
+              <p class="font-headline font-bold text-base text-on-background truncate">${esc(p.name || 'Untitled')}</p>
+              <p class="font-body text-xs text-on-surface-variant mt-0.5">
+                ${esc(p.client_name || '')}${p.bhk ? ' · ' + esc(p.bhk) : ''}${p.property_type ? ' ' + esc(p.property_type) : ''}
+              </p>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+              ${p.advance_payment_done ? `<span class="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-container px-2.5 py-1 rounded-full">₹ Paid</span>` : ''}
+              <a href="/designer?projectId=${p.id}" class="flex items-center gap-1 text-primary font-semibold text-sm hover:gap-2 transition-all">
+                Open <span class="material-symbols-outlined text-[15px]">east</span>
+              </a>
+            </div>
+          </div>
+          ${s.total > 0 ? `
+            <div>
+              <div class="drawing-bar-track mb-1.5">
+                <div class="drawing-bar-approved" style="width:${approvedPct}%;min-width:${approvedPct > 0 ? 4 : 0}px"></div>
+                <div class="drawing-bar-review"   style="width:${reviewPct}%;min-width:${reviewPct > 0 ? 4 : 0}px"></div>
+              </div>
+              <p class="font-body text-[11px] ${allDone ? 'text-primary font-semibold' : 'text-on-surface-variant'}">
+                ${allDone ? '✓ All drawings approved'
+                  : `${s.approved} / ${s.total} drawings approved`}
+                ${s.revision_requested ? ` · <span class="text-error">${s.revision_requested} need revision</span>` : ''}
+                ${s.pending_review ? ` · ${s.pending_review} awaiting review` : ''}
+              </p>
+            </div>
+          ` : `<p class="font-body text-[11px] text-on-surface-variant">No drawings uploaded yet.</p>`}
+        </div>`;
+    }).join('');
+  }
+
+  // ── Review queue ───────────────────────────────────────────────────────────
+  function renderReviewQueue(reviewData) {
+    const container = document.getElementById('reviewQueueContainer');
+    const drawings = reviewData?.drawings || [];
+    if (!drawings.length) {
+      container.innerHTML = `<div class="bg-surface-container-lowest rounded-xl p-6 flex items-center gap-4">
+        <span class="material-symbols-outlined text-primary text-2xl">check_circle</span>
+        <p class="font-body text-sm text-on-surface-variant">No drawings awaiting review. All clear!</p>
+      </div>`;
+      return;
+    }
+    container.innerHTML = drawings.slice(0, 6).map(d => `
+      <div class="bg-surface-container-lowest rounded-xl px-5 py-4 flex items-center gap-4">
+        <span class="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-container px-2.5 py-1 rounded-full flex-shrink-0">${esc(d.drawing_type)}</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-body text-sm font-semibold text-on-background truncate">${esc(d.title)}</p>
+          <p class="font-body text-[11px] text-on-surface-variant mt-0.5">
+            ${d.project?.name ? esc(d.project.name) : 'Unknown project'}
+            ${d.project?.client_name ? '· ' + esc(d.project.client_name) : ''}
+            · v${d.version_number}
+            ${d.uploader?.full_name ? '· ' + esc(d.uploader.full_name) : ''}
+          </p>
+        </div>
+        <a href="/designer?projectId=${d.project_id}" class="flex-shrink-0 flex items-center gap-1.5 text-primary font-semibold text-sm hover:gap-2.5 transition-all">
+          Review <span class="material-symbols-outlined text-[15px]">east</span>
+        </a>
+      </div>
+    `).join('');
+  }
+
+  // ── Data fetchers ──────────────────────────────────────────────────────────
+  async function fetchDrawingSummary(ids) {
+    try {
+      const r = await apiFetch(`/api/drawings/project-summary?projectIds=${ids.join(',')}`);
+      const d = await r.json();
+      return d.summary || {};
+    } catch { return {}; }
+  }
+
+  async function fetchPendingReview() {
+    try {
+      const r = await apiFetch('/api/drawings/pending');
+      if (!r.ok) return null;
+      return await r.json();
+    } catch { return null; }
+  }
+
+  // ── Browse paid projects modal ─────────────────────────────────────────────
+  function openBrowseModal() {
+    const modal = document.getElementById('browseModal');
+    modal.style.display = 'flex';
+    const list = document.getElementById('browseProjectsList');
+    list.innerHTML = '<p style="font-size:13px;color:#757c7d">Loading…</p>';
+
+    apiFetch('/api/project/available').then(r => r.json()).then(({ projects: avail }) => {
+      if (!avail?.length) {
+        list.innerHTML = '<p style="font-size:13px;color:#757c7d">No paid projects available right now.</p>';
+        return;
+      }
+      list.innerHTML = avail.map(p => `
+        <div style="display:flex;align-items:center;gap:14px;padding:12px;background:#f2f4f4;border-radius:8px;margin-bottom:8px">
+          <div style="flex:1;min-width:0">
+            <p style="font-size:14px;font-weight:700;color:#2d3435;font-family:Manrope;margin:0">${esc(p.name || 'Untitled')}</p>
+            <p style="font-size:12px;color:#5a6061;font-family:Inter;margin:2px 0 0">
+              ${esc(p.bhk || '')} ${esc(p.property_type || '')} ${p.client_name ? '· ' + esc(p.client_name) : ''}
+            </p>
+            <span style="display:inline-block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#46554c;background:#d5e7da;padding:3px 8px;border-radius:99px;margin-top:4px">₹ Advance Paid</span>
+          </div>
+          <button class="self-assign-btn" data-id="${p.id}"
+            style="padding:8px 16px;background:linear-gradient(135deg,#526258,#46564c);color:#eafcef;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:Inter;white-space:nowrap">
+            Assign to Me
+          </button>
+        </div>
+      `).join('');
+
+      list.querySelectorAll('.self-assign-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          btn.textContent = 'Assigning…';
+          try {
+            const r = await apiFetch('/api/project/assign-user', {
+              method: 'POST',
+              body: JSON.stringify({ projectId: btn.dataset.id, userId: profile.id }),
+            });
+            if (!r.ok) throw new Error();
+            btn.textContent = '✓ Assigned';
+            btn.style.background = '#526258';
+            setTimeout(() => { window.location.href = `/designer?projectId=${btn.dataset.id}`; }, 700);
+          } catch {
+            btn.disabled = false;
+            btn.textContent = 'Assign to Me';
+          }
+        });
+      });
+    }).catch(() => {
+      list.innerHTML = '<p style="font-size:13px;color:#9f403d">Failed to load projects.</p>';
+    });
+  }
+
+  function closeBrowseModal() {
+    document.getElementById('browseModal').style.display = 'none';
+  }
+
+  // ── Create project modal ───────────────────────────────────────────────────
+  function openCreateModal() {
+    document.getElementById('cpName').value   = '';
+    document.getElementById('cpClient').value = '';
+    document.getElementById('cpError').style.display = 'none';
+    document.getElementById('createModal').style.display = 'flex';
+  }
+
+  function closeCreateModal() {
+    document.getElementById('createModal').style.display = 'none';
+  }
+
+  async function handleCreateProject() {
+    const name   = document.getElementById('cpName').value.trim();
+    const client = document.getElementById('cpClient').value.trim();
+    const errEl  = document.getElementById('cpError');
+    const btn    = document.getElementById('cpSubmit');
+    errEl.style.display = 'none';
+    if (!name) { errEl.textContent = 'Project name is required.'; errEl.style.display = 'block'; return; }
+    btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+      const res = await apiFetch('/api/project/create', {
+        method: 'POST',
+        body: JSON.stringify({ name, clientName: client || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create project.');
+      window.location.href = `/designer?projectId=${data.projectId}`;
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Create & Open';
+    }
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function apiFetch(url, opts = {}) {
+    return fetch(url, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        ...(opts.headers || {}),
+      },
+    });
+  }
+
+  function esc(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
 })();
 </script>
 </body>
