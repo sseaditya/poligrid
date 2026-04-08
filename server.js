@@ -261,6 +261,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname.startsWith("/profile/")) {
       return serveStatic("/profile.html", false, res);
     }
+    // Serve lead designer home
+    if (req.method === "GET" && url.pathname === "/lead_designer_home") {
+      return serveStatic("/lead_designer_home.html", false, res);
+    }
     if (req.method === "GET" || req.method === "HEAD") {
       return serveStatic(url.pathname, req.method === "HEAD", res);
     }

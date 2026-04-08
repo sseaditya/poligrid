@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Poligrid — Design Lead</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;400;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "on-error": "#fff7f6",
+          "on-secondary": "#f3fbf3",
+          "primary-fixed-dim": "#c7d9cc",
+          "outline-variant": "#adb3b4",
+          "surface-container-low": "#f2f4f4",
+          "primary-dim": "#46564c",
+          "primary": "#526258",
+          "primary-container": "#d5e7da",
+          "on-primary": "#eafcef",
+          "tertiary-container": "#edf8d9",
+          "background": "#f9f9f9",
+          "on-surface-variant": "#5a6061",
+          "on-primary-fixed": "#33433a",
+          "surface-variant": "#dde4e5",
+          "on-primary-fixed-variant": "#4f5f55",
+          "on-tertiary-fixed": "#434d36",
+          "on-background": "#2d3435",
+          "error-container": "#fe8983",
+          "surface": "#f9f9f9",
+          "inverse-primary": "#ecfef0",
+          "surface-bright": "#f9f9f9",
+          "on-error-container": "#752121",
+          "tertiary-fixed": "#edf8d9",
+          "on-tertiary-fixed-variant": "#5f6a51",
+          "inverse-on-surface": "#9c9d9d",
+          "surface-dim": "#d4dbdd",
+          "inverse-surface": "#0c0f0f",
+          "surface-container-high": "#e4e9ea",
+          "surface-container": "#ebeeef",
+          "secondary-container": "#dde5dd",
+          "surface-container-lowest": "#ffffff",
+          "primary-fixed": "#d5e7da",
+          "surface-tint": "#526258",
+          "on-tertiary-container": "#555f47",
+          "on-secondary-fixed-variant": "#555d58",
+          "error": "#9f403d",
+          "secondary-dim": "#4d554f",
+          "secondary": "#59615b",
+          "error-dim": "#4e0309",
+          "on-secondary-fixed": "#39413c",
+          "tertiary": "#58634b",
+          "tertiary-dim": "#4c563f",
+          "tertiary-fixed-dim": "#deeacb",
+          "surface-container-highest": "#dde4e5",
+          "on-surface": "#2d3435",
+          "secondary-fixed": "#dde5dd",
+          "on-secondary-container": "#4c544e",
+          "outline": "#757c7d",
+          "on-tertiary": "#f2fdde",
+          "secondary-fixed-dim": "#ced6cf",
+          "on-primary-container": "#46554c"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.125rem",
+          "lg": "0.25rem",
+          "xl": "0.5rem",
+          "full": "0.75rem"
+        },
+        "fontFamily": {
+          "headline": ["Manrope"],
+          "body": ["Inter"],
+          "label": ["Inter"]
+        }
+      },
+    },
+  }
+</script>
+<style>
+  .blueprint-grid {
+    background-image: linear-gradient(rgba(82, 98, 88, 0.05) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(82, 98, 88, 0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .purple-gradient-glow {
+    background: linear-gradient(135deg, #6b46c1 0%, #a855f7 100%);
+  }
+  .signature-cta {
+    background: linear-gradient(135deg, #526258 0%, #46564c 100%);
+  }
+</style>
+</head>
+<body class="bg-background text-on-background font-body antialiased min-h-screen">
+
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-[#f9f9f9]/80 backdrop-blur-md flex justify-between items-center px-8 h-16 border-b border-outline-variant/10">
+  <div class="flex items-center gap-4">
+    <span class="font-headline font-black tracking-tighter text-[#2d3435] text-xl">GOD'S EYE</span>
+    <div class="h-4 w-px bg-outline-variant/30 hidden md:block"></div>
+    <span class="font-body text-xs font-semibold tracking-widest text-on-surface-variant uppercase opacity-60">Design Lead Console</span>
+  </div>
+  <div class="flex items-center gap-6">
+    <div class="flex items-center gap-4">
+      <span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors" id="notifBtn">notifications</span>
+      <a id="settingsLink" href="/profile">
+        <span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors">settings</span>
+      </a>
+    </div>
+    <a id="userAvatarLink" href="/profile">
+      <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border border-outline-variant/10">
+        <img alt="User profile" class="w-full h-full object-cover" id="userAvatarImg"
+          src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVv3JzqHKG6H9JJHwdw273lGyfi_XOnR4p-gIYlpF6kWBNU_NvGtY1FaSzXUFJoIY6HjLl4QC345Nb_pm6Lzfu9-zMbfyyLNiJqtqYICV9-jaC_dS7bb-yvsJ_Ntv5o0M-VYJNkw41yQ2fP-IOA79HnBhs4Qw_AXue64EGtzSATQWxUbbXdgoUfrBcbztY7EQalp5BD_XYZU8bObIFVEao1rgBbfq_02O45mFCKTzlTqhBTdBg6eF_yOSPYXXQYFT8kFNuCQtDb3Q"/>
+      </div>
+    </a>
+  </div>
+</header>
+
+<!-- Sidebar Navigation -->
+<aside class="fixed left-0 top-16 bottom-0 w-64 bg-surface-container-lowest border-r border-outline-variant/10 hidden md:flex flex-col z-40">
+  <nav class="flex-1 py-6 px-4 space-y-2">
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary bg-primary/5 font-bold transition-all border-r-2 border-primary" href="/lead_designer_home">
+      <span class="material-symbols-outlined" data-weight="fill">dashboard</span>
+      <span class="text-sm">Command Center</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all" href="/projects">
+      <span class="material-symbols-outlined">architecture</span>
+      <span class="text-sm">Projects</span>
+    </a>
+    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all" href="/designer">
+      <span class="material-symbols-outlined">edit_square</span>
+      <span class="text-sm">Detailed Design</span>
+    </a>
+  </nav>
+  <div class="p-6 border-t border-outline-variant/10">
+    <div class="bg-surface-container-low p-4 rounded-lg flex items-center gap-3">
+      <div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+      <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">System Active</span>
+    </div>
+  </div>
+</aside>
+
+<!-- Main Content Area -->
+<main class="pt-24 pb-12 px-8 lg:px-12 min-h-screen blueprint-grid md:ml-64">
+  <div class="max-w-6xl mx-auto">
+
+    <!-- Hero Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-16 items-center">
+      <div class="lg:col-span-7 space-y-6">
+        <h1 class="font-headline font-extrabold text-5xl lg:text-7xl text-on-background leading-tight tracking-tighter">
+          Welcome to your <br/>Command Center, <span class="text-primary" id="welcomeName">Design Lead.</span>
+        </h1>
+        <p class="font-body text-lg text-on-surface-variant max-w-xl leading-relaxed">
+          Your environment is ready for Stage 2 management. Currently, no projects are assigned to your studio for verification.
+        </p>
+      </div>
+      <div class="lg:col-span-5 relative">
+        <div class="aspect-square w-full rounded-xl purple-gradient-glow p-1 shadow-2xl shadow-purple-500/10">
+          <div class="w-full h-full rounded-[calc(0.5rem-1px)] bg-surface-container-lowest overflow-hidden flex items-center justify-center relative">
+            <img alt="Architectural Blueprint Graphic" class="w-full h-full object-cover opacity-90 mix-blend-multiply"
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuC3xJPxOyj6IKgQOHdKkg_47GUUw3fGvLbSywLzDLdqNAQKmqRIDZwH6eOGKqDNsLEbT4fWwRn90iLadlHlHJf2PdC97zAvwF8K5H1VstZwOIfgW1Hmiuus1u9VcD4b3TzHaiBiqZlyBBlYHmxftXeNXK24N569D74RlGX6DXCpj1kkgjScaHtQwGpOUcJ2kkgZM64Q"/>
+            <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Operational Workflow -->
+    <section class="mb-16">
+      <div class="flex items-center gap-4 mb-8">
+        <div class="h-px flex-1 bg-outline-variant/20"></div>
+        <h2 class="font-headline font-bold text-sm tracking-[0.2em] text-on-surface-variant uppercase">Operational Workflow</h2>
+        <div class="h-px flex-1 bg-outline-variant/20"></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <!-- Step 1 -->
+        <a href="/projects" class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 group hover:translate-y-[-4px] transition-transform duration-300 no-underline">
+          <div class="w-12 h-12 rounded-lg bg-primary-container flex items-center justify-center">
+            <span class="material-symbols-outlined text-primary" data-weight="fill">assignment_turned_in</span>
+          </div>
+          <div class="space-y-3">
+            <h3 class="font-headline font-bold text-xl text-on-background">Project Intake &amp; Assignment</h3>
+            <p class="font-body text-sm text-on-surface-variant leading-relaxed">Once a project clears Stage 1, it appears here. Allocate tasks to your team of Associate Designers.</p>
+          </div>
+        </a>
+        <!-- Step 2 -->
+        <a href="/projects" class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 group hover:translate-y-[-4px] transition-transform duration-300 no-underline">
+          <div class="w-12 h-12 rounded-lg bg-secondary-container flex items-center justify-center">
+            <span class="material-symbols-outlined text-secondary" data-weight="fill">monitoring</span>
+          </div>
+          <div class="space-y-3">
+            <h3 class="font-headline font-bold text-xl text-on-background">Real-time Monitoring</h3>
+            <p class="font-body text-sm text-on-surface-variant leading-relaxed">Track daily updates and progress from your team. Identify blockers immediately with automated tracking.</p>
+          </div>
+        </a>
+        <!-- Step 3 -->
+        <a href="/designer" class="bg-surface-container-lowest p-8 rounded-xl flex flex-col gap-6 group hover:translate-y-[-4px] transition-transform duration-300 no-underline">
+          <div class="w-12 h-12 rounded-lg bg-tertiary-container flex items-center justify-center">
+            <span class="material-symbols-outlined text-tertiary" data-weight="fill">verified</span>
+          </div>
+          <div class="space-y-3">
+            <h3 class="font-headline font-bold text-xl text-on-background">Verification &amp; Approval</h3>
+            <p class="font-body text-sm text-on-surface-variant leading-relaxed">Review technical drawings and BOMs. Your sign-off triggers Stage 3 execution and procurement.</p>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <!-- Bottom Cards -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <!-- Status Card -->
+      <div class="bg-surface-container-low p-8 rounded-xl border border-outline-variant/10 flex flex-col justify-between">
+        <div class="space-y-4">
+          <div class="flex items-center gap-2">
+            <span class="relative flex h-3 w-3">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+            </span>
+            <span class="font-label font-bold text-xs text-primary uppercase tracking-widest">Active Sync</span>
+          </div>
+          <h4 class="font-headline font-extrabold text-2xl text-on-background">Awaiting New Projects</h4>
+          <p class="font-body text-sm text-on-surface-variant">The system is currently scanning the Sales platform for Stage 1 completions. Estimated wait time for next sync: <span class="font-bold text-on-background">14 mins</span></p>
+        </div>
+        <div class="mt-8 pt-8 border-t border-outline-variant/10 flex items-center justify-between">
+          <span class="font-body text-xs text-on-surface-variant italic">Source: Poligrid Global Sales API</span>
+          <button onclick="location.reload()" class="text-primary font-bold text-sm flex items-center gap-1 hover:gap-2 transition-all">
+            Refresh Feed <span class="material-symbols-outlined text-[18px]">sync</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Onboarding Card -->
+      <div class="purple-gradient-glow p-8 rounded-xl text-white shadow-xl shadow-purple-500/20 relative overflow-hidden group">
+        <div class="absolute -right-12 -top-12 w-48 h-48 bg-white/10 rounded-full blur-3xl group-hover:bg-white/20 transition-colors duration-500"></div>
+        <div class="relative z-10 space-y-6 flex flex-col h-full justify-between">
+          <div class="space-y-2">
+            <span class="font-label text-[10px] uppercase tracking-[0.3em] font-bold text-white/70">Lead Development</span>
+            <h4 class="font-headline font-extrabold text-3xl">Master the GOD'S EYE Standards</h4>
+            <p class="font-body text-sm text-white/80 leading-relaxed max-w-md">
+              Refresh your knowledge on verified BOM structures and the new architectural compliance protocols for Stage 2 sign-offs.
+            </p>
+          </div>
+          <div>
+            <a href="/designer" class="inline-flex items-center gap-3 bg-white text-[#6b46c1] px-8 py-3 rounded-lg font-bold text-sm shadow-lg hover:shadow-white/20 transition-all active:scale-95">
+              Start Onboarding
+              <span class="material-symbols-outlined text-[18px]">east</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 pt-12 pb-8 border-t border-outline-variant/10 flex justify-between items-center opacity-40">
+      <p class="text-xs font-body font-medium">POLIGRID INTERIOR DESIGN SYSTEMS © 2024</p>
+      <div class="flex gap-6">
+        <span class="text-xs font-label font-bold cursor-pointer hover:text-primary transition-colors">PRIVACY</span>
+        <span class="text-xs font-label font-bold cursor-pointer hover:text-primary transition-colors">SECURITY</span>
+        <span class="text-xs font-label font-bold cursor-pointer hover:text-primary transition-colors">SUPPORT</span>
+      </div>
+    </footer>
+
+  </div>
+</main>
+
+<!-- Mobile Navigation (Teams & Reports removed) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full bg-[#f9f9f9]/90 backdrop-blur-md px-6 py-4 flex justify-around items-center z-50 border-t border-outline-variant/10">
+  <a href="/lead_designer_home" class="flex flex-col items-center gap-1 text-primary no-underline">
+    <span class="material-symbols-outlined" data-weight="fill">dashboard</span>
+    <span class="text-[10px] font-bold uppercase tracking-tighter">Home</span>
+  </a>
+  <a href="/projects" class="flex flex-col items-center gap-1 text-on-surface-variant/60 no-underline">
+    <span class="material-symbols-outlined">architecture</span>
+    <span class="text-[10px] font-bold uppercase tracking-tighter">Projects</span>
+  </a>
+  <a href="/designer" class="flex flex-col items-center gap-1 text-on-surface-variant/60 no-underline">
+    <span class="material-symbols-outlined">edit_square</span>
+    <span class="text-[10px] font-bold uppercase tracking-tighter">Drawings</span>
+  </a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/client/auth.js"></script>
+<script>
+(async () => {
+  let profile;
+  try {
+    const { profile: p } = await AuthClient.requireAuth(['lead_designer', 'admin']);
+    profile = p;
+  } catch { return; }
+
+  // Dynamic profile links
+  const slug = (profile.full_name || '').toLowerCase().replace(/\s+/g, '-');
+  if (slug) {
+    document.getElementById('settingsLink').href = `/profile/${slug}`;
+    document.getElementById('userAvatarLink').href = `/profile/${slug}`;
+  }
+
+  // Avatar
+  if (profile.avatar_url) {
+    document.getElementById('userAvatarImg').src = profile.avatar_url;
+  }
+  document.getElementById('userAvatarImg').alt = profile.full_name || 'User';
+
+  // Personalised welcome
+  const firstName = (profile.full_name || 'Design Lead').split(' ')[0];
+  document.getElementById('welcomeName').textContent = firstName + '.';
+})();
+</script>
+</body>
+</html>

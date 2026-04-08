@@ -26,7 +26,8 @@ let _session, _profile;
   if (_profile.role === "designer") {
     await setupDesignerDashboard();
   } else if (_profile.role === "lead_designer") {
-    await setupLeadDashboard();
+    window.location.href = "/lead_designer_home";
+    return;
   } else {
     // admin / ceo
     document.getElementById("statRow").hidden = false;
