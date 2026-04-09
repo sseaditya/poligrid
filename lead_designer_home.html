@@ -131,6 +131,9 @@
           src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVv3JzqHKG6H9JJHwdw273lGyfi_XOnR4p-gIYlpF6kWBNU_NvGtY1FaSzXUFJoIY6HjLl4QC345Nb_pm6Lzfu9-zMbfyyLNiJqtqYICV9-jaC_dS7bb-yvsJ_Ntv5o0M-VYJNkw41yQ2fP-IOA79HnBhs4Qw_AXue64EGtzSATQWxUbbXdgoUfrBcbztY7EQalp5BD_XYZU8bObIFVEao1rgBbfq_02O45mFCKTzlTqhBTdBg6eF_yOSPYXXQYFT8kFNuCQtDb3Q"/>
       </div>
     </a>
+    <button id="logoutBtn" class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-surface-container text-on-surface-variant text-xs font-bold uppercase tracking-widest hover:bg-surface-container-high transition-all">
+      <span class="material-symbols-outlined text-[15px]">logout</span>Sign out
+    </button>
   </div>
 </header>
 
@@ -330,12 +333,15 @@
       <!-- ─── PROJECT LIST ──────────────────────────────────────── -->
       <section class="mb-10">
         <div class="flex items-center justify-between mb-6">
-          <h2 class="font-headline font-bold text-lg text-on-background">My Projects</h2>
+          <div>
+            <h2 class="font-headline font-bold text-lg text-on-background">All Projects</h2>
+            <p class="font-body text-xs text-on-surface-variant mt-0.5">Assigned to your studio — click a project to open detail</p>
+          </div>
           <a href="/projects" class="text-primary font-semibold text-sm flex items-center gap-1 hover:gap-2 transition-all">
-            View all <span class="material-symbols-outlined text-[16px]">east</span>
+            Manage all <span class="material-symbols-outlined text-[16px]">east</span>
           </a>
         </div>
-        <div id="projectListContainer" class="space-y-3">
+        <div id="projectListContainer">
           <div class="skeleton h-20 rounded-xl"></div>
           <div class="skeleton h-20 rounded-xl"></div>
           <div class="skeleton h-20 rounded-xl"></div>
@@ -450,6 +456,7 @@
   }
   if (profile.avatar_url) document.getElementById('userAvatarImg').src = profile.avatar_url;
   document.getElementById('userAvatarImg').alt = profile.full_name || 'User';
+  document.getElementById('logoutBtn').addEventListener('click', () => AuthClient.signOut());
 
   const firstName = (profile.full_name || 'Lead').split(' ')[0];
   document.getElementById('welcomeName').textContent  = firstName + '.';
@@ -631,46 +638,77 @@
     });
   }
 
-  // ── Project list ───────────────────────────────────────────────────────────
+  // ── Project list (tabular) ─────────────────────────────────────────────────
   function renderProjects(projects, summary) {
     const container = document.getElementById('projectListContainer');
-    container.innerHTML = projects.slice(0, 8).map(p => {
+    const statusLabel = { active: 'Active', advanced_paid: 'Advance Paid', in_progress: 'In Progress',
+      completed: 'Completed', on_hold: 'On Hold', cancelled: 'Cancelled' };
+    const statusCls = { active: 'text-primary bg-primary-container', advanced_paid: 'text-secondary bg-secondary-container',
+      in_progress: 'text-tertiary bg-tertiary-container', completed: 'text-primary bg-primary-container',
+      on_hold: 'text-on-surface-variant bg-surface-container', cancelled: 'text-error bg-[#fff0f0]' };
+
+    const rows = [...projects].map(p => {
       const s = summary[p.id] || { total: 0, approved: 0, pending_review: 0, revision_requested: 0 };
       const approvedPct = s.total ? Math.round((s.approved / s.total) * 100) : 0;
       const reviewPct   = s.total ? Math.round((s.pending_review / s.total) * 100) : 0;
       const allDone     = s.total > 0 && s.approved === s.total;
+      const sCls = statusCls[p.status] || 'text-on-surface-variant bg-surface-container';
+      const sLbl = statusLabel[p.status] || p.status || '—';
+      const meta = [p.bhk, p.property_type, p.total_area_m2 ? p.total_area_m2 + ' m²' : null].filter(Boolean).join(' · ');
       return `
-        <div class="bg-surface-container-lowest rounded-xl p-5 flex flex-col gap-3">
-          <div class="flex items-start justify-between gap-4">
-            <div class="min-w-0">
-              <p class="font-headline font-bold text-base text-on-background truncate">${esc(p.name || 'Untitled')}</p>
-              <p class="font-body text-xs text-on-surface-variant mt-0.5">
-                ${esc(p.client_name || '')}${p.bhk ? ' · ' + esc(p.bhk) : ''}${p.property_type ? ' ' + esc(p.property_type) : ''}
+        <tr class="border-b border-outline-variant/10 hover:bg-surface-container-low transition-colors group">
+          <td class="px-5 py-4">
+            <p class="font-headline font-bold text-sm text-on-background leading-tight">${esc(p.name || 'Untitled')}</p>
+            <p class="font-body text-xs text-on-surface-variant mt-0.5">${esc(p.client_name || '—')}</p>
+          </td>
+          <td class="px-5 py-4 hidden sm:table-cell">
+            <p class="font-body text-xs text-on-surface-variant">${esc(meta || '—')}</p>
+          </td>
+          <td class="px-5 py-4">
+            <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${sCls}">${esc(sLbl)}</span>
+            ${p.advance_payment_done ? `<span class="ml-1 text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-container px-2.5 py-1 rounded-full">₹ Paid</span>` : ''}
+          </td>
+          <td class="px-5 py-4 hidden md:table-cell" style="min-width:140px">
+            ${s.total > 0 ? `
+              <div class="drawing-bar-track mb-1" style="height:3px">
+                <div class="drawing-bar-approved" style="width:${approvedPct}%;min-width:${approvedPct > 0 ? 3 : 0}px"></div>
+                <div class="drawing-bar-review"   style="width:${reviewPct}%;min-width:${reviewPct > 0 ? 3 : 0}px"></div>
+              </div>
+              <p class="font-body text-[10px] ${allDone ? 'text-primary font-semibold' : 'text-on-surface-variant'}">
+                ${allDone ? '✓ All approved' : `${s.approved}/${s.total} approved`}
+                ${s.pending_review ? ` · <span class="text-on-surface-variant">${s.pending_review} pending</span>` : ''}
+                ${s.revision_requested ? ` · <span style="color:#9f403d">${s.revision_requested} revision</span>` : ''}
               </p>
-            </div>
-            <div class="flex items-center gap-2 flex-shrink-0">
-              ${p.advance_payment_done ? `<span class="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-container px-2.5 py-1 rounded-full">₹ Paid</span>` : ''}
-              <a href="/designer?projectId=${p.id}" class="flex items-center gap-1 text-primary font-semibold text-sm hover:gap-2 transition-all">
-                Open <span class="material-symbols-outlined text-[15px]">east</span>
+            ` : `<p class="font-body text-[10px] text-on-surface-variant">No drawings yet</p>`}
+          </td>
+          <td class="px-5 py-4 text-right">
+            <div class="flex items-center gap-2 justify-end">
+              <a href="/project?id=${p.id}" class="flex items-center gap-1 text-on-surface-variant font-semibold text-xs hover:text-primary transition-colors" title="Project detail">
+                <span class="material-symbols-outlined text-[15px]">open_in_new</span>
+              </a>
+              <a href="/designer?projectId=${p.id}" class="flex items-center gap-1.5 text-primary font-semibold text-sm hover:gap-2.5 transition-all">
+                Drawings <span class="material-symbols-outlined text-[15px]">east</span>
               </a>
             </div>
-          </div>
-          ${s.total > 0 ? `
-            <div>
-              <div class="drawing-bar-track mb-1.5">
-                <div class="drawing-bar-approved" style="width:${approvedPct}%;min-width:${approvedPct > 0 ? 4 : 0}px"></div>
-                <div class="drawing-bar-review"   style="width:${reviewPct}%;min-width:${reviewPct > 0 ? 4 : 0}px"></div>
-              </div>
-              <p class="font-body text-[11px] ${allDone ? 'text-primary font-semibold' : 'text-on-surface-variant'}">
-                ${allDone ? '✓ All drawings approved'
-                  : `${s.approved} / ${s.total} drawings approved`}
-                ${s.revision_requested ? ` · <span class="text-error">${s.revision_requested} need revision</span>` : ''}
-                ${s.pending_review ? ` · ${s.pending_review} awaiting review` : ''}
-              </p>
-            </div>
-          ` : `<p class="font-body text-[11px] text-on-surface-variant">No drawings uploaded yet.</p>`}
-        </div>`;
+          </td>
+        </tr>`;
     }).join('');
+
+    container.innerHTML = `
+      <div class="bg-surface-container-lowest rounded-xl overflow-hidden">
+        <table class="w-full border-collapse">
+          <thead>
+            <tr class="bg-surface-container-low border-b border-outline-variant/10">
+              <th class="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Project / Client</th>
+              <th class="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hidden sm:table-cell">Property</th>
+              <th class="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Status</th>
+              <th class="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hidden md:table-cell">Drawings</th>
+              <th class="px-5 py-3 text-right text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Actions</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
   }
 
   // ── Review queue ───────────────────────────────────────────────────────────
