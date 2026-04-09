@@ -495,14 +495,15 @@
   document.getElementById('newProjectBtn').addEventListener('click', openCreateModal);
 
   // Load all data in parallel
-  const [summary, reviewData] = await Promise.all([
+  const [summary, reviewData, allAssignments] = await Promise.all([
     fetchDrawingSummary(projects.map(p => p.id)),
     fetchPendingReview(),
+    fetchAllAssignments(projects.map(p => p.id)),
   ]);
 
   renderStats(summary, reviewData);
   renderActionCards(projects, summary, reviewData);
-  renderProjects(projects, summary);
+  renderProjects(projects, summary, allAssignments);
   renderReviewQueue(reviewData);
 
   // ── Wire modals ────────────────────────────────────────────────────────────
@@ -639,13 +640,18 @@
   }
 
   // ── Project list (tabular) ─────────────────────────────────────────────────
-  function renderProjects(projects, summary) {
+  function renderProjects(projects, summary, allAssignments) {
     const container = document.getElementById('projectListContainer');
     const statusLabel = { active: 'Active', advanced_paid: 'Advance Paid', in_progress: 'In Progress',
       completed: 'Completed', on_hold: 'On Hold', cancelled: 'Cancelled' };
     const statusCls = { active: 'text-primary bg-primary-container', advanced_paid: 'text-secondary bg-secondary-container',
       in_progress: 'text-tertiary bg-tertiary-container', completed: 'text-primary bg-primary-container',
       on_hold: 'text-on-surface-variant bg-surface-container', cancelled: 'text-error bg-[#fff0f0]' };
+    const dtLabel = { civil: 'Civil', electrical: 'Electrical', plumbing: 'Plumbing',
+      hvac: 'HVAC', firefighting: 'Fire', architectural: 'Arch', structural: 'Structural',
+      interior: 'Interior', landscape: 'Landscape', other: 'Other' };
+    const dotColor = s => ({ approved: '#526258', pending_review: '#d97706',
+      revision_requested: '#9f403d' }[s] || '#757c7d');
 
     const rows = [...projects].map(p => {
       const s = summary[p.id] || { total: 0, approved: 0, pending_review: 0, revision_requested: 0 };
@@ -655,6 +661,31 @@
       const sCls = statusCls[p.status] || 'text-on-surface-variant bg-surface-container';
       const sLbl = statusLabel[p.status] || p.status || '—';
       const meta = [p.bhk, p.property_type, p.total_area_m2 ? p.total_area_m2 + ' m²' : null].filter(Boolean).join(' · ');
+
+      // Build designer assignments chips
+      const projAssignments = allAssignments[p.id] || [];
+      // Group by assignee
+      const byDesigner = {};
+      for (const a of projAssignments) {
+        const name = a.assignee?.full_name || 'Unknown';
+        if (!byDesigner[name]) byDesigner[name] = [];
+        byDesigner[name].push(a);
+      }
+      const designerChips = Object.entries(byDesigner).map(([name, assigns]) => {
+        const types = assigns.map(a =>
+          `<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;
+            padding:1px 6px;border-radius:99px;background:rgba(82,98,88,0.08);color:#526258">
+            <span style="width:4px;height:4px;border-radius:50%;background:${dotColor(a.status)};flex-shrink:0"></span>
+            ${esc(dtLabel[a.drawing_type] || a.drawing_type)}
+            ${a.deadline ? `<span style="color:#757c7d;font-weight:400">· ${fmtShort(a.deadline)}</span>` : ''}
+          </span>`
+        ).join('');
+        return `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+          <span style="font-size:11px;font-weight:600;color:#2d3435">${esc(name)}</span>
+          ${types}
+        </div>`;
+      }).join('');
+
       return `
         <tr class="border-b border-outline-variant/10 hover:bg-surface-container-low transition-colors group">
           <td class="px-5 py-4">
@@ -668,7 +699,7 @@
             <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${sCls}">${esc(sLbl)}</span>
             ${p.advance_payment_done ? `<span class="ml-1 text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-container px-2.5 py-1 rounded-full">₹ Paid</span>` : ''}
           </td>
-          <td class="px-5 py-4 hidden md:table-cell" style="min-width:140px">
+          <td class="px-5 py-4 hidden md:table-cell" style="min-width:160px">
             ${s.total > 0 ? `
               <div class="drawing-bar-track mb-1" style="height:3px">
                 <div class="drawing-bar-approved" style="width:${approvedPct}%;min-width:${approvedPct > 0 ? 3 : 0}px"></div>
@@ -681,10 +712,24 @@
               </p>
             ` : `<p class="font-body text-[10px] text-on-surface-variant">No drawings yet</p>`}
           </td>
+          <td class="px-5 py-4 hidden lg:table-cell" style="min-width:180px">
+            ${projAssignments.length
+              ? `<div style="display:flex;flex-direction:column;gap:4px">${designerChips}</div>`
+              : `<a href="/project?id=${p.id}"
+                  style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
+                    color:#526258;text-decoration:none;padding:3px 8px;border:1px solid #d5e7da;
+                    border-radius:6px;transition:background .15s"
+                  onmouseover="this.style.background='#d5e7da'" onmouseout="this.style.background=''">
+                  <span class="material-symbols-outlined" style="font-size:13px">person_add</span>
+                  Assign
+                </a>`}
+          </td>
           <td class="px-5 py-4 text-right">
             <div class="flex items-center gap-2 justify-end">
-              <a href="/project?id=${p.id}" class="flex items-center gap-1 text-on-surface-variant font-semibold text-xs hover:text-primary transition-colors" title="Project detail">
-                <span class="material-symbols-outlined text-[15px]">open_in_new</span>
+              <a href="/project?id=${p.id}"
+                class="flex items-center gap-1 text-on-surface-variant font-semibold text-xs hover:text-primary transition-colors"
+                title="Manage team & assignments">
+                <span class="material-symbols-outlined text-[15px]">group</span>
               </a>
               <a href="/designer?projectId=${p.id}" class="flex items-center gap-1.5 text-primary font-semibold text-sm hover:gap-2.5 transition-all">
                 Drawings <span class="material-symbols-outlined text-[15px]">east</span>
@@ -703,6 +748,7 @@
               <th class="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hidden sm:table-cell">Property</th>
               <th class="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Status</th>
               <th class="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hidden md:table-cell">Drawings</th>
+              <th class="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hidden lg:table-cell">Team</th>
               <th class="px-5 py-3 text-right text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Actions</th>
             </tr>
           </thead>
@@ -748,6 +794,24 @@
       const d = await r.json();
       return d.summary || {};
     } catch { return {}; }
+  }
+
+  async function fetchAllAssignments(projectIds) {
+    // Fetch drawing assignments for all projects in parallel
+    const results = await Promise.allSettled(
+      projectIds.map(id => apiFetch(`/api/drawings/assignments?projectId=${id}`)
+        .then(r => r.json()).then(d => ({ id, assignments: d.assignments || [] })))
+    );
+    const map = {};
+    for (const r of results) {
+      if (r.status === 'fulfilled') map[r.value.id] = r.value.assignments;
+    }
+    return map;
+  }
+
+  function fmtShort(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   }
 
   async function fetchPendingReview() {

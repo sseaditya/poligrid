@@ -95,6 +95,50 @@
     </div>
   </div>
 
+  <!-- ── Assign Designer Modal ─────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="assignDesignerModal" hidden>
+    <div class="modal-card" style="max-width:560px;width:100%">
+      <div class="modal-header">
+        <h2 class="modal-title">Assign Designer</h2>
+        <button class="ghost-sm" id="assignDesignerModalClose">✕</button>
+      </div>
+      <div class="modal-body" style="gap:16px">
+        <label class="field-label">Designer
+          <select class="ctx-input" id="modalDesignerSelect">
+            <option value="">Loading…</option>
+          </select>
+        </label>
+        <div id="designerTeamNote" hidden
+          style="font-size:12px;padding:8px 12px;border-radius:6px;margin-top:-8px"></div>
+
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+              color:var(--color-on-surface-variant);margin:0">Drawing Assignments</p>
+            <button class="ghost-sm" id="modalAddDrawingRowBtn" type="button">+ Add Type</button>
+          </div>
+          <div id="modalDrawingRows" style="display:flex;flex-direction:column;gap:8px"></div>
+          <p id="modalNoRowsHint" style="font-size:12px;color:var(--color-on-surface-variant)">
+            Add at least one drawing type to assign.</p>
+        </div>
+
+        <label class="field-label">Notes (optional)
+          <input class="ctx-input" id="modalAssignNotes" type="text"
+            placeholder="Special instructions for the designer…" />
+        </label>
+
+        <div class="auth-error" id="assignDesignerError" hidden></div>
+        <div class="modal-footer">
+          <button class="ghost-btn" id="assignDesignerCancelBtn">Cancel</button>
+          <button class="primary-btn" id="assignDesignerConfirmBtn" style="gap:6px;width:auto">
+            <span class="material-symbols-outlined" style="font-size:15px">person_add</span>
+            Assign Designer
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="client/auth.js"></script>
   <script src="client/project-detail.js"></script>

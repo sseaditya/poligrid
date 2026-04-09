@@ -660,79 +660,84 @@ function buildFloorPlan(url) {
 
 // ── Team ──────────────────────────────────────────────────────────────────────
 function buildTeamSection(team, project) {
-  const teamDesigners = team.filter(t => t.profile?.role === "designer");
+  // Group drawing assignments by assignee user_id
+  const byAssignee = {};
+  for (const a of _drawingAssignments) {
+    const uid = a.assigned_to || a.assignee?.id;
+    if (!byAssignee[uid]) byAssignee[uid] = [];
+    byAssignee[uid].push(a);
+  }
 
-  const assignmentRows = _drawingAssignments.map(a => `
-    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--color-surface-container)">
-      <span style="flex:1;font-size:12px;font-weight:600;color:var(--color-on-surface)">${escHtml(DRAWING_TYPE_LABELS[a.drawing_type] || a.drawing_type)}</span>
-      <span style="font-size:12px;color:var(--color-on-surface-variant)">${escHtml(a.assignee?.full_name || "Unassigned")}</span>
-      <button class="ghost-sm danger-sm del-drawing-assign-btn" data-id="${a.id}" title="Remove assignment">✕</button>
-    </div>`).join("");
+  const statusDot = s => ({
+    approved: "var(--success)",
+    pending_review: "var(--gold)",
+    revision_requested: "var(--color-error)",
+  }[s] || "var(--color-on-surface-variant)");
+
+  const memberCards = team.map(t => {
+    const uid = t.user_id;
+    const name = t.profile?.full_name || "Unknown";
+    const role = t.profile?.role || "";
+    const assignments = byAssignee[uid] || [];
+
+    const typeChips = assignments.map(a => {
+      const label = DRAWING_TYPE_LABELS[a.drawing_type] || a.drawing_type;
+      const dlStr = a.deadline ? ` · ${fmt(a.deadline)}` : "";
+      return `
+        <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
+          padding:3px 10px;border-radius:var(--radius-full);
+          background:var(--color-surface-container);color:var(--color-on-surface)">
+          <span style="width:5px;height:5px;border-radius:50%;flex-shrink:0;
+            background:${statusDot(a.status)}"></span>
+          ${escHtml(label)}${dlStr ? `<span style="color:var(--color-on-surface-variant);font-weight:400">${escHtml(dlStr)}</span>` : ""}
+          <button class="del-drawing-assign-btn" data-id="${a.id}"
+            style="background:none;border:none;cursor:pointer;padding:0;line-height:1;
+              color:var(--color-on-surface-variant);margin-left:2px;font-size:11px"
+            title="Remove assignment">✕</button>
+        </span>`;
+    }).join("");
+
+    return `
+      <div style="padding:12px;background:var(--color-surface-container-low);border-radius:10px">
+        <div style="display:flex;align-items:center;gap:10px;
+          margin-bottom:${assignments.length > 0 ? "8px" : "0"}">
+          <div style="width:34px;height:34px;border-radius:50%;background:var(--color-primary-container);
+            display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <span class="material-symbols-outlined" style="font-size:16px;color:var(--color-primary)">person</span>
+          </div>
+          <div style="flex:1;min-width:0">
+            <p style="font-size:13px;font-weight:700;color:var(--color-on-surface);
+              margin:0;line-height:1.2">${escHtml(name)}</p>
+            <span class="team-chip-role role-${role}" style="font-size:10px">
+              ${ROLE_LABELS[role] || role}</span>
+          </div>
+          <button class="ghost-sm danger-sm unassign-btn" data-uid="${uid}"
+            title="Remove from project">✕</button>
+        </div>
+        ${assignments.length > 0
+          ? `<div style="display:flex;flex-wrap:wrap;gap:4px">${typeChips}</div>`
+          : `<p style="font-size:11px;color:var(--color-on-surface-variant);margin:0">
+               No drawing types assigned yet.</p>`}
+      </div>`;
+  }).join("");
 
   return `
     <div class="dash-section">
-      <!-- Team members -->
-      <div class="dash-section-head">
+      <div class="dash-section-head" style="margin-bottom:14px">
         <div class="dash-section-icon">
           <span class="material-symbols-outlined">group</span>
-          <h2 class="dash-section-title">Team</h2>
+          <h2 class="dash-section-title">Team & Assignments</h2>
         </div>
-        <button class="ghost-sm" id="assignTeamBtn">+ Add</button>
+        <button class="ghost-sm" id="openAssignDesignerBtn"
+          style="display:flex;align-items:center;gap:4px">
+          <span class="material-symbols-outlined" style="font-size:14px">person_add</span>
+          Assign
+        </button>
       </div>
-      <div id="teamSection">
+      <div id="teamSection" style="display:flex;flex-direction:column;gap:8px">
         ${team.length
-          ? `<div class="team-chips" id="teamChips">
-              ${team.map(t => `
-                <div class="team-chip">
-                  <span class="team-chip-name">${escHtml(t.profile?.full_name || "Unknown")}</span>
-                  <span class="team-chip-role role-${t.profile?.role}">${ROLE_LABELS[t.profile?.role] || ""}</span>
-                  <button class="ghost-sm danger-sm unassign-btn" data-uid="${t.user_id}" title="Remove">✕</button>
-                </div>`).join("")}
-             </div>`
-          : `<p class="loading-hint">No team members assigned.</p>`}
-      </div>
-      <div id="assignRow" hidden style="margin-top:8px;display:flex;gap:8px;align-items:flex-end">
-        <label class="field-label" style="flex:1">Add member
-          <select class="ctx-input" id="assignUserSelect"><option value="">Loading…</option></select>
-        </label>
-        <button class="primary-btn btn-sm" id="assignConfirmBtn" style="width:auto">Assign</button>
-        <button class="ghost-sm" id="assignCancelBtn">Cancel</button>
-      </div>
-
-      <!-- Drawing assignments -->
-      <div style="margin-top:20px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-          <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--color-on-surface-variant);margin:0">Drawing Assignments</p>
-          <button class="ghost-sm" id="addDrawingAssignBtn">+ Assign</button>
-        </div>
-        <div id="drawingAssignmentsWrap">
-          ${_drawingAssignments.length
-            ? assignmentRows
-            : `<p class="loading-hint" style="font-size:12px">No drawing types assigned yet.</p>`}
-        </div>
-        <div id="drawingAssignRow" hidden style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
-          <label class="field-label">Drawing Type
-            <select class="ctx-input" id="drawingTypeSelect">
-              <option value="">Select type…</option>
-              ${Object.entries(DRAWING_TYPE_LABELS).map(([k,v]) =>
-                `<option value="${k}">${escHtml(v)}</option>`).join("")}
-            </select>
-          </label>
-          <label class="field-label">Assign To
-            <select class="ctx-input" id="drawingAssigneeSelect">
-              <option value="">Select designer…</option>
-              ${teamDesigners.map(t =>
-                `<option value="${t.user_id}">${escHtml(t.profile?.full_name || "Unknown")}</option>`
-              ).join("")}
-            </select>
-          </label>
-          ${teamDesigners.length === 0
-            ? `<p class="loading-hint" style="font-size:12px">Add designers to the team first.</p>` : ""}
-          <div style="display:flex;gap:8px">
-            <button class="primary-btn btn-sm" id="drawingAssignConfirmBtn" style="width:auto">Assign</button>
-            <button class="ghost-sm" id="drawingAssignCancelBtn">Cancel</button>
-          </div>
-        </div>
+          ? memberCards
+          : `<p class="loading-hint">No team members assigned yet.</p>`}
       </div>
     </div>`;
 }
@@ -787,19 +792,18 @@ function wireInteractions(project) {
   }
 
   if (can.assignTeam()) {
-    document.getElementById("assignTeamBtn")?.addEventListener("click", openAssignRow);
-    document.getElementById("assignCancelBtn")?.addEventListener("click", closeAssignRow);
-    document.getElementById("assignConfirmBtn")?.addEventListener("click", handleAssign);
+    document.getElementById("openAssignDesignerBtn")?.addEventListener("click", openAssignDesignerModal);
+    document.getElementById("assignDesignerModalClose")?.addEventListener("click", closeAssignDesignerModal);
+    document.getElementById("assignDesignerCancelBtn")?.addEventListener("click", closeAssignDesignerModal);
+    document.getElementById("assignDesignerConfirmBtn")?.addEventListener("click", handleAssignDesigner);
+    document.getElementById("modalAddDrawingRowBtn")?.addEventListener("click", addDrawingTypeRow);
+    document.getElementById("modalDesignerSelect")?.addEventListener("change", updateDesignerTeamNote);
     document.querySelectorAll(".unassign-btn").forEach(btn => {
       btn.addEventListener("click", () => handleUnassign(btn.dataset.uid));
     });
-    document.getElementById("addDrawingAssignBtn")?.addEventListener("click", openDrawingAssignRow);
-    document.getElementById("drawingAssignCancelBtn")?.addEventListener("click", closeDrawingAssignRow);
-    document.getElementById("drawingAssignConfirmBtn")?.addEventListener("click", handleDrawingAssign);
     document.querySelectorAll(".del-drawing-assign-btn").forEach(btn => {
       btn.addEventListener("click", () => handleDrawingAssignmentDelete(btn.dataset.id));
     });
-    loadUsersForAssign();
   }
 }
 
@@ -908,38 +912,147 @@ async function submitReview(status) {
   }
 }
 
-// ─── Team assign / unassign ───────────────────────────────────────────────────
-async function loadUsersForAssign() {
+// ─── Assign Designer modal ────────────────────────────────────────────────────
+async function openAssignDesignerModal() {
+  const modal = document.getElementById("assignDesignerModal");
+  const sel   = document.getElementById("modalDesignerSelect");
+
+  sel.innerHTML = `<option value="">Loading…</option>`;
+  document.getElementById("modalDrawingRows").innerHTML = "";
+  document.getElementById("modalNoRowsHint").hidden = false;
+  document.getElementById("assignDesignerError").hidden = true;
+  document.getElementById("modalAssignNotes").value = "";
+  document.getElementById("designerTeamNote").hidden = true;
+  modal.hidden = false;
+
   try {
     const res = await apiFetch("/api/users/list");
     const { users } = await res.json();
-    const sel = document.getElementById("assignUserSelect");
-    if (!sel) return;
-    const assignedIds = new Set(_team.map(t => t.user_id));
-    sel.innerHTML = `<option value="">Select a user…</option>` +
-      (users || []).filter(u => !assignedIds.has(u.id))
-        .map(u => `<option value="${u.id}">${escHtml(u.full_name)} (${ROLE_LABELS[u.role] || u.role})</option>`)
-        .join("");
-  } catch { /* silent */ }
-}
-function openAssignRow()  { const r = document.getElementById("assignRow"); if (r) { r.hidden = false; r.style.display = "flex"; } }
-function closeAssignRow() { const r = document.getElementById("assignRow"); if (r) r.hidden = true; }
+    const teamIds = new Set(_team.map(t => t.user_id));
+    const eligible = (users || []).filter(u =>
+      ["designer", "lead_designer", "admin"].includes(u.role));
+    sel.innerHTML = `<option value="">Select a designer…</option>` +
+      eligible.map(u => {
+        const inTeam = teamIds.has(u.id);
+        return `<option value="${u.id}" data-in-team="${inTeam}">` +
+          `${escHtml(u.full_name)}${inTeam ? " (on team)" : ""} — ${ROLE_LABELS[u.role] || u.role}</option>`;
+      }).join("");
+  } catch {
+    sel.innerHTML = `<option value="">Failed to load users</option>`;
+  }
 
-async function handleAssign() {
-  const userId = document.getElementById("assignUserSelect")?.value;
-  if (!userId) { alert("Select a user to assign."); return; }
-  const btn = document.getElementById("assignConfirmBtn");
-  btn.disabled = true; btn.textContent = "Assigning…";
+  addDrawingTypeRow();
+}
+
+function closeAssignDesignerModal() {
+  document.getElementById("assignDesignerModal").hidden = true;
+}
+
+function updateDesignerTeamNote() {
+  const sel  = document.getElementById("modalDesignerSelect");
+  const note = document.getElementById("designerTeamNote");
+  const opt  = sel.options[sel.selectedIndex];
+  if (!opt?.value) { note.hidden = true; return; }
+  const inTeam = opt.dataset.inTeam === "true";
+  note.hidden = false;
+  note.style.background = inTeam
+    ? "var(--color-tertiary-container)" : "var(--color-surface-container)";
+  note.style.color = inTeam
+    ? "var(--color-on-tertiary-container)" : "var(--color-on-surface-variant)";
+  note.textContent = inTeam
+    ? "Already on the team — new drawing assignments will be added."
+    : "Will be added to the project team automatically.";
+}
+
+function addDrawingTypeRow() {
+  const wrap = document.getElementById("modalDrawingRows");
+  document.getElementById("modalNoRowsHint").hidden = true;
+
+  const row = document.createElement("div");
+  row.style.cssText = "display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end";
+  row.innerHTML = `
+    <label class="field-label" style="margin:0">Drawing Type
+      <select class="ctx-input modal-drawing-type-sel">
+        <option value="">Select type…</option>
+        ${Object.entries(DRAWING_TYPE_LABELS).map(([k, v]) =>
+          `<option value="${k}">${escHtml(v)}</option>`).join("")}
+      </select>
+    </label>
+    <label class="field-label" style="margin:0">Deadline
+      <input class="ctx-input modal-drawing-deadline-inp" type="date" />
+    </label>
+    <button class="ghost-sm danger-sm" type="button" title="Remove"
+      style="align-self:flex-end;margin-bottom:1px">✕</button>`;
+
+  row.querySelector("button").addEventListener("click", () => {
+    row.remove();
+    if (!wrap.children.length) document.getElementById("modalNoRowsHint").hidden = false;
+  });
+
+  wrap.appendChild(row);
+}
+
+async function handleAssignDesigner() {
+  const designerId = document.getElementById("modalDesignerSelect")?.value;
+  const notes      = document.getElementById("modalAssignNotes")?.value.trim() || undefined;
+  const errEl      = document.getElementById("assignDesignerError");
+  const btn        = document.getElementById("assignDesignerConfirmBtn");
+  errEl.hidden = true;
+
+  if (!designerId) {
+    errEl.textContent = "Please select a designer."; errEl.hidden = false; return;
+  }
+  const rowEls = Array.from(document.getElementById("modalDrawingRows").children);
+  if (!rowEls.length) {
+    errEl.textContent = "Add at least one drawing type."; errEl.hidden = false; return;
+  }
+  const assignments = rowEls.map(r => ({
+    drawingType: r.querySelector(".modal-drawing-type-sel")?.value,
+    deadline:    r.querySelector(".modal-drawing-deadline-inp")?.value || null,
+  }));
+  if (assignments.some(a => !a.drawingType)) {
+    errEl.textContent = "Select a drawing type for all rows."; errEl.hidden = false; return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Assigning…";
+
   try {
-    const res = await apiFetch("/api/project/assign-user", {
-      method: "POST", body: JSON.stringify({ projectId: _projectId, userId }),
-    });
-    const d = await res.json();
-    if (res.ok) { closeAssignRow(); await loadAll(); }
-    else { alert(d.error || "Failed to assign team member."); }
+    // Add to team first if not already on it
+    const teamIds = new Set(_team.map(t => t.user_id));
+    if (!teamIds.has(designerId)) {
+      const addRes = await apiFetch("/api/project/assign-user", {
+        method: "POST",
+        body: JSON.stringify({ projectId: _projectId, userId: designerId }),
+      });
+      if (!addRes.ok) {
+        const d = await addRes.json();
+        throw new Error(d.error || "Failed to add designer to team.");
+      }
+    }
+    // Upsert each drawing assignment
+    for (const { drawingType, deadline } of assignments) {
+      const res = await apiFetch("/api/drawings/assignments/upsert", {
+        method: "POST",
+        body: JSON.stringify({
+          projectId: _projectId, drawingType,
+          assignedTo: designerId,
+          deadline: deadline || undefined, notes,
+        }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json();
+        throw new Error(error || `Failed to assign ${drawingType}.`);
+      }
+    }
+    closeAssignDesignerModal();
+    await loadAll();
   } catch (err) {
-    alert("Network error: " + err.message);
-  } finally { btn.disabled = false; btn.textContent = "Assign"; }
+    errEl.textContent = err.message; errEl.hidden = false;
+    btn.disabled = false;
+    btn.innerHTML =
+      `<span class="material-symbols-outlined" style="font-size:15px">person_add</span> Assign Designer`;
+  }
 }
 
 async function handleUnassign(userId) {
@@ -950,33 +1063,6 @@ async function handleUnassign(userId) {
     });
     await loadAll();
   } catch { /* silent */ }
-}
-
-// ─── Drawing assignment ───────────────────────────────────────────────────────
-function openDrawingAssignRow() {
-  const r = document.getElementById("drawingAssignRow");
-  if (r) { r.hidden = false; r.style.display = "flex"; }
-}
-function closeDrawingAssignRow() {
-  const r = document.getElementById("drawingAssignRow");
-  if (r) r.hidden = true;
-}
-
-async function handleDrawingAssign() {
-  const drawingType = document.getElementById("drawingTypeSelect")?.value;
-  const assignedTo  = document.getElementById("drawingAssigneeSelect")?.value;
-  if (!drawingType) { alert("Select a drawing type."); return; }
-  if (!assignedTo)  { alert("Select a designer to assign."); return; }
-  const btn = document.getElementById("drawingAssignConfirmBtn");
-  btn.disabled = true; btn.textContent = "Assigning…";
-  try {
-    const res = await apiFetch("/api/drawings/assignments/upsert", {
-      method: "POST",
-      body: JSON.stringify({ projectId: _projectId, drawingType, assignedTo }),
-    });
-    if (res.ok) { closeDrawingAssignRow(); await loadAll(); }
-    else { const { error } = await res.json(); alert(error || "Failed to assign."); }
-  } finally { btn.disabled = false; btn.textContent = "Assign"; }
 }
 
 async function handleDrawingAssignmentDelete(assignmentId) {
