@@ -4,6 +4,7 @@ let _session, _profile;
 let _currentProjectId = null;
 let _reviewDrawingId  = null;
 let _allDesigners     = [];    // profiles with role=designer
+let _projectAssignments = [];   // assignments for the selected project
 
 const DRAWING_TYPES = [
   { value: "civil",         label: "Civil" },
@@ -29,6 +30,7 @@ const DRAWING_TYPES = [
   renderNav(_profile);
 
   const isLead = ["lead_designer", "admin"].includes(_profile.role);
+  const isDesigner = _profile.role === "designer";
 
   await Promise.all([
     loadProjects(),
@@ -38,10 +40,16 @@ const DRAWING_TYPES = [
   // Show assignment panel for lead/admin
   if (isLead) {
     document.getElementById("assignmentPanel").hidden = false;
+    document.getElementById("leadTimelinePanel").hidden = false;
     document.getElementById("addAssignmentBtn").addEventListener("click", openAssignModal);
     document.getElementById("assignModalClose").addEventListener("click", closeAssignModal);
     document.getElementById("assignCancelBtn").addEventListener("click", closeAssignModal);
     document.getElementById("assignSaveBtn").addEventListener("click", handleAssignSave);
+    await loadLeadTimeline();
+  }
+
+  if (isDesigner) {
+    document.getElementById("myAssignmentPanel").hidden = false;
   }
 
   // Pre-select from URL
@@ -58,7 +66,7 @@ const DRAWING_TYPES = [
   document.getElementById("createModalSubmit")?.addEventListener("click", handleCreateProject);
 
   document.getElementById("projectSelect").addEventListener("change", e => selectProject(e.target.value));
-  document.getElementById("uploadBtn").addEventListener("click", () => { document.getElementById("uploadModal").hidden = false; });
+  document.getElementById("uploadBtn").addEventListener("click", () => openUploadModal());
   document.getElementById("uploadModalClose").addEventListener("click", closeUploadModal);
   document.getElementById("uploadCancelBtn").addEventListener("click", closeUploadModal);
   document.getElementById("uploadForm").addEventListener("submit", handleUpload);
@@ -136,6 +144,7 @@ const ROLE_LABELS = {
 
 function selectProject(projectId) {
   _currentProjectId = projectId;
+  _projectAssignments = [];
   document.getElementById("uploadBtn").disabled = !projectId;
   document.getElementById("downloadZipBtn").disabled = !projectId;
   document.getElementById("progressWrap").hidden = !projectId;
@@ -145,6 +154,8 @@ function selectProject(projectId) {
     document.getElementById("drawingsHint").hidden = false;
     document.getElementById("drawingsByType").innerHTML = "";
     document.getElementById("assignmentList").innerHTML = `<p class="loading-hint">No drawing types assigned yet.</p>`;
+    document.getElementById("myAssignmentList").innerHTML = `<p class="loading-hint">Select a project to view your assignments.</p>`;
+    setDesignerUploadTypes([]);
     updateProgress([]);
     return;
   }
@@ -153,10 +164,12 @@ function selectProject(projectId) {
 
 async function loadAll(projectId) {
   const isLead = ["lead_designer", "admin"].includes(_profile.role);
-  await Promise.all([
+  const loads = [
     loadDrawings(projectId),
     isLead ? loadAssignments(projectId) : loadProgressOnly(projectId),
-  ]);
+  ];
+  if (isLead) loads.push(loadLeadTimeline());
+  await Promise.all(loads);
 }
 
 // Progress bar for non-lead roles (read-only, no assignment panel)
@@ -164,8 +177,14 @@ async function loadProgressOnly(projectId) {
   try {
     const res = await apiFetch(`/api/drawings/assignments?projectId=${projectId}`);
     const { assignments } = await res.json();
+    _projectAssignments = assignments || [];
     updateProgress(assignments);
-  } catch { updateProgress([]); }
+    loadMyAssignments(assignments || []);
+  } catch {
+    _projectAssignments = [];
+    updateProgress([]);
+    loadMyAssignments([]);
+  }
 }
 
 // ─── Progress bar ─────────────────────────────────────────────────────────────
@@ -198,6 +217,7 @@ async function loadAssignments(projectId) {
   try {
     const res = await apiFetch(`/api/drawings/assignments?projectId=${projectId}`);
     const { assignments } = await res.json();
+    _projectAssignments = assignments || [];
 
     updateProgress(assignments);
 
@@ -208,7 +228,7 @@ async function loadAssignments(projectId) {
 
     wrap.innerHTML = `<div class="assignment-table">
       <div class="assignment-header">
-        <span>Type</span><span>Designer</span><span>Deadline</span><span>Status</span><span></span>
+        <span>Type</span><span>Designer</span><span>Assigned</span><span>Deadline</span><span>Submitted</span><span>Completed</span><span>Status</span><span></span>
       </div>
       ${assignments.map(a => assignmentRow(a)).join("")}
     </div>`;
@@ -223,17 +243,103 @@ async function loadAssignments(projectId) {
 
 function assignmentRow(a) {
   const { icon, label, cls } = assignmentStatusMeta(a.status);
-  const deadline = a.deadline
-    ? new Date(a.deadline + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-    : "—";
+  const assignedAt = fmtDateTime(a.assigned_at || a.created_at);
+  const deadline = fmtDateOnly(a.deadline);
+  const submittedAt = fmtDateTime(a.submitted_at);
+  const completedAt = fmtDateTime(a.completed_at);
   const isOverdue = a.deadline && a.status !== "approved" && new Date(a.deadline) < new Date();
   return `
     <div class="assignment-row">
       <span class="assignment-type">${capitalize(a.drawing_type)}</span>
       <span class="assignment-designer">${escHtml(a.assignee?.full_name || "Unassigned")}</span>
+      <span class="assignment-time">${assignedAt}</span>
       <span class="assignment-deadline${isOverdue ? " overdue" : ""}">${deadline}${isOverdue ? " ⚠" : ""}</span>
+      <span class="assignment-time">${submittedAt}</span>
+      <span class="assignment-time">${completedAt}</span>
       <span class="badge ${cls}">${icon} ${label}</span>
       <button class="ghost-sm danger-sm delete-assignment-btn" data-id="${a.id}" title="Remove assignment">✕</button>
+    </div>`;
+}
+
+async function loadLeadTimeline() {
+  if (!["lead_designer", "admin"].includes(_profile.role)) return;
+  const wrap = document.getElementById("leadTimelineList");
+  try {
+    const res = await apiFetch("/api/drawings/assignments?mine=1");
+    const { assignments } = await res.json();
+    if (!assignments?.length) {
+      wrap.innerHTML = `<p class="loading-hint">You have not assigned any drawings yet.</p>`;
+      return;
+    }
+
+    wrap.innerHTML = `<div class="assignment-table assignment-table-wide">
+      <div class="assignment-header">
+        <span>Project</span><span>Type</span><span>Designer</span><span>Assigned</span><span>Submitted</span><span>Completed</span><span>Status</span>
+      </div>
+      ${assignments.map(a => {
+        const { icon, label, cls } = assignmentStatusMeta(a.status);
+        return `
+          <div class="assignment-row">
+            <span class="assignment-project">${escHtml(a.project?.name || "Unknown project")}</span>
+            <span class="assignment-type">${capitalize(a.drawing_type)}</span>
+            <span class="assignment-designer">${escHtml(a.assignee?.full_name || "Unassigned")}</span>
+            <span class="assignment-time">${fmtDateTime(a.assigned_at || a.created_at)}</span>
+            <span class="assignment-time">${fmtDateTime(a.submitted_at)}</span>
+            <span class="assignment-time">${fmtDateTime(a.completed_at)}</span>
+            <span class="badge ${cls}">${icon} ${label}</span>
+          </div>`;
+      }).join("")}
+    </div>`;
+  } catch {
+    wrap.innerHTML = `<p class="loading-hint">Failed to load assignment timeline.</p>`;
+  }
+}
+
+function loadMyAssignments(assignments) {
+  if (_profile.role !== "designer") return;
+  const wrap = document.getElementById("myAssignmentList");
+  const sorted = [...assignments].sort((a, b) =>
+    new Date(b.assigned_at || b.created_at || 0) - new Date(a.assigned_at || a.created_at || 0)
+  );
+  const uploadableTypes = sorted
+    .filter(a => ["assigned", "revision_requested", "rejected"].includes(a.status))
+    .map(a => a.drawing_type);
+  setDesignerUploadTypes(uploadableTypes);
+  document.getElementById("uploadBtn").disabled = !_currentProjectId || uploadableTypes.length === 0;
+
+  if (!sorted.length) {
+    wrap.innerHTML = `<p class="loading-hint">No drawings assigned to you for this project yet.</p>`;
+    return;
+  }
+
+  wrap.innerHTML = `<div class="assignment-table">
+    <div class="assignment-header">
+      <span>Type</span><span>Assigned By</span><span>Assigned</span><span>Deadline</span><span>Submitted</span><span>Completed</span><span>Status</span><span></span>
+    </div>
+    ${sorted.map(a => myAssignmentRow(a)).join("")}
+  </div>`;
+
+  wrap.querySelectorAll(".assignment-upload-btn").forEach(btn => {
+    btn.addEventListener("click", () => openUploadModal(btn.dataset.drawingType || ""));
+  });
+}
+
+function myAssignmentRow(a) {
+  const { icon, label, cls } = assignmentStatusMeta(a.status);
+  const isOverdue = a.deadline && a.status !== "approved" && new Date(a.deadline) < new Date();
+  const canUpload = ["assigned", "revision_requested", "rejected"].includes(a.status);
+  return `
+    <div class="assignment-row">
+      <span class="assignment-type">${capitalize(a.drawing_type)}</span>
+      <span class="assignment-designer">${escHtml(a.assigner?.full_name || "Lead Designer")}</span>
+      <span class="assignment-time">${fmtDateTime(a.assigned_at || a.created_at)}</span>
+      <span class="assignment-deadline${isOverdue ? " overdue" : ""}">${fmtDateOnly(a.deadline)}${isOverdue ? " ⚠" : ""}</span>
+      <span class="assignment-time">${fmtDateTime(a.submitted_at)}</span>
+      <span class="assignment-time">${fmtDateTime(a.completed_at)}</span>
+      <span class="badge ${cls}">${icon} ${label}</span>
+      ${canUpload
+        ? `<button class="primary-btn btn-sm assignment-upload-btn" data-drawing-type="${escHtml(a.drawing_type)}">Upload</button>`
+        : `<span class="assignment-action-hint">Awaiting review</span>`}
     </div>`;
 }
 
@@ -244,7 +350,7 @@ async function deleteAssignment(assignmentId) {
       method: "POST",
       body: JSON.stringify({ assignmentId }),
     });
-    loadAssignments(_currentProjectId);
+    loadAll(_currentProjectId);
   } catch (err) {
     alert("Failed to remove: " + err.message);
   }
@@ -274,6 +380,7 @@ async function handleAssignSave() {
   errEl.hidden = true;
 
   if (!drawingType) { errEl.textContent = "Please select a drawing type."; errEl.hidden = false; return; }
+  if (!assignedTo) { errEl.textContent = "Please select a designer."; errEl.hidden = false; return; }
 
   btn.disabled = true;
   btn.textContent = "Saving…";
@@ -285,7 +392,7 @@ async function handleAssignSave() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed");
     closeAssignModal();
-    loadAssignments(_currentProjectId);
+    loadAll(_currentProjectId);
   } catch (err) {
     errEl.textContent = err.message;
     errEl.hidden = false;
@@ -494,6 +601,47 @@ async function handleZipDownload() {
 }
 
 // ─── Upload ───────────────────────────────────────────────────────────────────
+function setDesignerUploadTypes(types) {
+  if (_profile.role !== "designer") return;
+  const sel = document.getElementById("drawingType");
+  const unique = [...new Set(types)];
+  if (!unique.length) {
+    sel.innerHTML = `<option value="">No assigned drawing types in this project</option>`;
+    sel.value = "";
+    return;
+  }
+  sel.innerHTML =
+    `<option value="">Select type…</option>` +
+    unique.map(t => `<option value="${t}">${capitalize(t)}</option>`).join("");
+}
+
+function openUploadModal(prefillType = "") {
+  if (!_currentProjectId) return;
+  document.getElementById("uploadForm").reset();
+  const errEl = document.getElementById("uploadError");
+  const submitBtn = document.getElementById("uploadSubmitBtn");
+  errEl.hidden = true;
+  submitBtn.disabled = false;
+
+  if (_profile.role === "designer") {
+    const uploadableTypes = _projectAssignments
+      .filter(a => ["assigned", "revision_requested", "rejected"].includes(a.status))
+      .map(a => a.drawing_type);
+    setDesignerUploadTypes(uploadableTypes);
+    if (!uploadableTypes.length) {
+      errEl.textContent = "No uploadable drawing assignments found for this project.";
+      errEl.hidden = false;
+      submitBtn.disabled = true;
+    }
+  }
+
+  if (prefillType) {
+    document.getElementById("drawingType").value = prefillType;
+  }
+
+  document.getElementById("uploadModal").hidden = false;
+}
+
 function closeUploadModal() {
   document.getElementById("uploadModal").hidden = true;
   document.getElementById("uploadForm").reset();
@@ -623,6 +771,26 @@ function fileToBase64(file) {
 function fmtDate(iso) {
   if (!iso) return "";
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function fmtDateOnly(dateStr) {
+  if (!dateStr) return "—";
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function fmtBytes(n) {

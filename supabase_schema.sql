@@ -360,6 +360,9 @@ CREATE TABLE IF NOT EXISTS drawing_assignments (
   drawing_type TEXT        NOT NULL,
   assigned_to  UUID        REFERENCES profiles(id) ON DELETE SET NULL,
   assigned_by  UUID        REFERENCES profiles(id) ON DELETE SET NULL,
+  assigned_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  submitted_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
   deadline     DATE,
   notes        TEXT,
   status       TEXT        NOT NULL DEFAULT 'assigned',
@@ -367,6 +370,11 @@ CREATE TABLE IF NOT EXISTS drawing_assignments (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT drawing_assignments_project_type_unique UNIQUE (project_id, drawing_type)
 );
+
+ALTER TABLE drawing_assignments
+  ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_da_project_id  ON drawing_assignments(project_id);
 CREATE INDEX IF NOT EXISTS idx_da_assigned_to ON drawing_assignments(assigned_to);

@@ -232,7 +232,10 @@ module.exports = async (req, res) => {
       return sendJson(res, 200, await drawingReview(req, await readJson(req)));
     }
     if (req.method === "GET" && pathname === "/api/drawings/assignments") {
-      return sendJson(res, 200, await drawingAssignmentsList(req, url.searchParams.get("projectId")));
+      return sendJson(res, 200, await drawingAssignmentsList(req, {
+        projectId: url.searchParams.get("projectId"),
+        mineOnly: url.searchParams.get("mine") === "1",
+      }));
     }
     if (req.method === "POST" && pathname === "/api/drawings/assignments/upsert") {
       return sendJson(res, 200, await drawingAssignmentUpsert(req, await readJson(req)));

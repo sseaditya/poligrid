@@ -63,15 +63,48 @@
       </div>
     </div>
 
+    <!-- ── Designer assignment panel (designer only) ───────────────────────── -->
+    <div id="myAssignmentPanel" hidden>
+      <section class="dash-section" style="margin-bottom:28px">
+        <div class="dash-section-head">
+          <div>
+            <h2 class="dash-section-title">My Drawing Assignments</h2>
+            <p class="dash-section-hint">Assigned drawings, due dates, and completion timeline for this project.</p>
+          </div>
+        </div>
+        <div id="myAssignmentList">
+          <p class="loading-hint">Select a project to view your assignments.</p>
+        </div>
+      </section>
+    </div>
+
     <!-- ── Assignment panel (lead_designer / admin only) ────────────────────── -->
     <div id="assignmentPanel" hidden>
       <section class="dash-section" style="margin-bottom:28px">
         <div class="dash-section-head">
-          <h2 class="dash-section-title">Drawing Assignments</h2>
+          <div>
+            <h2 class="dash-section-title">Project Drawing Assignments</h2>
+            <p class="dash-section-hint">Assign drawing types to designers and track handoff to completion.</p>
+          </div>
           <button class="primary-btn btn-sm" id="addAssignmentBtn">+ Assign Drawing Type</button>
         </div>
         <div id="assignmentList">
           <p class="loading-hint">No drawing types assigned yet.</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- ── Lead assignment timeline (lead_designer / admin only) ───────────── -->
+    <div id="leadTimelinePanel" hidden>
+      <section class="dash-section" style="margin-bottom:28px">
+        <div class="dash-section-head">
+          <div>
+            <h2 class="dash-section-title">Assignments You Made</h2>
+            <p class="dash-section-hint">Cross-project timeline with assignment, submission, and completion dates.</p>
+          </div>
+        </div>
+        <div id="leadTimelineList">
+          <p class="loading-hint">Loading assignment timeline…</p>
         </div>
       </section>
     </div>

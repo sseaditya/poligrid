@@ -164,6 +164,22 @@ async function drawingUpload(req, body) {
 
   const sb = db.getClient();
 
+  // Designers can upload only drawing types explicitly assigned to them.
+  if (profile.role === "designer") {
+    const { data: assignment, error: assignmentError } = await sb
+      .from("drawing_assignments")
+      .select("id, status")
+      .eq("project_id", projectId)
+      .eq("drawing_type", drawingType)
+      .eq("assigned_to", profile.id)
+      .maybeSingle();
+
+    if (assignmentError) throw httpError(500, assignmentError.message);
+    if (!assignment) {
+      throw httpError(403, "You can only upload drawing types assigned to you for this project.");
+    }
+  }
+
   const { data: existing } = await sb
     .from("drawings")
     .select("version_number")
@@ -196,21 +212,24 @@ async function drawingUpload(req, body) {
 
   if (error) throw httpError(500, error.message);
 
-  // Sync assignment status → pending_review
-  await sb
-    .from("drawing_assignments")
-    .update({ status: "pending_review", updated_at: new Date().toISOString() })
-    .eq("project_id", projectId)
-    .eq("drawing_type", drawingType)
-    .eq("status", "assigned"); // only bump if still in 'assigned' state
+  const nowIso = new Date().toISOString();
 
-  // Also update if revision was requested (re-submitted)
-  await sb
+  // Sync assignment lifecycle → submitted for review
+  let assignmentUpdate = sb
     .from("drawing_assignments")
-    .update({ status: "pending_review", updated_at: new Date().toISOString() })
+    .update({
+      status: "pending_review",
+      submitted_at: nowIso,
+      completed_at: null,
+      updated_at: nowIso,
+    })
     .eq("project_id", projectId)
-    .eq("drawing_type", drawingType)
-    .eq("status", "revision_requested");
+    .eq("drawing_type", drawingType);
+
+  if (profile.role === "designer") {
+    assignmentUpdate = assignmentUpdate.eq("assigned_to", profile.id);
+  }
+  await assignmentUpdate;
 
   // Auto-create review task for all active lead designers
   const { data: leads } = await sb
@@ -271,10 +290,17 @@ async function drawingReview(req, body) {
     .single();
 
   if (drawing) {
+    const nowIso = new Date().toISOString();
+
     // Sync assignment status
+    const assignmentPatch = {
+      status,
+      updated_at: nowIso,
+      completed_at: status === "approved" ? nowIso : null,
+    };
     await sb
       .from("drawing_assignments")
-      .update({ status, updated_at: new Date().toISOString() })
+      .update(assignmentPatch)
       .eq("project_id", drawing.project_id)
       .eq("drawing_type", drawing.drawing_type);
 
@@ -324,21 +350,33 @@ async function drawingReview(req, body) {
   return { ok: true };
 }
 
-// ─── List drawing assignments for a project ───────────────────────────────────
+// ─── List drawing assignments (project-scoped or mine-only) ──────────────────
 async function drawingAssignmentsList(req, projectId) {
-  await requireAuth(req);
-  if (!projectId) throw httpError(400, "projectId required.");
+  const { profile } = await requireAuth(req);
+  const parsed = typeof projectId === "object" && projectId !== null
+    ? projectId
+    : { projectId };
+  const { projectId: pid, mineOnly = false } = parsed;
 
   const sb = db.getClient();
-  const { data, error } = await sb
+  let query = sb
     .from("drawing_assignments")
     .select(`
       *,
+      project:projects(id, name, client_name, status),
       assignee:profiles!assigned_to(id, full_name, email, role),
       assigner:profiles!assigned_by(id, full_name)
     `)
-    .eq("project_id", projectId)
-    .order("created_at", { ascending: true });
+    .order("assigned_at", { ascending: false });
+
+  if (pid) query = query.eq("project_id", pid);
+  if (mineOnly) query = query.eq("assigned_by", profile.id);
+
+  if (profile.role === "designer") {
+    query = query.eq("assigned_to", profile.id);
+  }
+
+  const { data, error } = await query;
 
   if (error) throw httpError(500, error.message);
   return { assignments: data || [] };
@@ -348,43 +386,87 @@ async function drawingAssignmentsList(req, projectId) {
 async function drawingAssignmentUpsert(req, body) {
   const { profile } = await requireAuth(req, ["admin", "lead_designer"]);
   const { projectId, drawingType, assignedTo, deadline, notes } = body;
-  if (!projectId || !drawingType) throw httpError(400, "projectId, drawingType required.");
+  if (!projectId || !drawingType || !assignedTo) {
+    throw httpError(400, "projectId, drawingType, assignedTo required.");
+  }
 
   const sb = db.getClient();
-  const { error } = await sb
-    .from("drawing_assignments")
-    .upsert(
-      {
-        project_id:   projectId,
-        drawing_type: drawingType,
-        assigned_to:  assignedTo || null,
-        assigned_by:  profile.id,
-        deadline:     deadline || null,
-        notes:        notes || null,
-        updated_at:   new Date().toISOString(),
-      },
-      { onConflict: "project_id,drawing_type" }
-    );
+  const nowIso = new Date().toISOString();
 
-  if (error) {
-    console.error("[drawingAssignmentUpsert]", error.message);
-    throw httpError(500, error.message);
+  const { data: existing, error: existingError } = await sb
+    .from("drawing_assignments")
+    .select("id, assigned_to")
+    .eq("project_id", projectId)
+    .eq("drawing_type", drawingType)
+    .maybeSingle();
+
+  if (existingError) throw httpError(500, existingError.message);
+
+  const shouldResetLifecycle = !existing || existing.assigned_to !== assignedTo;
+
+  if (existing) {
+    const updatePayload = {
+      assigned_to: assignedTo,
+      assigned_by: profile.id,
+      deadline: deadline || null,
+      notes: notes || null,
+      updated_at: nowIso,
+      ...(shouldResetLifecycle
+        ? {
+            status: "assigned",
+            assigned_at: nowIso,
+            submitted_at: null,
+            completed_at: null,
+          }
+        : {}),
+    };
+
+    const { error } = await sb
+      .from("drawing_assignments")
+      .update(updatePayload)
+      .eq("id", existing.id);
+
+    if (error) {
+      console.error("[drawingAssignmentUpsert:update]", error.message);
+      throw httpError(500, error.message);
+    }
+  } else {
+    const { error } = await sb
+      .from("drawing_assignments")
+      .insert({
+        project_id: projectId,
+        drawing_type: drawingType,
+        assigned_to: assignedTo,
+        assigned_by: profile.id,
+        assigned_at: nowIso,
+        submitted_at: null,
+        completed_at: null,
+        deadline: deadline || null,
+        notes: notes || null,
+        status: "assigned",
+        updated_at: nowIso,
+      });
+
+    if (error) {
+      console.error("[drawingAssignmentUpsert:insert]", error.message);
+      throw httpError(500, error.message);
+    }
   }
 
   // Give the designer access to this project
-  if (assignedTo) {
-    await sb.from("project_assignments").upsert(
-      { project_id: projectId, user_id: assignedTo, assigned_by: profile.id },
-      { onConflict: "project_id,user_id" }
-    );
+  await sb.from("project_assignments").upsert(
+    { project_id: projectId, user_id: assignedTo, assigned_by: profile.id },
+    { onConflict: "project_id,user_id" }
+  );
 
-    // Create an upload task for the designer
+  // Create an upload task only when this is a new or reassigned owner.
+  if (shouldResetLifecycle) {
     const deadlineStr = deadline ? ` by ${new Date(deadline).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : "";
     await sb.from("tasks").insert({
       assigned_to:  assignedTo,
       assigned_by:  profile.id,
       project_id:   projectId,
-      title:        `Upload ${drawingType} drawing`,
+      title:        `Complete ${drawingType} drawing`,
       description:  `Please upload the ${drawingType} drawing${deadlineStr}.${notes ? " Notes: " + notes : ""}`,
       priority:     deadline ? "high" : "medium",
       due_date:     deadline || null,

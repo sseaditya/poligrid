@@ -446,6 +446,68 @@
 .drawing-progress-fill.approved { background: var(--success); }
 .drawing-progress-fill.review   { background: var(--color-outline); }
 
+/* ── Assignment workflow tables (designer / lead) ────────────────────────── */
+.assignment-table {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-x: auto;
+}
+.assignment-header,
+.assignment-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1.2fr 0.9fr 0.9fr 0.9fr 0.9fr 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 980px;
+}
+.assignment-table-wide .assignment-header,
+.assignment-table-wide .assignment-row {
+  grid-template-columns: 1.4fr 0.9fr 1.2fr 1fr 1fr 1fr 1fr;
+  min-width: 900px;
+}
+.assignment-header {
+  padding: 8px 12px;
+}
+.assignment-header span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-on-surface-variant);
+}
+.assignment-row {
+  background: var(--color-surface-container-low);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+.assignment-row:hover {
+  background: var(--color-surface-container);
+}
+.assignment-type {
+  font-weight: 700;
+  color: var(--color-on-surface);
+}
+.assignment-project {
+  font-weight: 700;
+  color: var(--color-on-surface);
+}
+.assignment-designer,
+.assignment-time,
+.assignment-deadline,
+.assignment-action-hint {
+  font-size: 12px;
+  color: var(--color-on-surface-variant);
+}
+.assignment-action-hint {
+  font-weight: 600;
+}
+.assignment-deadline.overdue {
+  color: var(--color-error);
+  font-weight: 700;
+}
+
 /* ── Admin team ───────────────────────────────────────────────────────────── */
 .team-wrap  { margin-top: 16px; }
 .team-chips { display: flex; flex-wrap: wrap; gap: 8px; }

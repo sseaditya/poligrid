@@ -153,7 +153,10 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, await drawingReview(req, await readJson(req)));
     }
     if (req.method === "GET" && url.pathname === "/api/drawings/assignments") {
-      return sendJson(res, 200, await drawingAssignmentsList(req, url.searchParams.get("projectId")));
+      return sendJson(res, 200, await drawingAssignmentsList(req, {
+        projectId: url.searchParams.get("projectId"),
+        mineOnly: url.searchParams.get("mine") === "1",
+      }));
     }
     if (req.method === "POST" && url.pathname === "/api/drawings/assignments/upsert") {
       return sendJson(res, 200, await drawingAssignmentUpsert(req, await readJson(req)));
