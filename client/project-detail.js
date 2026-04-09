@@ -927,14 +927,18 @@ function closeAssignRow() { const r = document.getElementById("assignRow"); if (
 
 async function handleAssign() {
   const userId = document.getElementById("assignUserSelect")?.value;
-  if (!userId) return;
+  if (!userId) { alert("Select a user to assign."); return; }
   const btn = document.getElementById("assignConfirmBtn");
   btn.disabled = true; btn.textContent = "Assigning…";
   try {
     const res = await apiFetch("/api/project/assign-user", {
       method: "POST", body: JSON.stringify({ projectId: _projectId, userId }),
     });
+    const d = await res.json();
     if (res.ok) { closeAssignRow(); await loadAll(); }
+    else { alert(d.error || "Failed to assign team member."); }
+  } catch (err) {
+    alert("Network error: " + err.message);
   } finally { btn.disabled = false; btn.textContent = "Assign"; }
 }
 

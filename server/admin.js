@@ -43,7 +43,7 @@ async function usersList(req) {
   const { profile } = await requireAuth(req, ["admin", "ceo", "lead_designer"]);
   const sb = db.getClient();
   // Lead designers only need to see designers (for drawing/team assignment)
-  let query = sb.from("profiles").select("*").order("created_at", { ascending: true });
+  let query = sb.from("profiles").select("*").eq("is_active", true).order("created_at", { ascending: true });
   if (profile.role === "lead_designer") query = query.eq("role", "designer");
   const { data, error } = await query;
   if (error) throw httpError(500, error.message);
@@ -91,7 +91,10 @@ async function projectAssignUser(req, body) {
     { project_id: projectId, user_id: userId, assigned_by: profile.id },
     { onConflict: "project_id,user_id" }
   );
-  if (error) throw httpError(500, error.message);
+  if (error) {
+    console.error("[projectAssignUser]", error.message);
+    throw httpError(500, error.message);
+  }
   return { ok: true };
 }
 

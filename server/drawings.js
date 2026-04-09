@@ -351,24 +351,25 @@ async function drawingAssignmentUpsert(req, body) {
   if (!projectId || !drawingType) throw httpError(400, "projectId, drawingType required.");
 
   const sb = db.getClient();
-  const { data, error } = await sb
+  const { error } = await sb
     .from("drawing_assignments")
     .upsert(
       {
-        project_id:  projectId,
+        project_id:   projectId,
         drawing_type: drawingType,
-        assigned_to: assignedTo || null,
-        assigned_by: profile.id,
-        deadline:    deadline || null,
-        notes:       notes || null,
-        updated_at:  new Date().toISOString(),
+        assigned_to:  assignedTo || null,
+        assigned_by:  profile.id,
+        deadline:     deadline || null,
+        notes:        notes || null,
+        updated_at:   new Date().toISOString(),
       },
       { onConflict: "project_id,drawing_type" }
-    )
-    .select("id")
-    .single();
+    );
 
-  if (error) throw httpError(500, error.message);
+  if (error) {
+    console.error("[drawingAssignmentUpsert]", error.message);
+    throw httpError(500, error.message);
+  }
 
   // Give the designer access to this project
   if (assignedTo) {
@@ -390,7 +391,7 @@ async function drawingAssignmentUpsert(req, body) {
     });
   }
 
-  return { ok: true, id: data?.id };
+  return { ok: true };
 }
 
 // ─── Delete a drawing assignment ──────────────────────────────────────────────
