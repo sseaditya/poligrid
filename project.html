@@ -6,22 +6,28 @@
   <title>Poligrid — Project</title>
   <link rel="stylesheet" href="/theme.css" />
 </head>
-<body class="dash-body">
+<body class="dash-body page-project">
 
-  <header class="top-bar">
+  <!-- Light frosted-glass top bar (overridden via .page-project) -->
+  <header class="top-bar" id="topBar">
     <div class="top-bar-left">
       <a href="/homepage" class="logo-link"><span class="logo-text">Poligrid</span></a>
-      <a href="/projects" class="page-title-link">← Projects</a>
     </div>
     <nav class="dash-nav" id="dashNav"></nav>
     <div class="top-bar-right" id="userChipWrap"></div>
   </header>
 
-  <main class="dash-main" id="projectMain">
-    <p class="loading-hint">Loading project…</p>
-  </main>
+  <!-- Sidebar + canvas layout -->
+  <div class="proj-page-layout">
+    <aside class="proj-sidebar" id="projSidebar">
+      <!-- rendered by JS -->
+    </aside>
+    <div class="proj-canvas" id="projectMain">
+      <p class="loading-hint">Loading project…</p>
+    </div>
+  </div>
 
-  <!-- ── Edit Details Modal ─────────────────────────────────────────────────── -->
+  <!-- ── Edit Details Modal ──────────────────────────────────────────────── -->
   <div class="modal-overlay" id="editModal" hidden>
     <div class="modal-card">
       <div class="modal-header">
@@ -61,7 +67,7 @@
     </div>
   </div>
 
-  <!-- ── Drawing Review Modal (Lead Designer / Admin) ────────────────────────── -->
+  <!-- ── Drawing Review Modal ────────────────────────────────────────────── -->
   <div class="modal-overlay" id="reviewModal" hidden>
     <div class="modal-card">
       <div class="modal-header">
@@ -71,7 +77,8 @@
       <div class="modal-body">
         <div class="review-drawing-name" id="reviewDrawingTitle">—</div>
         <label class="field-label">Comments / Feedback
-          <textarea class="ctx-input" id="reviewComments" rows="4" placeholder="Optional notes for the designer…" style="resize:vertical"></textarea>
+          <textarea class="ctx-input" id="reviewComments" rows="4"
+            placeholder="Optional notes for the designer…" style="resize:vertical"></textarea>
         </label>
         <div class="auth-error" id="reviewError" hidden></div>
         <div class="modal-footer review-actions">
@@ -88,7 +95,6 @@
     </div>
   </div>
 
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="client/auth.js"></script>
   <script src="client/project-detail.js"></script>
