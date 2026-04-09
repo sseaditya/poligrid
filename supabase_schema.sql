@@ -1,400 +1,437 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- Poligrid – Supabase Schema
+-- Poligrid – Complete Supabase Schema
 -- Run this entire file in the Supabase SQL Editor (Dashboard → SQL Editor → New Query)
+-- Safe to re-run: uses CREATE IF NOT EXISTS / ALTER … ADD COLUMN IF NOT EXISTS
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- Enable UUID generation
-create extension if not exists "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Shared updated_at trigger function
-create or replace function update_updated_at_column()
-returns trigger as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$ language plpgsql;
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ─── Enums ────────────────────────────────────────────────────────────────────
+
+DO $$ BEGIN
+  CREATE TYPE user_role AS ENUM ('admin', 'sales', 'designer', 'lead_designer', 'ceo');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE drawing_type AS ENUM (
+    'civil', 'electrical', 'plumbing', 'hvac',
+    'firefighting', 'architectural', 'structural',
+    'interior', 'landscape', 'other'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE drawing_status AS ENUM (
+    'pending_review', 'approved', 'rejected', 'revision_requested'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE task_status AS ENUM ('pending', 'in_progress', 'completed', 'cancelled');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE task_priority AS ENUM ('low', 'medium', 'high');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ─── 1. Projects ─────────────────────────────────────────────────────────────
-create table projects (
-  id             uuid primary key,          -- client-generated UUID
-  created_at     timestamptz not null default now(),
-  updated_at     timestamptz not null default now(),
-  property_type  text,                      -- Apartment | Villa | Commercial
-  bhk            text,                      -- 2BHK | Open Plan Office | …
-  total_area_m2  numeric,
-  notes          text,
-  bhk_type       text,                      -- derived by AI
-  orientation    text,
-  summary        text
-);
-create trigger projects_updated_at before update on projects
-  for each row execute function update_updated_at_column();
 
--- ─── 2. Floor Plans ──────────────────────────────────────────────────────────
-create table floor_plans (
-  id             uuid primary key default uuid_generate_v4(),
-  project_id     uuid not null references projects(id) on delete cascade,
-  created_at     timestamptz not null default now(),
-  file_name      text,
-  storage_path   text,          -- path inside bucket poligrid-floor-plans
-  analysis_raw   jsonb,         -- full /api/analyze/floorplan response
-  analyzed_at    timestamptz
+CREATE TABLE IF NOT EXISTS projects (
+  id             UUID        PRIMARY KEY,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  name           TEXT,
+  client_name    TEXT,
+  client_email   TEXT,
+  client_phone   TEXT,
+  status         TEXT        NOT NULL DEFAULT 'active',
+  property_type  TEXT,
+  bhk            TEXT,
+  bhk_type       TEXT,
+  total_area_m2  NUMERIC,
+  global_brief   TEXT,
+  notes          TEXT,
+  orientation    TEXT,
+  summary        TEXT,
+  advance_payment_done BOOLEAN NOT NULL DEFAULT FALSE,
+  created_by     UUID        REFERENCES auth.users(id)
 );
 
--- ─── 3. Inspiration Images ───────────────────────────────────────────────────
-create table inspiration_images (
-  id             uuid primary key default uuid_generate_v4(),
-  project_id     uuid not null references projects(id) on delete cascade,
-  created_at     timestamptz not null default now(),
-  file_name      text,
-  storage_path   text,          -- path inside bucket poligrid-inspiration
-  sort_order     integer not null default 0
+DO $$ BEGIN
+  CREATE TRIGGER projects_updated_at BEFORE UPDATE ON projects
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE INDEX IF NOT EXISTS idx_projects_created_by ON projects(created_by);
+CREATE INDEX IF NOT EXISTS idx_projects_status     ON projects(status);
+
+-- ─── 2. Profiles (extends Supabase auth.users) ───────────────────────────────
+
+CREATE TABLE IF NOT EXISTS profiles (
+  id          UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name   TEXT        NOT NULL,
+  email       TEXT        NOT NULL UNIQUE,
+  phone       TEXT,
+  role        user_role   NOT NULL DEFAULT 'sales',
+  is_active   BOOLEAN     NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ─── 4. Rooms ─────────────────────────────────────────────────────────────────
-create table rooms (
-  id             uuid primary key default uuid_generate_v4(),
-  project_id     uuid not null references projects(id) on delete cascade,
-  floor_plan_id  uuid references floor_plans(id),
-  created_at     timestamptz not null default now(),
-  updated_at     timestamptz not null default now(),
-  label          text not null,             -- e.g. LR-01
-  name           text,                      -- e.g. Living Room
-  room_type      text,                      -- bedroom | living | kitchen | …
-  bbox_x_pct     numeric,                   -- 0–1 fraction of image width
-  bbox_y_pct     numeric,
-  bbox_w_pct     numeric,
-  bbox_h_pct     numeric,
-  width_m        numeric,
-  length_m       numeric,
-  notes          text,
-  walls          jsonb,                     -- [{ side, isExterior, adjacentRoomLabel, openings[] }]
-  fp_placements  jsonb                      -- furniture drawn in floor plan
-);
-create trigger rooms_updated_at before update on rooms
-  for each row execute function update_updated_at_column();
+DO $$ BEGIN
+  CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- ─── 5. Camera Pins ──────────────────────────────────────────────────────────
-create table camera_pins (
-  id                  uuid primary key default uuid_generate_v4(),
-  project_id          uuid not null references projects(id) on delete cascade,
-  client_id           text not null,        -- id assigned by frontend
-  created_at          timestamptz not null default now(),
-  updated_at          timestamptz not null default now(),
-  x_m                 numeric,
-  y_m                 numeric,
-  angle_deg           numeric,
-  fov_deg             numeric default 60,
-  room_label          text,
-  brief               text,
-  photo_file_name     text,
-  photo_storage_path  text,                 -- path inside bucket poligrid-pin-photos
-  unique (project_id, client_id)
-);
-create trigger camera_pins_updated_at before update on camera_pins
-  for each row execute function update_updated_at_column();
+-- Auto-create profile on new Supabase Auth sign-up
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO profiles (id, email, full_name, role, is_active)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', SPLIT_PART(NEW.email, '@', 1)),
+    COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'sales'),
+    FALSE
+  )
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- ─── 6. Furniture Placements ─────────────────────────────────────────────────
-create table furniture_placements (
-  id          uuid primary key default uuid_generate_v4(),
-  project_id  uuid not null references projects(id) on delete cascade,
-  created_at  timestamptz not null default now(),
-  client_id   text,                         -- id assigned by frontend
-  module_id   text,
-  label       text,
-  type        text,                         -- cabinet | bed | seating | table | decor | custom
-  room_label  text,
-  room_type   text,
-  x_m         numeric,
-  y_m         numeric,
-  w_m         numeric,
-  d_m         numeric,
-  h_m         numeric,
-  rotation_y  numeric default 0,
-  wall        text,                         -- north | south | east | west | center
-  color       text,
-  source      text                          -- manual | ai_suggestion | auto_place | floor_plan
+DO $$ BEGIN
+  CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ─── 3. Invitations ──────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS invitations (
+  email       TEXT        PRIMARY KEY,
+  role        TEXT        NOT NULL,
+  full_name   TEXT,
+  invited_by  UUID        REFERENCES profiles(id),
+  invited_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ─── 7. Renders ──────────────────────────────────────────────────────────────
-create table renders (
-  id                    uuid primary key default uuid_generate_v4(),
-  project_id            uuid not null references projects(id) on delete cascade,
-  camera_pin_client_id  text,
-  created_at            timestamptz not null default now(),
-  room_label            text,
-  storage_path          text,               -- path inside bucket poligrid-renders
-  model_used            text,
-  furniture_list        jsonb,              -- [{ label, type, wM, dM, hM }]
-  generation_type       text               -- edit | generate
+-- ─── 4. Project Assignments ───────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS project_assignments (
+  id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id  UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  user_id     UUID        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  assigned_by UUID        REFERENCES profiles(id),
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(project_id, user_id)
 );
 
--- ─── 8. BOQ Items ────────────────────────────────────────────────────────────
-create table boq_items (
-  id          uuid primary key default uuid_generate_v4(),
-  project_id  uuid not null references projects(id) on delete cascade,
-  created_at  timestamptz not null default now(),
-  source      text,                         -- floor_plan_analysis | furniture_generated
-  category    text,                         -- Civil work | Plumbing | Flooring | …
-  item        text,
-  qty         numeric,
-  unit        text,
-  rate        numeric,
-  amount      numeric
+CREATE INDEX IF NOT EXISTS idx_project_assignments_project_id ON project_assignments(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_assignments_user_id    ON project_assignments(user_id);
+
+-- ─── 5. Floor Plans ──────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS floor_plans (
+  id             UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id     UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  file_name      TEXT,
+  storage_path   TEXT,
+  analysis_raw   JSONB,
+  analyzed_at    TIMESTAMPTZ
 );
 
--- ─── 9. Scene Exports ────────────────────────────────────────────────────────
-create table scene_exports (
-  id                   uuid primary key default uuid_generate_v4(),
-  project_id           uuid not null references projects(id) on delete cascade,
-  created_at           timestamptz not null default now(),
-  scene_json           jsonb,
-  boq_csv_storage_path text                 -- path inside bucket poligrid-exports
+CREATE INDEX IF NOT EXISTS idx_floor_plans_project_id ON floor_plans(project_id);
+
+-- ─── 6. Inspiration Images ───────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS inspiration_images (
+  id           UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id   UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  file_name    TEXT,
+  storage_path TEXT,
+  sort_order   INTEGER     NOT NULL DEFAULT 0
 );
 
--- ─── Indexes for common queries ───────────────────────────────────────────────
-create index on floor_plans    (project_id);
-create index on inspiration_images (project_id);
-create index on rooms          (project_id);
-create index on camera_pins    (project_id);
-create index on furniture_placements (project_id);
-create index on renders        (project_id);
-create index on boq_items      (project_id, source);
-create index on scene_exports  (project_id);
+CREATE INDEX IF NOT EXISTS idx_inspiration_images_project_id ON inspiration_images(project_id);
 
--- ─── Migration: Add Project Versions (run after initial schema) ───────────────
--- Run these statements in the Supabase SQL Editor if the schema was already deployed.
+-- ─── 7. Rooms ─────────────────────────────────────────────────────────────────
 
--- 1. Version table — each version shares floor plan + rooms + pins but has its own
---    brief, inspiration images, renders, and BOQ.
-create table if not exists project_versions (
-  id                        uuid primary key default uuid_generate_v4(),
-  project_id                uuid not null references projects(id) on delete cascade,
-  version_number            integer not null,
-  created_at                timestamptz not null default now(),
-  design_brief              text,
-  regen_inspiration_paths   jsonb,   -- storage paths of version-specific inspiration images
-  unique(project_id, version_number)
-);
-create index if not exists idx_project_versions_project_id on project_versions(project_id);
-
--- 2. Link renders to a version
-alter table renders add column if not exists version_id uuid references project_versions(id) on delete set null;
-create index if not exists idx_renders_version_id on renders(version_id);
-
--- 3. Link furniture BOQ items to a version
-alter table boq_items add column if not exists version_id uuid references project_versions(id) on delete set null;
-create index if not exists idx_boq_items_version_id on boq_items(version_id);
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Migration: Role-Based Access Control (run after initial schema)
--- ─────────────────────────────────────────────────────────────────────────────
-
--- ─── Enums ───────────────────────────────────────────────────────────────────
-
-create type user_role as enum ('admin', 'sales', 'designer', 'lead_designer', 'ceo');
-
-create type drawing_type as enum (
-  'civil', 'electrical', 'plumbing', 'hvac',
-  'firefighting', 'architectural', 'structural',
-  'interior', 'landscape', 'other'
+CREATE TABLE IF NOT EXISTS rooms (
+  id             UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id     UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  floor_plan_id  UUID        REFERENCES floor_plans(id),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  label          TEXT        NOT NULL,
+  name           TEXT,
+  room_type      TEXT,
+  bbox_x_pct     NUMERIC,
+  bbox_y_pct     NUMERIC,
+  bbox_w_pct     NUMERIC,
+  bbox_h_pct     NUMERIC,
+  width_m        NUMERIC,
+  length_m       NUMERIC,
+  notes          TEXT,
+  walls          JSONB,
+  fp_placements  JSONB
 );
 
-create type drawing_status as enum (
-  'pending_review', 'approved', 'rejected', 'revision_requested'
+DO $$ BEGIN
+  CREATE TRIGGER rooms_updated_at BEFORE UPDATE ON rooms
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE INDEX IF NOT EXISTS idx_rooms_project_id ON rooms(project_id);
+
+-- ─── 8. Camera Pins ──────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS camera_pins (
+  id                  UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id          UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  client_id           TEXT        NOT NULL,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  x_m                 NUMERIC,
+  y_m                 NUMERIC,
+  angle_deg           NUMERIC,
+  fov_deg             NUMERIC     DEFAULT 60,
+  room_label          TEXT,
+  brief               TEXT,
+  photo_file_name     TEXT,
+  photo_storage_path  TEXT,
+  UNIQUE(project_id, client_id)
 );
 
-create type task_status as enum ('pending', 'in_progress', 'completed', 'cancelled');
+DO $$ BEGIN
+  CREATE TRIGGER camera_pins_updated_at BEFORE UPDATE ON camera_pins
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-create type task_priority as enum ('low', 'medium', 'high');
+CREATE INDEX IF NOT EXISTS idx_camera_pins_project_id ON camera_pins(project_id);
 
--- ─── Profiles (extends Supabase auth.users) ──────────────────────────────────
--- One row per user, auto-created on sign-up via trigger below.
--- Admin panel manages the `role` column to grant/revoke access.
+-- ─── 9. Furniture Placements ─────────────────────────────────────────────────
 
-create table if not exists profiles (
-  id          uuid primary key references auth.users(id) on delete cascade,
-  full_name   text not null,
-  email       text not null unique,
-  phone       text,                             -- optional contact number, editable via profile page
-  role        user_role not null default 'sales',
-  is_active   boolean not null default false,  -- blocked until admin activates
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS furniture_placements (
+  id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id  UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  client_id   TEXT,
+  module_id   TEXT,
+  label       TEXT,
+  type        TEXT,
+  room_label  TEXT,
+  room_type   TEXT,
+  x_m         NUMERIC,
+  y_m         NUMERIC,
+  w_m         NUMERIC,
+  d_m         NUMERIC,
+  h_m         NUMERIC,
+  rotation_y  NUMERIC     DEFAULT 0,
+  wall        TEXT,
+  color       TEXT,
+  source      TEXT
 );
 
--- Migration: add phone column if deploying to an existing DB
--- alter table profiles add column if not exists phone text;
+CREATE INDEX IF NOT EXISTS idx_furniture_placements_project_id ON furniture_placements(project_id);
 
-create trigger update_profiles_updated_at before update on profiles
-  for each row execute function update_updated_at_column();
+-- ─── 10. Project Versions ─────────────────────────────────────────────────────
 
--- Auto-insert a profile row whenever a new user signs up in Supabase Auth.
--- The role can be pre-seeded via user_metadata when the admin creates the invite.
--- Every new Google sign-in is blocked by default (is_active = false).
--- Admin must activate users via the admin panel or SQL before they can log in.
-create or replace function handle_new_user()
-returns trigger as $$
-begin
-  insert into profiles (id, email, full_name, role, is_active)
-  values (
-    new.id,
-    new.email,
-    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
-    'sales',
-    false
-  );
-  return new;
-end;
-$$ language plpgsql security definer;
-
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function handle_new_user();
-
--- ─── Extend projects with ownership + client info ────────────────────────────
-
-alter table projects add column if not exists created_by   uuid references profiles(id);
-alter table projects add column if not exists client_name  text;
-alter table projects add column if not exists client_email text;
-alter table projects add column if not exists client_phone text;
--- status: active | on_hold | completed | cancelled
-alter table projects add column if not exists status       text not null default 'active';
-
-create index if not exists idx_projects_created_by on projects(created_by);
-create index if not exists idx_projects_status     on projects(status);
-
--- ─── Project Assignments ─────────────────────────────────────────────────────
--- Controls which users have access to which projects.
--- Sales are assigned by admin; designers/lead designers are assigned by admin or lead designer.
-
-create table if not exists project_assignments (
-  id          uuid primary key default uuid_generate_v4(),
-  project_id  uuid not null references projects(id) on delete cascade,
-  user_id     uuid not null references profiles(id) on delete cascade,
-  assigned_by uuid references profiles(id),
-  assigned_at timestamptz not null default now(),
-  unique(project_id, user_id)
+CREATE TABLE IF NOT EXISTS project_versions (
+  id                      UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id              UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  version_number          INTEGER     NOT NULL,
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  design_brief            TEXT,
+  regen_inspiration_paths JSONB,
+  UNIQUE(project_id, version_number)
 );
 
-create index if not exists idx_project_assignments_project_id on project_assignments(project_id);
-create index if not exists idx_project_assignments_user_id    on project_assignments(user_id);
+CREATE INDEX IF NOT EXISTS idx_project_versions_project_id ON project_versions(project_id);
 
--- ─── Drawings ────────────────────────────────────────────────────────────────
--- Designers upload drawings per project. Lead designers review and approve them.
--- Storage bucket: poligrid-drawings (create as private in Supabase dashboard)
+-- ─── 11. Renders ─────────────────────────────────────────────────────────────
 
-create table if not exists drawings (
-  id              uuid primary key default uuid_generate_v4(),
-  project_id      uuid not null references projects(id) on delete cascade,
-  uploaded_by     uuid not null references profiles(id),
-  drawing_type    drawing_type not null,
-  title           text not null,
-  description     text,
-  file_path       text not null,   -- path inside bucket poligrid-drawings
-  file_name       text not null,
-  file_size_bytes bigint,
-  status          drawing_status not null default 'pending_review',
-  version_number  integer not null default 1,
-  created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS renders (
+  id                    UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id            UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  version_id            UUID        REFERENCES project_versions(id) ON DELETE SET NULL,
+  camera_pin_client_id  TEXT,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  room_label            TEXT,
+  storage_path          TEXT,
+  model_used            TEXT,
+  furniture_list        JSONB,
+  generation_type       TEXT
 );
 
-create index if not exists idx_drawings_project_id   on drawings(project_id);
-create index if not exists idx_drawings_uploaded_by  on drawings(uploaded_by);
-create index if not exists idx_drawings_status       on drawings(status);
+CREATE INDEX IF NOT EXISTS idx_renders_project_id  ON renders(project_id);
+CREATE INDEX IF NOT EXISTS idx_renders_version_id  ON renders(version_id);
 
-create trigger update_drawings_updated_at before update on drawings
-  for each row execute function update_updated_at_column();
+-- ─── 12. BOQ Items ───────────────────────────────────────────────────────────
 
--- ─── Drawing Reviews ─────────────────────────────────────────────────────────
--- Each review by a lead designer appends a row; the drawing's status column is
--- updated to match the latest review outcome.
-
-create table if not exists drawing_reviews (
-  id           uuid primary key default uuid_generate_v4(),
-  drawing_id   uuid not null references drawings(id) on delete cascade,
-  reviewed_by  uuid not null references profiles(id),  -- must be lead_designer
-  status       drawing_status not null,                -- approved | rejected | revision_requested
-  comments     text,
-  reviewed_at  timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS boq_items (
+  id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id  UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  version_id  UUID        REFERENCES project_versions(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  source      TEXT,
+  category    TEXT,
+  item        TEXT,
+  qty         NUMERIC,
+  unit        TEXT,
+  rate        NUMERIC,
+  amount      NUMERIC
 );
 
-create index if not exists idx_drawing_reviews_drawing_id on drawing_reviews(drawing_id);
+CREATE INDEX IF NOT EXISTS idx_boq_items_project_id  ON boq_items(project_id);
+CREATE INDEX IF NOT EXISTS idx_boq_items_version_id  ON boq_items(version_id);
 
--- ─── Tasks ───────────────────────────────────────────────────────────────────
--- Drives each user's personal homepage. Can be linked to a project and/or a drawing.
+-- ─── 13. Scene Exports ───────────────────────────────────────────────────────
 
-create table if not exists tasks (
-  id           uuid primary key default uuid_generate_v4(),
-  assigned_to  uuid not null references profiles(id) on delete cascade,
-  assigned_by  uuid references profiles(id),
-  project_id   uuid references projects(id) on delete set null,
-  drawing_id   uuid references drawings(id) on delete set null,
-  title        text not null,
-  description  text,
-  status       task_status not null default 'pending',
-  priority     task_priority not null default 'medium',
-  due_date     date,
-  completed_at timestamptz,
-  created_at   timestamptz not null default now(),
-  updated_at   timestamptz not null default now()
+CREATE TABLE IF NOT EXISTS scene_exports (
+  id                   UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id           UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  scene_json           JSONB,
+  boq_csv_storage_path TEXT
 );
 
-create index if not exists idx_tasks_assigned_to on tasks(assigned_to);
-create index if not exists idx_tasks_project_id  on tasks(project_id);
-create index if not exists idx_tasks_status      on tasks(status);
+CREATE INDEX IF NOT EXISTS idx_scene_exports_project_id ON scene_exports(project_id);
 
-create trigger update_tasks_updated_at before update on tasks
-  for each row execute function update_updated_at_column();
+-- ─── 14. Drawings ────────────────────────────────────────────────────────────
 
--- ─── CEO Dashboard View ───────────────────────────────────────────────────────
--- Aggregated per-project snapshot for the CEO drill-down dashboard.
+CREATE TABLE IF NOT EXISTS drawings (
+  id              UUID           PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id      UUID           NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  uploaded_by     UUID           NOT NULL REFERENCES profiles(id),
+  drawing_type    drawing_type   NOT NULL,
+  title           TEXT           NOT NULL,
+  description     TEXT,
+  file_path       TEXT           NOT NULL,
+  file_name       TEXT           NOT NULL,
+  file_size_bytes BIGINT,
+  status          drawing_status NOT NULL DEFAULT 'pending_review',
+  version_number  INTEGER        NOT NULL DEFAULT 1,
+  created_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
 
-create or replace view ceo_project_dashboard as
-select
-  p.id                                                                       as project_id,
-  p.name                                                                     as project_name,
-  p.status                                                                   as project_status,
+DO $$ BEGIN
+  CREATE TRIGGER update_drawings_updated_at BEFORE UPDATE ON drawings
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE INDEX IF NOT EXISTS idx_drawings_project_id  ON drawings(project_id);
+CREATE INDEX IF NOT EXISTS idx_drawings_uploaded_by ON drawings(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_drawings_status      ON drawings(status);
+
+-- ─── 15. Drawing Reviews ─────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS drawing_reviews (
+  id           UUID           PRIMARY KEY DEFAULT uuid_generate_v4(),
+  drawing_id   UUID           NOT NULL REFERENCES drawings(id) ON DELETE CASCADE,
+  reviewed_by  UUID           NOT NULL REFERENCES profiles(id),
+  status       drawing_status NOT NULL,
+  comments     TEXT,
+  reviewed_at  TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_drawing_reviews_drawing_id ON drawing_reviews(drawing_id);
+
+-- ─── 16. Drawing Assignments ─────────────────────────────────────────────────
+-- Lead designer assigns a drawing type to a specific designer per project.
+-- status mirrors the latest drawing submission: assigned | pending_review | approved | revision_requested | rejected
+
+CREATE TABLE IF NOT EXISTS drawing_assignments (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id   UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  drawing_type TEXT        NOT NULL,
+  assigned_to  UUID        REFERENCES profiles(id) ON DELETE SET NULL,
+  assigned_by  UUID        REFERENCES profiles(id) ON DELETE SET NULL,
+  deadline     DATE,
+  notes        TEXT,
+  status       TEXT        NOT NULL DEFAULT 'assigned',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT drawing_assignments_project_type_unique UNIQUE (project_id, drawing_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_da_project_id  ON drawing_assignments(project_id);
+CREATE INDEX IF NOT EXISTS idx_da_assigned_to ON drawing_assignments(assigned_to);
+
+-- ─── 17. Tasks ───────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS tasks (
+  id           UUID          PRIMARY KEY DEFAULT uuid_generate_v4(),
+  assigned_to  UUID          NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  assigned_by  UUID          REFERENCES profiles(id),
+  project_id   UUID          REFERENCES projects(id) ON DELETE SET NULL,
+  drawing_id   UUID          REFERENCES drawings(id) ON DELETE SET NULL,
+  title        TEXT          NOT NULL,
+  description  TEXT,
+  status       task_status   NOT NULL DEFAULT 'pending',
+  priority     task_priority NOT NULL DEFAULT 'medium',
+  due_date     DATE,
+  completed_at TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+);
+
+DO $$ BEGIN
+  CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON tasks
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_id  ON tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_status      ON tasks(status);
+
+-- ─── 18. CEO Dashboard View ──────────────────────────────────────────────────
+
+CREATE OR REPLACE VIEW ceo_project_dashboard AS
+SELECT
+  p.id                                                                       AS project_id,
+  p.name                                                                     AS project_name,
+  p.status                                                                   AS project_status,
   p.client_name,
   p.created_at,
-  creator.full_name                                                          as sales_person,
-  count(distinct pa.user_id)                                                 as team_size,
-  count(distinct d.id) filter (where d.status = 'pending_review')           as drawings_pending_review,
-  count(distinct d.id) filter (where d.status = 'approved')                 as drawings_approved,
-  count(distinct d.id) filter (where d.status = 'revision_requested')       as drawings_needs_revision,
-  count(distinct t.id) filter (where t.status = 'pending')                  as tasks_pending,
-  count(distinct t.id) filter (where t.status = 'completed')                as tasks_completed
-from projects p
-left join profiles creator          on p.created_by = creator.id
-left join project_assignments pa    on p.id = pa.project_id
-left join drawings d                on p.id = d.project_id
-left join tasks t                   on p.id = t.project_id
-group by p.id, p.name, p.status, p.client_name, p.created_at, creator.full_name;
+  creator.full_name                                                          AS sales_person,
+  COUNT(DISTINCT pa.user_id)                                                 AS team_size,
+  COUNT(DISTINCT d.id) FILTER (WHERE d.status = 'pending_review')           AS drawings_pending_review,
+  COUNT(DISTINCT d.id) FILTER (WHERE d.status = 'approved')                 AS drawings_approved,
+  COUNT(DISTINCT d.id) FILTER (WHERE d.status = 'revision_requested')       AS drawings_needs_revision,
+  COUNT(DISTINCT t.id) FILTER (WHERE t.status = 'pending')                  AS tasks_pending,
+  COUNT(DISTINCT t.id) FILTER (WHERE t.status = 'completed')                AS tasks_completed
+FROM projects p
+LEFT JOIN profiles creator          ON p.created_by = creator.id
+LEFT JOIN project_assignments pa    ON p.id = pa.project_id
+LEFT JOIN drawings d                ON p.id = d.project_id
+LEFT JOIN tasks t                   ON p.id = t.project_id
+GROUP BY p.id, p.name, p.status, p.client_name, p.created_at, creator.full_name;
 
--- ─── Invitations (pre-invite before first login) ─────────────────────────────
--- Admin adds an email here. When the user signs in via Google OAuth, requireAuth
--- reads this table to set the correct role + activate the profile automatically.
--- Also supports auth.admin.createUser() path where role is stored in user_metadata.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Storage Buckets (create manually in Supabase Dashboard → Storage)
+-- ─────────────────────────────────────────────────────────────────────────────
+--   poligrid-floor-plans  — Public
+--   poligrid-inspiration  — Public
+--   poligrid-pin-photos   — Public
+--   poligrid-renders      — Public
+--   poligrid-exports      — Public
+--   poligrid-drawings     — Private (serve via signed URLs)
 
-create table if not exists invitations (
-  email       text primary key,
-  role        text not null,
-  full_name   text,
-  invited_by  uuid references profiles(id),
-  invited_at  timestamptz not null default now()
-);
-
--- ─── Storage Bucket Note ─────────────────────────────────────────────────────
--- Create the following bucket manually in Supabase Dashboard → Storage:
---   Name: poligrid-drawings
---   Public: No (private — serve files via signed URLs)
-
--- ─── One-time Bootstrap: Activate the first admin ────────────────────────────
--- Run AFTER sseaditya@gmail.com signs in with Google for the first time.
--- (Sign-in creates the profile row with is_active=false; this unlocks it.)
---
--- update profiles
--- set is_active = true, role = 'admin'
--- where email = 'sseaditya@gmail.com';
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Bootstrap: activate first admin after their first Google sign-in
+-- ─────────────────────────────────────────────────────────────────────────────
+-- UPDATE profiles SET is_active = TRUE, role = 'admin' WHERE email = 'sseaditya@gmail.com';

@@ -215,17 +215,6 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/project/versions") {
       return sendJson(res, 200, await projectLoadVersions(url.searchParams.get("id")));
     }
-    // ── Project team management ───────────────────────────────────────────────
-    if (req.method === "GET" && url.pathname === "/api/project/team") {
-      return sendJson(res, 200, await projectTeamGet(req, url.searchParams.get("id")));
-    }
-    if (req.method === "POST" && url.pathname === "/api/project/assign-user") {
-      return sendJson(res, 200, await projectAssignUser(req, await readJson(req)));
-    }
-    if (req.method === "POST" && url.pathname === "/api/project/unassign-user") {
-      return sendJson(res, 200, await projectUnassignUser(req, await readJson(req)));
-    }
-
     if (req.method === "GET" && url.pathname === "/api/sales/projects") {
       const auth = await requireAuth(req, ["sales", "admin", "ceo"]);
       return sendJson(res, 200, await salesProjectList(auth));
@@ -247,6 +236,17 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "POST" && url.pathname === "/api/project/update") {
       return sendJson(res, 200, await projectUpdate(req, await readJson(req)));
     }
+    // ── Project team (must be before the catch-all below) ────────────────────
+    if (req.method === "GET" && url.pathname === "/api/project/team") {
+      return sendJson(res, 200, await projectTeamGet(req, url.searchParams.get("id")));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/assign-user") {
+      return sendJson(res, 200, await projectAssignUser(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/project/unassign-user") {
+      return sendJson(res, 200, await projectUnassignUser(req, await readJson(req)));
+    }
+    // ── Project action catch-all (legacy fitout planner actions) ─────────────
     if (req.method === "POST" && url.pathname.startsWith("/api/project/")) {
       const auth   = await getAuthProfile(req);
       const body   = await readJson(req);

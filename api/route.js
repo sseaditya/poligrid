@@ -180,6 +180,19 @@ module.exports = async (req, res) => {
     if (req.method === "POST" && pathname === "/api/project/advance-payment") {
       return sendJson(res, 200, await projectAdvancePayment(req, await readJson(req)));
     }
+
+    // ── Project team (must be before the catch-all below) ────────────────────
+    if (req.method === "GET" && pathname === "/api/project/team") {
+      return sendJson(res, 200, await projectTeamGet(req, url.searchParams.get("id")));
+    }
+    if (req.method === "POST" && pathname === "/api/project/assign-user") {
+      return sendJson(res, 200, await projectAssignUser(req, await readJson(req)));
+    }
+    if (req.method === "POST" && pathname === "/api/project/unassign-user") {
+      return sendJson(res, 200, await projectUnassignUser(req, await readJson(req)));
+    }
+
+    // ── Project action catch-all (legacy fitout planner actions) ─────────────
     if (req.method === "POST" && pathname.startsWith("/api/project/")) {
       const auth   = await getAuthProfile(req);
       const body   = await readJson(req);
@@ -191,17 +204,6 @@ module.exports = async (req, res) => {
     if (req.method === "GET" && pathname === "/api/sales/projects") {
       const auth = await requireAuth(req, ["sales", "admin", "ceo"]);
       return sendJson(res, 200, await salesProjectList(auth));
-    }
-
-    // ── Project team ──────────────────────────────────────────────────────────
-    if (req.method === "GET" && pathname === "/api/project/team") {
-      return sendJson(res, 200, await projectTeamGet(req, url.searchParams.get("id")));
-    }
-    if (req.method === "POST" && pathname === "/api/project/assign-user") {
-      return sendJson(res, 200, await projectAssignUser(req, await readJson(req)));
-    }
-    if (req.method === "POST" && pathname === "/api/project/unassign-user") {
-      return sendJson(res, 200, await projectUnassignUser(req, await readJson(req)));
     }
 
     // ── Drawings ────────────────────────────────────────────────────────────
