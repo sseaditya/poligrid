@@ -24,7 +24,8 @@ let _session, _profile;
   }
 
   if (_profile.role === "designer") {
-    await setupDesignerDashboard();
+    window.location.href = "/designer_home";
+    return;
   } else if (_profile.role === "lead_designer") {
     window.location.href = "/lead_designer_home";
     return;
