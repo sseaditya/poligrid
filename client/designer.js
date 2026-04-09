@@ -302,7 +302,7 @@ function loadMyAssignments(assignments) {
     new Date(b.assigned_at || b.created_at || 0) - new Date(a.assigned_at || a.created_at || 0)
   );
   const uploadableTypes = sorted
-    .filter(a => ["assigned", "revision_requested", "rejected"].includes(a.status))
+    .filter(a => ["assigned", "revision_requested"].includes(a.status))
     .map(a => a.drawing_type);
   setDesignerUploadTypes(uploadableTypes);
   document.getElementById("uploadBtn").disabled = !_currentProjectId || uploadableTypes.length === 0;
@@ -327,7 +327,20 @@ function loadMyAssignments(assignments) {
 function myAssignmentRow(a) {
   const { icon, label, cls } = assignmentStatusMeta(a.status);
   const isOverdue = a.deadline && a.status !== "approved" && new Date(a.deadline) < new Date();
-  const canUpload = ["assigned", "revision_requested", "rejected"].includes(a.status);
+
+  let actionHtml;
+  if (a.status === "assigned") {
+    actionHtml = `<button class="primary-btn btn-sm assignment-upload-btn" data-drawing-type="${escHtml(a.drawing_type)}">Upload</button>`;
+  } else if (a.status === "revision_requested") {
+    actionHtml = `<button class="primary-btn btn-sm assignment-upload-btn" data-drawing-type="${escHtml(a.drawing_type)}" style="background:linear-gradient(135deg,#d97706,#92400e)">Replace File</button>`;
+  } else if (a.status === "pending_review") {
+    actionHtml = `<span class="assignment-action-hint">Awaiting review</span>`;
+  } else if (a.status === "approved") {
+    actionHtml = `<span class="assignment-action-hint" style="color:var(--success);font-weight:600">✓ Finalised</span>`;
+  } else {
+    actionHtml = `<span class="assignment-action-hint">—</span>`;
+  }
+
   return `
     <div class="assignment-row">
       <span class="assignment-type">${capitalize(a.drawing_type)}</span>
@@ -337,9 +350,7 @@ function myAssignmentRow(a) {
       <span class="assignment-time">${fmtDateTime(a.submitted_at)}</span>
       <span class="assignment-time">${fmtDateTime(a.completed_at)}</span>
       <span class="badge ${cls}">${icon} ${label}</span>
-      ${canUpload
-        ? `<button class="primary-btn btn-sm assignment-upload-btn" data-drawing-type="${escHtml(a.drawing_type)}">Upload</button>`
-        : `<span class="assignment-action-hint">Awaiting review</span>`}
+      ${actionHtml}
     </div>`;
 }
 
@@ -445,6 +456,12 @@ async function loadDrawings(projectId) {
         btn.addEventListener("click", () => openReviewModal(btn.dataset.id, btn.dataset.title));
       });
     }
+    // Wire replace buttons on cards (designer only, revision_requested)
+    if (_profile.role === "designer") {
+      wrap.querySelectorAll(".assignment-upload-btn").forEach(btn => {
+        btn.addEventListener("click", () => openUploadModal(btn.dataset.drawingType || ""));
+      });
+    }
   } catch {
     hint.textContent = "Failed to load drawings.";
   }
@@ -452,6 +469,10 @@ async function loadDrawings(projectId) {
 
 function drawingCard(d) {
   const canReview = ["lead_designer", "admin"].includes(_profile.role) && d.status === "pending_review";
+  // Designers can only replace their own drawing when revision is requested
+  const canReplace = _profile.role === "designer"
+    && d.status === "revision_requested"
+    && d.uploaded_by === _profile.id;
   const latestReview = d.drawing_reviews?.[0];
   const { icon, label, cls } = statusMeta(d.status);
   const ext = (d.file_name || "").split(".").pop().toLowerCase();
@@ -499,6 +520,12 @@ function drawingCard(d) {
             data-id="${d.id}"
             data-title="${escHtml(d.title)}">
             Review
+          </button>` : ""}
+        ${canReplace ? `
+          <button class="primary-btn btn-sm assignment-upload-btn"
+            data-drawing-type="${escHtml(d.drawing_type)}"
+            style="background:linear-gradient(135deg,#d97706,#92400e)">
+            Replace File
           </button>` : ""}
       </div>
     </div>`;
@@ -620,18 +647,36 @@ function openUploadModal(prefillType = "") {
   document.getElementById("uploadForm").reset();
   const errEl = document.getElementById("uploadError");
   const submitBtn = document.getElementById("uploadSubmitBtn");
+  const modalTitle = document.getElementById("uploadModalTitle");
   errEl.hidden = true;
   submitBtn.disabled = false;
 
   if (_profile.role === "designer") {
-    const uploadableTypes = _projectAssignments
-      .filter(a => ["assigned", "revision_requested", "rejected"].includes(a.status))
-      .map(a => a.drawing_type);
+    const uploadableAssignments = _projectAssignments
+      .filter(a => ["assigned", "revision_requested"].includes(a.status));
+    const uploadableTypes = uploadableAssignments.map(a => a.drawing_type);
     setDesignerUploadTypes(uploadableTypes);
+
     if (!uploadableTypes.length) {
-      errEl.textContent = "No uploadable drawing assignments found for this project.";
+      errEl.textContent = "No uploadable drawing assignments found for this project. Either all drawings are approved or awaiting review.";
       errEl.hidden = false;
       submitBtn.disabled = true;
+    }
+
+    // Update modal title: "Replace Drawing" if this is a revision
+    const prefillAssignment = prefillType
+      ? uploadableAssignments.find(a => a.drawing_type === prefillType)
+      : null;
+    const isRevision = prefillAssignment?.status === "revision_requested";
+    if (modalTitle) {
+      modalTitle.textContent = isRevision ? "Replace Drawing" : "Upload Drawing";
+    }
+    if (isRevision) {
+      submitBtn.style.background = "linear-gradient(135deg,#d97706,#92400e)";
+      submitBtn.textContent = "Replace File";
+    } else {
+      submitBtn.style.background = "";
+      submitBtn.textContent = "Upload";
     }
   }
 
@@ -646,6 +691,10 @@ function closeUploadModal() {
   document.getElementById("uploadModal").hidden = true;
   document.getElementById("uploadForm").reset();
   document.getElementById("uploadError").hidden = true;
+  const title = document.getElementById("uploadModalTitle");
+  if (title) title.textContent = "Upload Drawing";
+  const submitBtn = document.getElementById("uploadSubmitBtn");
+  if (submitBtn) { submitBtn.style.background = ""; submitBtn.textContent = "Upload"; }
 }
 
 async function handleUpload(e) {

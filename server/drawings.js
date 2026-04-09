@@ -178,6 +178,12 @@ async function drawingUpload(req, body) {
     if (!assignment) {
       throw httpError(403, "You can only upload drawing types assigned to you for this project.");
     }
+    if (assignment.status === "pending_review") {
+      throw httpError(409, "Drawing already submitted and awaiting lead designer review. You cannot upload again until the lead has reviewed it.");
+    }
+    if (assignment.status === "approved") {
+      throw httpError(403, "This drawing has been approved and is finalised. No further uploads are allowed.");
+    }
   }
 
   const { data: existing } = await sb
