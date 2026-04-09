@@ -75,7 +75,7 @@ async function projectTeamGet(req, projectId) {
   const sb = db.getClient();
   const { data, error } = await sb
     .from("project_assignments")
-    .select("*, profile:profiles(id, full_name, email, role)")
+    .select("*, profile:profiles!user_id(id, full_name, email, role)")
     .eq("project_id", projectId);
   if (error) throw httpError(500, error.message);
   return { team: data };

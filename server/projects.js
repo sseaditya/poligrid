@@ -715,7 +715,7 @@ async function projectDetail(req, id) {
     { data: renders },
   ] = await Promise.all([
     sb.from("projects").select("*").eq("id", id).single(),
-    sb.from("project_assignments").select("*, profile:profiles(id, full_name, email, role)").eq("project_id", id),
+    sb.from("project_assignments").select("*, profile:profiles!user_id(id, full_name, email, role)").eq("project_id", id),
     sb.from("drawings").select("id, status, drawing_type, title, file_name, created_at, uploaded_by, uploader:profiles!uploaded_by(full_name)").eq("project_id", id).order("created_at", { ascending: false }),
     sb.from("floor_plans").select("storage_path").eq("project_id", id).order("created_at", { ascending: false }).limit(1),
     sb.from("renders").select("id").eq("project_id", id),
