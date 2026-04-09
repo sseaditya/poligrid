@@ -21,7 +21,7 @@
     <p class="loading-hint">Loading project…</p>
   </main>
 
-  <!-- Edit details modal -->
+  <!-- ── Edit Details Modal ─────────────────────────────────────────────────── -->
   <div class="modal-overlay" id="editModal" hidden>
     <div class="modal-card">
       <div class="modal-header">
@@ -61,6 +61,34 @@
     </div>
   </div>
 
+  <!-- ── Drawing Review Modal (Lead Designer / Admin) ────────────────────────── -->
+  <div class="modal-overlay" id="reviewModal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Review Drawing</h2>
+        <button class="ghost-sm" id="reviewModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="review-drawing-name" id="reviewDrawingTitle">—</div>
+        <label class="field-label">Comments / Feedback
+          <textarea class="ctx-input" id="reviewComments" rows="4" placeholder="Optional notes for the designer…" style="resize:vertical"></textarea>
+        </label>
+        <div class="auth-error" id="reviewError" hidden></div>
+        <div class="modal-footer review-actions">
+          <div style="display:flex;gap:8px">
+            <button class="ghost-btn btn-sm danger-btn" id="reviewRejectBtn">Reject</button>
+            <button class="ghost-btn btn-sm" id="reviewRevisionBtn">Request Revision</button>
+          </div>
+          <button class="primary-btn btn-sm" id="reviewApproveBtn" style="width:auto">
+            <span class="material-symbols-outlined" style="font-size:15px">check</span>
+            Approve
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@400,0" />
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="client/auth.js"></script>
   <script src="client/project-detail.js"></script>
