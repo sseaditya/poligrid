@@ -16,6 +16,7 @@
     { "src": "^/index$",        "dest": "/index.html" },
     { "src": "^/designer$",     "dest": "/designer.html" },
     { "src": "^/lead_designer_home$", "dest": "/lead_designer_home.html" },
+    { "src": "^/designer_home$",     "dest": "/designer_home.html" },
     { "src": "^/admin$",        "dest": "/admin.html" },
     { "src": "^/ceo$",          "dest": "/ceo.html" },
     { "src": "^/$",             "dest": "/login.html" }
