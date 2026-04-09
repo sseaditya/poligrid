@@ -2,9 +2,10 @@
 
 let _session, _profile, _project, _team, _drawings, _drawingStats;
 let _projectId;
-let _versions  = [];
-let _myTasks   = [];
-let _reviewDrawingId = null;
+let _versions          = [];
+let _myTasks           = [];
+let _drawingAssignments = [];
+let _reviewDrawingId   = null;
 
 const STATUS_OPTIONS = [
   { value: "active",        label: "Active" },
@@ -79,11 +80,14 @@ const can = {
 async function loadAll() {
   const main = document.getElementById("projectMain");
   try {
-    const [detailRes, versionsRes, tasksRes] = await Promise.all([
+    const [detailRes, versionsRes, tasksRes, daRes] = await Promise.all([
       apiFetch(`/api/project/detail?id=${_projectId}`),
       apiFetch(`/api/project/versions?id=${_projectId}`).catch(() => null),
       can.seeTasks()
         ? apiFetch(`/api/tasks?projectId=${_projectId}&status=pending`).catch(() => null)
+        : Promise.resolve(null),
+      can.assignTeam()
+        ? apiFetch(`/api/drawings/assignments?projectId=${_projectId}`).catch(() => null)
         : Promise.resolve(null),
     ]);
 
@@ -101,6 +105,7 @@ async function loadAll() {
 
     if (versionsRes?.ok) { const vd = await versionsRes.json(); _versions = vd.versions || []; }
     if (tasksRes?.ok)    { const td = await tasksRes.json();    _myTasks  = td.tasks || []; }
+    if (daRes?.ok)       { const dd = await daRes.json();       _drawingAssignments = dd.assignments || []; }
 
     document.title = `Poligrid — ${_project.name || "Project"}`;
     renderSidebar(_project);
@@ -655,14 +660,24 @@ function buildFloorPlan(url) {
 
 // ── Team ──────────────────────────────────────────────────────────────────────
 function buildTeamSection(team, project) {
+  const teamDesigners = team.filter(t => t.profile?.role === "designer");
+
+  const assignmentRows = _drawingAssignments.map(a => `
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--color-surface-container)">
+      <span style="flex:1;font-size:12px;font-weight:600;color:var(--color-on-surface)">${escHtml(DRAWING_TYPE_LABELS[a.drawing_type] || a.drawing_type)}</span>
+      <span style="font-size:12px;color:var(--color-on-surface-variant)">${escHtml(a.assignee?.full_name || "Unassigned")}</span>
+      <button class="ghost-sm danger-sm del-drawing-assign-btn" data-id="${a.id}" title="Remove assignment">✕</button>
+    </div>`).join("");
+
   return `
     <div class="dash-section">
+      <!-- Team members -->
       <div class="dash-section-head">
         <div class="dash-section-icon">
           <span class="material-symbols-outlined">group</span>
           <h2 class="dash-section-title">Team</h2>
         </div>
-        <button class="ghost-sm" id="assignTeamBtn">+ Assign</button>
+        <button class="ghost-sm" id="assignTeamBtn">+ Add</button>
       </div>
       <div id="teamSection">
         ${team.length
@@ -682,6 +697,42 @@ function buildTeamSection(team, project) {
         </label>
         <button class="primary-btn btn-sm" id="assignConfirmBtn" style="width:auto">Assign</button>
         <button class="ghost-sm" id="assignCancelBtn">Cancel</button>
+      </div>
+
+      <!-- Drawing assignments -->
+      <div style="margin-top:20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--color-on-surface-variant);margin:0">Drawing Assignments</p>
+          <button class="ghost-sm" id="addDrawingAssignBtn">+ Assign</button>
+        </div>
+        <div id="drawingAssignmentsWrap">
+          ${_drawingAssignments.length
+            ? assignmentRows
+            : `<p class="loading-hint" style="font-size:12px">No drawing types assigned yet.</p>`}
+        </div>
+        <div id="drawingAssignRow" hidden style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+          <label class="field-label">Drawing Type
+            <select class="ctx-input" id="drawingTypeSelect">
+              <option value="">Select type…</option>
+              ${Object.entries(DRAWING_TYPE_LABELS).map(([k,v]) =>
+                `<option value="${k}">${escHtml(v)}</option>`).join("")}
+            </select>
+          </label>
+          <label class="field-label">Assign To
+            <select class="ctx-input" id="drawingAssigneeSelect">
+              <option value="">Select designer…</option>
+              ${teamDesigners.map(t =>
+                `<option value="${t.user_id}">${escHtml(t.profile?.full_name || "Unknown")}</option>`
+              ).join("")}
+            </select>
+          </label>
+          ${teamDesigners.length === 0
+            ? `<p class="loading-hint" style="font-size:12px">Add designers to the team first.</p>` : ""}
+          <div style="display:flex;gap:8px">
+            <button class="primary-btn btn-sm" id="drawingAssignConfirmBtn" style="width:auto">Assign</button>
+            <button class="ghost-sm" id="drawingAssignCancelBtn">Cancel</button>
+          </div>
+        </div>
       </div>
     </div>`;
 }
@@ -741,6 +792,12 @@ function wireInteractions(project) {
     document.getElementById("assignConfirmBtn")?.addEventListener("click", handleAssign);
     document.querySelectorAll(".unassign-btn").forEach(btn => {
       btn.addEventListener("click", () => handleUnassign(btn.dataset.uid));
+    });
+    document.getElementById("addDrawingAssignBtn")?.addEventListener("click", openDrawingAssignRow);
+    document.getElementById("drawingAssignCancelBtn")?.addEventListener("click", closeDrawingAssignRow);
+    document.getElementById("drawingAssignConfirmBtn")?.addEventListener("click", handleDrawingAssign);
+    document.querySelectorAll(".del-drawing-assign-btn").forEach(btn => {
+      btn.addEventListener("click", () => handleDrawingAssignmentDelete(btn.dataset.id));
     });
     loadUsersForAssign();
   }
@@ -886,6 +943,43 @@ async function handleUnassign(userId) {
   try {
     await apiFetch("/api/project/unassign-user", {
       method: "POST", body: JSON.stringify({ projectId: _projectId, userId }),
+    });
+    await loadAll();
+  } catch { /* silent */ }
+}
+
+// ─── Drawing assignment ───────────────────────────────────────────────────────
+function openDrawingAssignRow() {
+  const r = document.getElementById("drawingAssignRow");
+  if (r) { r.hidden = false; r.style.display = "flex"; }
+}
+function closeDrawingAssignRow() {
+  const r = document.getElementById("drawingAssignRow");
+  if (r) r.hidden = true;
+}
+
+async function handleDrawingAssign() {
+  const drawingType = document.getElementById("drawingTypeSelect")?.value;
+  const assignedTo  = document.getElementById("drawingAssigneeSelect")?.value;
+  if (!drawingType) { alert("Select a drawing type."); return; }
+  if (!assignedTo)  { alert("Select a designer to assign."); return; }
+  const btn = document.getElementById("drawingAssignConfirmBtn");
+  btn.disabled = true; btn.textContent = "Assigning…";
+  try {
+    const res = await apiFetch("/api/drawings/assignments/upsert", {
+      method: "POST",
+      body: JSON.stringify({ projectId: _projectId, drawingType, assignedTo }),
+    });
+    if (res.ok) { closeDrawingAssignRow(); await loadAll(); }
+    else { const { error } = await res.json(); alert(error || "Failed to assign."); }
+  } finally { btn.disabled = false; btn.textContent = "Assign"; }
+}
+
+async function handleDrawingAssignmentDelete(assignmentId) {
+  if (!confirm("Remove this drawing assignment?")) return;
+  try {
+    await apiFetch("/api/drawings/assignments/delete", {
+      method: "POST", body: JSON.stringify({ assignmentId }),
     });
     await loadAll();
   } catch { /* silent */ }

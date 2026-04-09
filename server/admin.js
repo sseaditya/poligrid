@@ -40,12 +40,12 @@ async function userInvite(req, body) {
 
 // ─── List all user profiles ───────────────────────────────────────────────────
 async function usersList(req) {
-  await requireAuth(req, ["admin", "ceo"]);
+  const { profile } = await requireAuth(req, ["admin", "ceo", "lead_designer"]);
   const sb = db.getClient();
-  const { data, error } = await sb
-    .from("profiles")
-    .select("*")
-    .order("created_at", { ascending: true });
+  // Lead designers only need to see designers (for drawing/team assignment)
+  let query = sb.from("profiles").select("*").order("created_at", { ascending: true });
+  if (profile.role === "lead_designer") query = query.eq("role", "designer");
+  const { data, error } = await query;
   if (error) throw httpError(500, error.message);
   return { users: data };
 }
@@ -97,7 +97,7 @@ async function projectAssignUser(req, body) {
 
 // ─── Remove a user from a project ─────────────────────────────────────────────
 async function projectUnassignUser(req, body) {
-  await requireAuth(req, ["admin"]);
+  await requireAuth(req, ["admin", "lead_designer"]);
   const { projectId, userId } = body;
   if (!projectId || !userId) throw httpError(400, "projectId, userId required.");
   const sb = db.getClient();
