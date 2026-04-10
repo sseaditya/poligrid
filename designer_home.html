@@ -373,14 +373,39 @@
     }).join('');
   }
 
-  // ── Task Table ─────────────────────────────────────────────────────────────
+  // ── Task Table (tasks + revision requests) ─────────────────────────────────
   document.getElementById('tasksSkeleton').style.display = 'none';
-  if (!tasks.length) {
+  if (!tasks.length && !revisions.length) {
     document.getElementById('tasksEmpty').style.display = '';
   } else {
     const tbody = document.getElementById('tasksBody');
     const today = new Date().toDateString();
-    tbody.innerHTML = tasks.map(t => {
+    // Revision rows shown first, highlighted in red tint
+    const revisionRows = revisions.map(d => {
+      const reviewer = d.drawing_reviews?.[0]?.reviewer?.full_name || 'Design Lead';
+      const comment  = d.drawing_reviews?.[0]?.comments || '';
+      return `
+        <tr class="transition-colors" style="background:#fff8f8">
+          <td class="px-5 py-4">
+            <div class="font-semibold text-on-surface text-sm">${esc(d.title)}</div>
+            <div class="text-[10px] text-on-surface-variant mt-0.5">${esc(d.project?.name || '—')} · ${esc(d.drawing_type)} · v${d.version_number || 1}</div>
+            ${comment ? `<div class="text-[10px] text-on-surface-variant/70 mt-0.5 italic">"${esc(comment)}" — ${esc(reviewer)}</div>` : ''}
+          </td>
+          <td class="px-5 py-4">
+            <span class="text-[10px] font-bold px-2 py-1 rounded-full uppercase" style="background:#fff0f0;color:#9f403d">high</span>
+          </td>
+          <td class="px-5 py-4"><span class="text-[10px] text-on-surface-variant">—</span></td>
+          <td class="px-5 py-4"><span class="text-[10px] font-bold" style="color:#9f403d">Now</span></td>
+          <td class="px-5 py-4">
+            <span class="text-[10px] font-bold px-2 py-1 rounded-full" style="background:#fff0f0;color:#9f403d">🔁 Revision Needed</span>
+          </td>
+          <td class="px-5 py-4 text-right">
+            <a href="/project?id=${esc(d.project_id)}" class="text-primary font-semibold text-xs hover:underline">Open →</a>
+          </td>
+        </tr>`;
+    });
+    // Regular task rows
+    const taskRows = tasks.map(t => {
       const dueStr    = t.due_date ? new Date(t.due_date).toDateString() : null;
       const isToday   = dueStr === today;
       const isOverdue = t.due_date && new Date(t.due_date) < new Date() && !isToday;
@@ -411,15 +436,16 @@
           </td>
           <td class="px-5 py-4 text-right">
             ${t.project?.id
-              ? `<a href="/designer?projectId=${esc(t.project.id)}" class="text-primary font-semibold text-xs hover:underline">Open →</a>`
+              ? `<a href="/project?id=${esc(t.project.id)}" class="text-primary font-semibold text-xs hover:underline">Open →</a>`
               : `<span class="text-on-surface-variant text-xs">—</span>`}
           </td>
         </tr>`;
-    }).join('');
+    });
+    tbody.innerHTML = [...revisionRows, ...taskRows].join('');
     document.getElementById('tasksTable').style.display = '';
   }
 
-  // ── Drawing Assignment Timeline ────────────────────────────────────────────
+  // ── Drawing Assignment Timeline (paginated) ───────────────────────────────
   document.getElementById('timelineSkeleton').style.display = 'none';
   if (!assignments.length) {
     document.getElementById('timelineEmpty').style.display = '';
@@ -431,39 +457,84 @@
       approved:           { cls: 'bg-primary-container text-primary',                   label: 'Approved' },
       revision_requested: { cls: 'bg-[#fff0f0] text-error',                             label: 'Revision' },
     };
-    const tbody = document.getElementById('timelineBody');
-    tbody.innerHTML = assignments.map(a => {
-      const cfg = statusCfg[a.status] || statusCfg.pending;
-      const isOverdue = a.due_date && !['approved'].includes(a.status) && new Date(a.due_date) < new Date();
-      const deadlineCell = a.due_date
-        ? `<span class="${isOverdue ? 'text-error font-bold' : 'text-on-surface-variant'} text-[10px]">${fmtDt(a.due_date)}${isOverdue ? ' ⚠' : ''}</span>`
-        : `<span class="text-on-surface-variant text-[10px]">—</span>`;
-      return `
-        <tr class="hover:bg-surface-container-low transition-colors">
-          <td class="px-5 py-4">
-            <div class="font-semibold text-on-surface text-sm">${esc(a.drawing_type)}</div>
-            <div class="text-[10px] text-on-surface-variant mt-0.5">${esc(a.project?.name || '—')}${a.project?.client_name ? ' · ' + esc(a.project.client_name) : ''}</div>
-          </td>
-          <td class="px-5 py-4">
-            <span class="${cfg.cls} text-[10px] font-bold px-2 py-1 rounded-full">${cfg.label}</span>
-          </td>
-          <td class="px-5 py-4">
-            <span class="text-[10px] text-on-surface-variant">${fmtDt(a.assigned_at)}</span>
-            ${a.assigner?.full_name ? `<div class="text-[9px] text-on-surface-variant/60 mt-0.5">by ${esc(a.assigner.full_name)}</div>` : ''}
-          </td>
-          <td class="px-5 py-4">${deadlineCell}</td>
-          <td class="px-5 py-4">
-            <span class="text-[10px] ${a.submitted_at ? 'text-on-surface-variant' : 'text-on-surface-variant/40'}">${fmtDt(a.submitted_at)}</span>
-          </td>
-          <td class="px-5 py-4">
-            <span class="text-[10px] ${a.completed_at ? 'text-primary font-semibold' : 'text-on-surface-variant/40'}">${fmtDt(a.completed_at)}</span>
-          </td>
-          <td class="px-5 py-4 text-right">
-            <a href="/designer?projectId=${esc(a.project_id)}" class="text-primary font-semibold text-xs hover:underline">Open →</a>
-          </td>
-        </tr>`;
-    }).join('');
+
+    let tlPage = 0;
+    let tlPageSize = 5;
+
+    function renderTimeline() {
+      const start  = tlPage * tlPageSize;
+      const slice  = assignments.slice(start, start + tlPageSize);
+      const total  = assignments.length;
+      const pages  = Math.ceil(total / tlPageSize);
+      const tbody  = document.getElementById('timelineBody');
+      tbody.innerHTML = slice.map(a => {
+        const cfg = statusCfg[a.status] || statusCfg.pending;
+        const isOverdue = a.due_date && !['approved'].includes(a.status) && new Date(a.due_date) < new Date();
+        const deadlineCell = a.due_date
+          ? `<span class="${isOverdue ? 'text-error font-bold' : 'text-on-surface-variant'} text-[10px]">${fmtDt(a.due_date)}${isOverdue ? ' ⚠' : ''}</span>`
+          : `<span class="text-on-surface-variant text-[10px]">—</span>`;
+        return `
+          <tr class="hover:bg-surface-container-low transition-colors">
+            <td class="px-5 py-4">
+              <div class="font-semibold text-on-surface text-sm">${esc(a.drawing_type)}</div>
+              <div class="text-[10px] text-on-surface-variant mt-0.5">${esc(a.project?.name || '—')}${a.project?.client_name ? ' · ' + esc(a.project.client_name) : ''}</div>
+            </td>
+            <td class="px-5 py-4">
+              <span class="${cfg.cls} text-[10px] font-bold px-2 py-1 rounded-full">${cfg.label}</span>
+            </td>
+            <td class="px-5 py-4">
+              <span class="text-[10px] text-on-surface-variant">${fmtDt(a.assigned_at)}</span>
+              ${a.assigner?.full_name ? `<div class="text-[9px] text-on-surface-variant/60 mt-0.5">by ${esc(a.assigner.full_name)}</div>` : ''}
+            </td>
+            <td class="px-5 py-4">${deadlineCell}</td>
+            <td class="px-5 py-4">
+              <span class="text-[10px] ${a.submitted_at ? 'text-on-surface-variant' : 'text-on-surface-variant/40'}">${fmtDt(a.submitted_at)}</span>
+            </td>
+            <td class="px-5 py-4">
+              <span class="text-[10px] ${a.completed_at ? 'text-primary font-semibold' : 'text-on-surface-variant/40'}">${fmtDt(a.completed_at)}</span>
+            </td>
+            <td class="px-5 py-4 text-right">
+              <a href="/project?id=${esc(a.project_id)}" class="text-primary font-semibold text-xs hover:underline">Open →</a>
+            </td>
+          </tr>`;
+      }).join('');
+
+      // Update pagination controls
+      document.getElementById('tlPageInfo').textContent =
+        `${start + 1}–${Math.min(start + tlPageSize, total)} of ${total}`;
+      document.getElementById('tlPrevBtn').disabled = tlPage === 0;
+      document.getElementById('tlNextBtn').disabled = tlPage >= pages - 1;
+    }
+
+    // Inject pagination bar above the table
+    const timelineSection = document.getElementById('timelineTable').parentElement;
+    const paginationBar = document.createElement('div');
+    paginationBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:12px;flex-wrap:wrap';
+    paginationBar.innerHTML = `
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px;color:#5a6061;font-weight:600">Rows per page:</span>
+        <select id="tlPageSizeSelect" style="font-size:11px;padding:3px 8px;border:1px solid #dde4e5;border-radius:6px;background:#fff;color:#2d3435;outline:none;cursor:pointer">
+          <option value="5" selected>5</option>
+          <option value="10">10</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span id="tlPageInfo" style="font-size:11px;color:#5a6061"></span>
+        <button id="tlPrevBtn" style="padding:3px 10px;border:1px solid #dde4e5;border-radius:6px;background:#fff;font-size:12px;cursor:pointer;font-weight:700;color:#526258" disabled>‹ Prev</button>
+        <button id="tlNextBtn" style="padding:3px 10px;border:1px solid #dde4e5;border-radius:6px;background:#fff;font-size:12px;cursor:pointer;font-weight:700;color:#526258">Next ›</button>
+      </div>`;
+    document.getElementById('timelineTable').before(paginationBar);
+
+    document.getElementById('tlPageSizeSelect').addEventListener('change', e => {
+      tlPageSize = parseInt(e.target.value, 10);
+      tlPage = 0;
+      renderTimeline();
+    });
+    document.getElementById('tlPrevBtn').addEventListener('click', () => { tlPage--; renderTimeline(); });
+    document.getElementById('tlNextBtn').addEventListener('click', () => { tlPage++; renderTimeline(); });
+
     document.getElementById('timelineTable').style.display = '';
+    renderTimeline();
   }
 
   // ── Project Context Cards ──────────────────────────────────────────────────
@@ -481,8 +552,8 @@
           <p class="text-[10px] font-bold text-primary uppercase tracking-widest">Stage 2: Design Dev</p>
           <h4 class="font-bold text-on-surface text-sm truncate">${esc(p.name || 'Untitled')}</h4>
           ${p.client_name ? `<p class="text-xs text-on-surface-variant mt-0.5">${esc(p.client_name)}</p>` : ''}
-          <a class="text-xs font-semibold text-on-surface-variant hover:text-primary mt-1 inline-flex items-center gap-1 transition-colors" href="/designer?projectId=${esc(p.id)}">
-            Open Drawings <span class="material-symbols-outlined text-[12px]">east</span>
+          <a class="text-xs font-semibold text-on-surface-variant hover:text-primary mt-1 inline-flex items-center gap-1 transition-colors" href="/project?id=${esc(p.id)}">
+            Open Project <span class="material-symbols-outlined text-[12px]">east</span>
           </a>
         </div>
       </div>`).join('');
