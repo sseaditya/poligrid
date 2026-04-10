@@ -469,12 +469,15 @@
 
   // ── Drawing Assignment Timeline (paginated) ───────────────────────────────
   document.getElementById('timelineSkeleton').style.display = 'none';
-  const timelineAssignments = assignments.filter(a => a.status === 'pending_review');
-  if (!timelineAssignments.length) {
+  if (!assignments.length) {
     document.getElementById('timelineEmpty').style.display = '';
   } else {
     const statusCfg = {
-      pending_review: { cls: 'text-[10px] font-bold px-2 py-1 rounded-full', style: 'background:#fef9c3;color:#a16207', label: 'Approval Pending' },
+      assigned:           { style: 'background:#f1f5f9;color:#475569',           label: 'Not Uploaded' },
+      pending_review:     { style: 'background:#fef9c3;color:#a16207',           label: 'Approval Pending' },
+      approved:           { style: 'background:#dcfce7;color:#166534',           label: 'Approved' },
+      rejected:           { style: 'background:#fee2e2;color:#991b1b',           label: 'Rejected' },
+      revision_requested: { style: 'background:#fef3c7;color:#d97706',           label: 'Revision Requested' },
     };
 
     let tlPage = 0;
@@ -482,12 +485,12 @@
 
     function renderTimeline() {
       const start  = tlPage * tlPageSize;
-      const slice  = timelineAssignments.slice(start, start + tlPageSize);
-      const total  = timelineAssignments.length;
+      const slice  = assignments.slice(start, start + tlPageSize);
+      const total  = assignments.length;
       const pages  = Math.ceil(total / tlPageSize);
       const tbody  = document.getElementById('timelineBody');
       tbody.innerHTML = slice.map(a => {
-        const cfg = statusCfg[a.status] || statusCfg.pending_review;
+        const cfg = statusCfg[a.status] || { style: 'background:#f1f5f9;color:#475569', label: a.status };
         const isOverdue = a.due_date && !['approved'].includes(a.status) && new Date(a.due_date) < new Date();
         const deadlineCell = a.due_date
           ? `<span class="${isOverdue ? 'text-error font-bold' : 'text-on-surface-variant'} text-[10px]">${fmtDt(a.due_date)}${isOverdue ? ' ⚠' : ''}</span>`
