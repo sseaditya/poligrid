@@ -534,9 +534,9 @@ function buildDrawingsSection(drawings, project) {
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           ${filePaths.length > 0
-            ? `<a class="ghost-btn btn-sm" href="/api/drawings/download-zip?projectId=${project.id}" style="gap:5px">
+            ? `<button class="ghost-btn btn-sm drawing-dl-all-btn" data-project-id="${project.id}" style="gap:5px">
                  <span class="material-symbols-outlined" style="font-size:14px">folder_zip</span> Download All
-               </a>` : ""}
+               </button>` : ""}
           ${can.uploadDrawings()
             ? `<a class="ghost-btn btn-sm" href="/designer?projectId=${project.id}" style="gap:5px">
                  <span class="material-symbols-outlined" style="font-size:14px">upload_file</span> Upload
@@ -928,6 +928,26 @@ function wireInteractions(project) {
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 10000);
       } catch { alert("Could not download drawing."); }
+    });
+  });
+
+  document.querySelectorAll(".drawing-dl-all-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const projectId = btn.dataset.projectId;
+      btn.disabled = true;
+      btn.textContent = "Preparing…";
+      try {
+        const res = await apiFetch(`/api/drawings/download-zip?projectId=${encodeURIComponent(projectId)}`);
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "Failed"); }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `drawings_${projectId}.zip`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      } catch (err) { alert("Could not download drawings: " + err.message); }
+      finally { btn.disabled = false; btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:14px">folder_zip</span> Download All`; }
     });
   });
 

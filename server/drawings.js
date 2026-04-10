@@ -42,10 +42,15 @@ function _buildZip(files) {
   for (const { name, data } of files) {
     const nameBuf = Buffer.from(name, "utf8");
     const crc = _crc32(data);
-    const compressed = zlib.deflateRawSync(data, { level: 6 });
-    const useDeflate = compressed.length < data.length;
-    const fileData = useDeflate ? compressed : data;
-    const method = useDeflate ? 8 : 0;
+    // Skip compression for binary formats — they don't shrink and it wastes CPU/time
+    const ext = name.split(".").pop().toLowerCase();
+    const skipCompress = ["pdf", "dwg", "dxf", "png", "jpg", "jpeg", "webp", "gif"].includes(ext);
+    let fileData = data;
+    let method = 0;
+    if (!skipCompress) {
+      const compressed = zlib.deflateRawSync(data, { level: 1 });
+      if (compressed.length < data.length) { fileData = compressed; method = 8; }
+    }
 
     const lh = Buffer.alloc(30 + nameBuf.length);
     lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4);
