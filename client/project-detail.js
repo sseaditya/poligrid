@@ -881,12 +881,12 @@ function wireInteractions(project) {
       viewerIframe.style.display = "block";
       viewerIframe.src = url;
     }
-    viewerModal.hidden = false;
+    viewerModal.style.display = "flex";
     document.body.style.overflow = "hidden";
   }
 
   function closeDrawingViewer() {
-    viewerModal.hidden = true;
+    viewerModal.style.display = "none";
     viewerIframe.src = "about:blank";
     viewerImg.src = "";
     document.body.style.overflow = "";
@@ -897,7 +897,7 @@ function wireInteractions(project) {
     if (e.target === viewerModal) closeDrawingViewer();
   });
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape" && viewerModal && !viewerModal.hidden) closeDrawingViewer();
+    if (e.key === "Escape" && viewerModal && viewerModal.style.display !== "none") closeDrawingViewer();
   });
 
   // Drawing view / download buttons
