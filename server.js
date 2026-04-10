@@ -154,9 +154,11 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, await drawingReview(req, await readJson(req)));
     }
     if (req.method === "GET" && url.pathname === "/api/drawings/assignments") {
+      const projectIdsParam = url.searchParams.get("projectIds");
       return sendJson(res, 200, await drawingAssignmentsList(req, {
-        projectId: url.searchParams.get("projectId"),
-        mineOnly: url.searchParams.get("mine") === "1",
+        projectId:  url.searchParams.get("projectId"),
+        projectIds: projectIdsParam ? projectIdsParam.split(",").filter(Boolean) : null,
+        mineOnly:   url.searchParams.get("mine") === "1",
       }));
     }
     if (req.method === "POST" && url.pathname === "/api/drawings/assignments/upsert") {

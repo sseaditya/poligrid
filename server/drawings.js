@@ -402,12 +402,14 @@ async function drawingReview(req, body) {
 }
 
 // ─── List drawing assignments (project-scoped or mine-only) ──────────────────
+// Accepts: { projectId, projectIds, mineOnly }
+// projectIds (array) enables a single batched query instead of N calls.
 async function drawingAssignmentsList(req, projectId) {
   const { profile } = await requireAuth(req);
   const parsed = typeof projectId === "object" && projectId !== null
     ? projectId
     : { projectId };
-  const { projectId: pid, mineOnly = false } = parsed;
+  const { projectId: pid, projectIds, mineOnly = false } = parsed;
 
   const sb = db.getClient();
   let query = sb
@@ -420,7 +422,11 @@ async function drawingAssignmentsList(req, projectId) {
     `)
     .order("assigned_at", { ascending: false });
 
-  if (pid) query = query.eq("project_id", pid);
+  if (pid) {
+    query = query.eq("project_id", pid);
+  } else if (Array.isArray(projectIds) && projectIds.length) {
+    query = query.in("project_id", projectIds);
+  }
   if (mineOnly) query = query.eq("assigned_by", profile.id);
 
   if (profile.role === "designer") {
