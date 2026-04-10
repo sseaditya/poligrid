@@ -336,6 +336,9 @@ async function loadAssignments(projectId) {
     wrap.querySelectorAll(".delete-assignment-btn").forEach(btn => {
       btn.addEventListener("click", () => deleteAssignment(btn.dataset.id));
     });
+    wrap.querySelectorAll(".reassign-btn").forEach(btn => {
+      btn.addEventListener("click", () => openReassignInline(btn.dataset.id));
+    });
   } catch {
     wrap.innerHTML = `<p class="loading-hint">Failed to load assignments.</p>`;
   }
@@ -343,13 +346,14 @@ async function loadAssignments(projectId) {
 
 function assignmentRow(a) {
   const { icon, label, cls } = assignmentStatusMeta(a.status);
-  const assignedAt = fmtDateTime(a.assigned_at || a.created_at);
-  const deadline = fmtDateOnly(a.deadline);
+  const assignedAt  = fmtDateTime(a.assigned_at || a.created_at);
+  const deadline    = fmtDateOnly(a.deadline);
   const submittedAt = fmtDateTime(a.submitted_at);
   const completedAt = fmtDateTime(a.completed_at);
-  const isOverdue = a.deadline && a.status !== "approved" && new Date(a.deadline) < new Date();
+  const isOverdue   = a.deadline && a.status !== "approved" && new Date(a.deadline) < new Date();
+  const rowId       = `asgn-row-${a.id}`;
   return `
-    <div class="assignment-row">
+    <div class="assignment-row" id="${rowId}" data-id="${a.id}" data-type="${escHtml(a.drawing_type)}" data-project="${escHtml(a.project_id || _currentProjectId)}">
       <span class="assignment-type">${capitalize(a.drawing_type)}</span>
       <span class="assignment-designer">${escHtml(a.assignee?.full_name || "Unassigned")}</span>
       <span class="assignment-time">${assignedAt}</span>
@@ -357,8 +361,70 @@ function assignmentRow(a) {
       <span class="assignment-time">${submittedAt}</span>
       <span class="assignment-time">${completedAt}</span>
       <span class="badge ${cls}">${icon} ${label}</span>
-      <button class="ghost-sm danger-sm delete-assignment-btn" data-id="${a.id}" title="Remove assignment">✕</button>
+      <div style="display:flex;gap:4px">
+        <button class="ghost-sm reassign-btn" data-id="${a.id}" title="Change designer or deadline"
+          style="font-size:11px;padding:2px 8px;color:var(--primary)">Reassign</button>
+        <button class="ghost-sm danger-sm delete-assignment-btn" data-id="${a.id}" title="Remove assignment">✕</button>
+      </div>
     </div>`;
+}
+
+function openReassignInline(assignmentId) {
+  const rowEl = document.getElementById(`asgn-row-${assignmentId}`);
+  if (!rowEl) return;
+  if (rowEl.querySelector(".reassign-inline-form")) return; // already open
+
+  const drawingType  = rowEl.dataset.type;
+  const projectId    = rowEl.dataset.project || _currentProjectId;
+  const existing     = _projectAssignments.find(a => a.id === assignmentId);
+  const currentDesId = existing?.assigned_to || existing?.assignee?.id || "";
+  const currentDl    = existing?.deadline ? existing.deadline.slice(0, 10) : "";
+
+  const form = document.createElement("div");
+  form.className = "reassign-inline-form";
+  form.style.cssText = "grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0 4px;border-top:1px solid var(--color-surface-container);margin-top:4px";
+  form.innerHTML = `
+    <span style="font-size:11px;font-weight:700;color:var(--color-on-surface-variant)">Reassign ${capitalize(drawingType)}:</span>
+    <select class="ctx-input reassign-designer-sel" style="font-size:12px;flex:1;min-width:160px">
+      <option value="">Select designer…</option>
+      ${_allDesigners.map(u =>
+        `<option value="${u.id}" ${u.id === currentDesId ? "selected" : ""}>${escHtml(u.full_name)} — ${ROLE_LABELS[u.role] || u.role}</option>`
+      ).join("")}
+    </select>
+    <input class="ctx-input reassign-deadline-inp" type="date" value="${currentDl}" title="Deadline" style="font-size:12px;width:140px" />
+    <button class="primary-btn btn-sm reassign-save-btn" style="width:auto;padding:4px 14px;font-size:12px">Save</button>
+    <button class="ghost-sm reassign-cancel-btn" style="font-size:12px">Cancel</button>
+    <span class="reassign-error" style="color:var(--color-error);font-size:11px;display:none"></span>`;
+
+  rowEl.appendChild(form);
+
+  form.querySelector(".reassign-cancel-btn").addEventListener("click", () => form.remove());
+  form.querySelector(".reassign-save-btn").addEventListener("click", async () => {
+    const newDesignerId = form.querySelector(".reassign-designer-sel").value;
+    const newDeadline   = form.querySelector(".reassign-deadline-inp").value || null;
+    const errSpan       = form.querySelector(".reassign-error");
+    const saveBtn       = form.querySelector(".reassign-save-btn");
+
+    if (!newDesignerId) { errSpan.textContent = "Select a designer."; errSpan.style.display = ""; return; }
+    errSpan.style.display = "none";
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Saving…";
+
+    try {
+      const res = await apiFetch("/api/drawings/assignments/upsert", {
+        method: "POST",
+        body: JSON.stringify({ projectId, drawingType, assignedTo: newDesignerId, deadline: newDeadline }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reassign.");
+      await loadAssignments(projectId);
+    } catch (err) {
+      errSpan.textContent = err.message;
+      errSpan.style.display = "";
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save";
+    }
+  });
 }
 
 async function loadLeadTimeline() {
@@ -472,12 +538,44 @@ function openAssignModal() {
   const rowsWrap = document.getElementById("assignRows");
   rowsWrap.innerHTML = "";
   document.getElementById("assignError").hidden = true;
+
+  // Show how many types are still available
+  const assignedTypes = new Set(_projectAssignments.map(a => a.drawing_type));
+  const remaining = DRAWING_TYPES.filter(t => !assignedTypes.has(t.value));
+  const headerNote = document.getElementById("assignModalSubtitle");
+  if (headerNote) {
+    if (remaining.length === 0) {
+      headerNote.textContent = "All drawing types are already assigned. Use Reassign on the existing assignments to change designer.";
+    } else {
+      headerNote.textContent = `${assignedTypes.size} type${assignedTypes.size !== 1 ? "s" : ""} already assigned — showing only unassigned types below.`;
+    }
+  }
+
   document.getElementById("assignModal").hidden = false;
+
+  if (remaining.length === 0) {
+    document.getElementById("addAssignRowBtn").hidden = true;
+    return;
+  }
+  document.getElementById("addAssignRowBtn").hidden = false;
   addAssignRow(); // start with one empty row
 }
 
 function closeAssignModal() {
   document.getElementById("assignModal").hidden = true;
+  document.getElementById("addAssignRowBtn").hidden = false;
+}
+
+/** Returns drawing types already selected in the assign modal rows (excluding the given row). */
+function _getSelectedTypesInModal(exceptRow) {
+  const rows = document.querySelectorAll(".assign-type-row");
+  const selected = new Set();
+  for (const r of rows) {
+    if (r === exceptRow) continue;
+    const v = r.querySelector(".assign-row-type")?.value;
+    if (v) selected.add(v);
+  }
+  return selected;
 }
 
 const DRAWING_TYPE_ICONS = {
@@ -489,16 +587,29 @@ const DRAWING_TYPE_ICONS = {
 function addAssignRow() {
   const wrap = document.getElementById("assignRows");
 
+  // Already assigned in DB + already selected in other rows in this modal
+  const assignedInDb    = new Set(_projectAssignments.map(a => a.drawing_type));
+  const selectedInModal = _getSelectedTypesInModal(null);
+  const excluded        = new Set([...assignedInDb, ...selectedInModal]);
+  const available       = DRAWING_TYPES.filter(t => !excluded.has(t.value));
+
+  if (!available.length) {
+    const errEl = document.getElementById("assignError");
+    errEl.textContent = "All drawing types are already assigned or selected above.";
+    errEl.hidden = false;
+    return;
+  }
+
   const row = document.createElement("div");
   row.className = "assign-type-row";
   row.innerHTML = `
-    <div class="assign-type-row-icon" id="assignRowIcon_${Date.now()}">
+    <div class="assign-type-row-icon">
       <span class="material-symbols-outlined">architecture</span>
     </div>
     <div class="assign-type-row-fields">
       <select class="ctx-input assign-row-type" style="font-size:13px">
         <option value="">Drawing type…</option>
-        ${DRAWING_TYPES.map(t => `<option value="${t.value}">${t.label}</option>`).join("")}
+        ${available.map(t => `<option value="${t.value}">${t.label}</option>`).join("")}
       </select>
       <select class="ctx-input assign-row-designer" style="font-size:13px">
         <option value="">Assign to…</option>
@@ -512,17 +623,25 @@ function addAssignRow() {
       <span class="material-symbols-outlined" style="font-size:15px">close</span>
     </button>`;
 
-  // Update icon when type changes
   const typeSelect = row.querySelector(".assign-row-type");
-  const iconWrap = row.querySelector(".assign-type-row-icon");
+  const iconWrap   = row.querySelector(".assign-type-row-icon");
+
+  // Update icon + hide the "Add" button if nothing left to add
   typeSelect.addEventListener("change", () => {
-    const icon = DRAWING_TYPE_ICONS[typeSelect.value] || "architecture";
-    iconWrap.querySelector(".material-symbols-outlined").textContent = icon;
+    iconWrap.querySelector(".material-symbols-outlined").textContent =
+      DRAWING_TYPE_ICONS[typeSelect.value] || "architecture";
+    // Check if all types are now covered
+    const assignedInDb2    = new Set(_projectAssignments.map(a => a.drawing_type));
+    const selectedInModal2 = _getSelectedTypesInModal(null);
+    const remaining = DRAWING_TYPES.filter(t => !assignedInDb2.has(t.value) && !selectedInModal2.has(t.value));
+    document.getElementById("addAssignRowBtn").hidden = remaining.length === 0;
+    document.getElementById("assignError").hidden = true;
   });
 
-  // Remove row
   row.querySelector(".assign-row-del").addEventListener("click", () => {
     row.remove();
+    document.getElementById("addAssignRowBtn").hidden = false;
+    document.getElementById("assignError").hidden = true;
     if (!wrap.children.length) addAssignRow();
   });
 
@@ -552,6 +671,17 @@ async function handleAssignSave() {
     errEl.textContent = "Add at least one drawing type with a designer.";
     errEl.hidden = false;
     return;
+  }
+
+  // Prevent duplicate types in the same batch
+  const typesSeen = new Set();
+  for (const a of toSave) {
+    if (typesSeen.has(a.drawingType)) {
+      errEl.textContent = `Duplicate drawing type "${a.drawingType}" — each type can only be assigned once per project.`;
+      errEl.hidden = false;
+      return;
+    }
+    typesSeen.add(a.drawingType);
   }
 
   btn.disabled = true;

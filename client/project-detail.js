@@ -748,9 +748,13 @@ function buildTeamSection(team, project) {
           <span style="width:5px;height:5px;border-radius:50%;flex-shrink:0;
             background:${statusDot(a.status)}"></span>
           ${escHtml(label)}${dlStr ? `<span style="color:var(--color-on-surface-variant);font-weight:400">${escHtml(dlStr)}</span>` : ""}
+          <button class="reassign-chip-btn" data-id="${a.id}" data-type="${escHtml(a.drawing_type)}"
+            style="background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;
+              color:var(--color-primary);margin-left:2px;font-size:10px;font-weight:700"
+            title="Reassign to a different designer">↺</button>
           <button class="del-drawing-assign-btn" data-id="${a.id}"
             style="background:none;border:none;cursor:pointer;padding:0;line-height:1;
-              color:var(--color-on-surface-variant);margin-left:2px;font-size:11px"
+              color:var(--color-on-surface-variant);margin-left:0;font-size:11px"
             title="Remove assignment">✕</button>
         </span>`;
     }).join("");
@@ -861,6 +865,9 @@ function wireInteractions(project) {
     });
     document.querySelectorAll(".del-drawing-assign-btn").forEach(btn => {
       btn.addEventListener("click", () => handleDrawingAssignmentDelete(btn.dataset.id));
+    });
+    document.querySelectorAll(".reassign-chip-btn").forEach(btn => {
+      btn.addEventListener("click", () => openReassignDrawingModal(btn.dataset.id, btn.dataset.type));
     });
   }
 
@@ -1126,9 +1133,33 @@ function updateDesignerTeamNote() {
     : "Will be added to the project team automatically.";
 }
 
+function _getModalSelectedTypes(exceptRow) {
+  const rows = document.querySelectorAll("#modalDrawingRows > div");
+  const selected = new Set();
+  for (const r of rows) {
+    if (r === exceptRow) continue;
+    const v = r.querySelector(".modal-drawing-type-sel")?.value;
+    if (v) selected.add(v);
+  }
+  return selected;
+}
+
 function addDrawingTypeRow() {
   const wrap = document.getElementById("modalDrawingRows");
   document.getElementById("modalNoRowsHint").hidden = true;
+
+  // Already assigned in DB + selected in other rows in this modal
+  const assignedInDb    = new Set(_drawingAssignments.map(a => a.drawing_type));
+  const selectedInModal = _getModalSelectedTypes(null);
+  const excluded        = new Set([...assignedInDb, ...selectedInModal]);
+  const available       = Object.entries(DRAWING_TYPE_LABELS).filter(([k]) => !excluded.has(k));
+
+  if (!available.length) {
+    const errEl = document.getElementById("assignDesignerError");
+    errEl.textContent = "All drawing types are already assigned. Use Reassign on existing assignments to change designer.";
+    errEl.hidden = false;
+    return;
+  }
 
   const row = document.createElement("div");
   row.style.cssText = "display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end";
@@ -1136,8 +1167,7 @@ function addDrawingTypeRow() {
     <label class="field-label" style="margin:0">Drawing Type
       <select class="ctx-input modal-drawing-type-sel">
         <option value="">Select type…</option>
-        ${Object.entries(DRAWING_TYPE_LABELS).map(([k, v]) =>
-          `<option value="${k}">${escHtml(v)}</option>`).join("")}
+        ${available.map(([k, v]) => `<option value="${k}">${escHtml(v)}</option>`).join("")}
       </select>
     </label>
     <label class="field-label" style="margin:0">Deadline
@@ -1149,6 +1179,7 @@ function addDrawingTypeRow() {
   row.querySelector("button").addEventListener("click", () => {
     row.remove();
     if (!wrap.children.length) document.getElementById("modalNoRowsHint").hidden = false;
+    document.getElementById("assignDesignerError").hidden = true;
   });
 
   wrap.appendChild(row);
@@ -1174,6 +1205,14 @@ async function handleAssignDesigner() {
   }));
   if (assignments.some(a => !a.drawingType)) {
     errEl.textContent = "Select a drawing type for all rows."; errEl.hidden = false; return;
+  }
+  const typesSeen = new Set();
+  for (const a of assignments) {
+    if (typesSeen.has(a.drawingType)) {
+      errEl.textContent = `"${DRAWING_TYPE_LABELS[a.drawingType] || a.drawingType}" selected more than once — each type can only be assigned once.`;
+      errEl.hidden = false; return;
+    }
+    typesSeen.add(a.drawingType);
   }
 
   btn.disabled = true;
@@ -1235,6 +1274,92 @@ async function handleDrawingAssignmentDelete(assignmentId) {
     });
     await loadAll();
   } catch { /* silent */ }
+}
+
+// ─── Reassign drawing type to a different designer (inline modal) ─────────────
+let _reassignModal = null;
+
+async function openReassignDrawingModal(assignmentId, drawingType) {
+  // Remove existing modal if open
+  _reassignModal?.remove();
+
+  const existing   = _drawingAssignments.find(a => a.id === assignmentId);
+  const currentDl  = existing?.deadline ? existing.deadline.slice(0, 10) : "";
+  const currentUid = existing?.assigned_to || existing?.assignee?.id || "";
+  const typeLabel  = DRAWING_TYPE_LABELS[drawingType] || drawingType;
+
+  const modal = document.createElement("div");
+  modal.style.cssText = "position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;padding:24px";
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:12px;max-width:440px;width:100%;box-shadow:0 24px 48px rgba(0,0,0,0.14);padding:28px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <div>
+          <h3 style="font-family:Manrope,sans-serif;font-weight:800;font-size:16px;margin:0">Reassign ${escHtml(typeLabel)}</h3>
+          <p style="font-size:12px;color:var(--color-on-surface-variant);margin:4px 0 0">Change the designer or deadline for this drawing type</p>
+        </div>
+        <button id="reassignModalClose" style="background:none;border:none;cursor:pointer;font-size:18px;color:#5a6061">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <label class="field-label" style="margin:0">New Designer
+          <select class="ctx-input" id="reassignDesignerSel">
+            <option value="">Loading…</option>
+          </select>
+        </label>
+        <label class="field-label" style="margin:0">Deadline (optional)
+          <input class="ctx-input" id="reassignDeadlineInp" type="date" value="${currentDl}" />
+        </label>
+        <div id="reassignError" style="display:none;color:var(--color-error);font-size:12px;padding:8px 12px;background:#fff0f0;border-radius:6px"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+          <button id="reassignCancelBtn" style="padding:9px 18px;background:#f2f4f4;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+          <button id="reassignSaveBtn" style="padding:9px 18px;background:linear-gradient(135deg,#526258,#46564c);color:#eafcef;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">Save</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  _reassignModal = modal;
+
+  const close = () => { modal.remove(); _reassignModal = null; };
+  modal.querySelector("#reassignModalClose").addEventListener("click", close);
+  modal.querySelector("#reassignCancelBtn").addEventListener("click", close);
+  modal.addEventListener("click", e => { if (e.target === modal) close(); });
+
+  // Load designers
+  const sel = modal.querySelector("#reassignDesignerSel");
+  try {
+    const res = await apiFetch("/api/users/list");
+    const { users } = await res.json();
+    const eligible = (users || []).filter(u => ["designer", "lead_designer", "admin"].includes(u.role));
+    sel.innerHTML = `<option value="">Select designer…</option>` +
+      eligible.map(u =>
+        `<option value="${u.id}" ${u.id === currentUid ? "selected" : ""}>${escHtml(u.full_name)} — ${ROLE_LABELS[u.role] || u.role}</option>`
+      ).join("");
+  } catch {
+    sel.innerHTML = `<option value="">Failed to load</option>`;
+  }
+
+  modal.querySelector("#reassignSaveBtn").addEventListener("click", async () => {
+    const newDesignerId = sel.value;
+    const newDeadline   = modal.querySelector("#reassignDeadlineInp").value || null;
+    const errEl         = modal.querySelector("#reassignError");
+    const saveBtn       = modal.querySelector("#reassignSaveBtn");
+    if (!newDesignerId) { errEl.textContent = "Please select a designer."; errEl.style.display = ""; return; }
+    errEl.style.display = "none";
+    saveBtn.disabled = true; saveBtn.textContent = "Saving…";
+    try {
+      const res = await apiFetch("/api/drawings/assignments/upsert", {
+        method: "POST",
+        body: JSON.stringify({ projectId: _projectId, drawingType, assignedTo: newDesignerId, deadline: newDeadline }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to reassign.");
+      close();
+      await loadAll();
+    } catch (err) {
+      errEl.textContent = err.message; errEl.style.display = "";
+      saveBtn.disabled = false; saveBtn.textContent = "Save";
+    }
+  });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
