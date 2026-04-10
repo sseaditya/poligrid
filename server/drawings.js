@@ -212,6 +212,7 @@ async function drawingUpload(req, body) {
       file_name:       fileName,
       file_size_bytes: fileSizeBytes || null,
       version_number:  versionNumber,
+      status:          "pending_review",
     })
     .select("id")
     .single();

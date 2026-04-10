@@ -254,10 +254,9 @@ function selectProject(projectId) {
 
 async function loadAll(projectId) {
   const isLead = ["lead_designer", "admin"].includes(_profile.role);
-  const loads = [
-    loadDrawings(projectId),
-    isLead ? loadAssignments(projectId) : loadProgressOnly(projectId),
-  ];
+  // Assignments must load first so _projectAssignments is populated before drawings render
+  await (isLead ? loadAssignments(projectId) : loadProgressOnly(projectId));
+  const loads = [loadDrawings(projectId)];
   if (isLead) loads.push(loadLeadTimeline());
   await Promise.all(loads);
 }
@@ -585,16 +584,25 @@ async function loadDrawings(projectId) {
     }
     hint.hidden = true;
 
-    // Group by drawing type
+    // Group by drawing type, sorted newest version first within each group
     const byType = {};
     for (const d of drawings) {
       (byType[d.drawing_type] = byType[d.drawing_type] || []).push(d);
+    }
+    for (const type in byType) {
+      byType[type].sort((a, b) => (b.version_number ?? 0) - (a.version_number ?? 0));
+    }
+
+    // Build a map of assignment status per drawing type so cards know the real state
+    const assignmentStatusByType = {};
+    for (const a of _projectAssignments) {
+      assignmentStatusByType[a.drawing_type] = a.status;
     }
 
     wrap.innerHTML = Object.entries(byType).map(([type, items]) => `
       <div class="drawings-group">
         <h3 class="drawings-group-title">${capitalize(type)}</h3>
-        <div class="drawings-group-list">${items.map(d => drawingCard(d)).join("")}</div>
+        <div class="drawings-group-list">${items.map((d, idx) => drawingCard(d, idx === 0, assignmentStatusByType[type])).join("")}</div>
       </div>
     `).join("");
 
@@ -621,11 +629,15 @@ async function loadDrawings(projectId) {
   }
 }
 
-function drawingCard(d) {
-  const canReview = ["lead_designer", "admin"].includes(_profile.role) && d.status === "pending_review";
-  // Designers can only replace their own drawing when revision is requested
+function drawingCard(d, isLatest = false, assignmentStatus = null) {
+  // Lead can review only the latest pending_review drawing
+  const canReview = ["lead_designer", "admin"].includes(_profile.role)
+    && d.status === "pending_review"
+    && isLatest;
+  // Designer can replace only if the ASSIGNMENT is revision_requested (not older drawing rows)
   const canReplace = _profile.role === "designer"
-    && d.status === "revision_requested"
+    && assignmentStatus === "revision_requested"
+    && isLatest
     && d.uploaded_by === _profile.id;
   const latestReview = d.drawing_reviews?.[0];
   const { icon, label, cls } = statusMeta(d.status);
@@ -634,12 +646,12 @@ function drawingCard(d) {
   const fileSize = d.file_size_bytes ? fmtBytes(d.file_size_bytes) : null;
 
   return `
-    <div class="drawing-card status-${d.status}">
+    <div class="drawing-card status-${d.status}${isLatest ? " drawing-card-latest" : " drawing-card-old"}">
       <div class="drawing-card-top">
         <div class="drawing-card-info">
           <span class="drawing-title">${escHtml(d.title)}</span>
           <span class="drawing-meta">
-            v${d.version_number}
+            <strong>v${d.version_number ?? 1}</strong>${isLatest ? ' <span class="drawing-latest-badge">LATEST</span>' : ' <span class="drawing-old-badge">SUPERSEDED</span>'}
             &nbsp;·&nbsp; ${escHtml(d.uploader?.full_name || "Unknown")}
             &nbsp;·&nbsp; ${fmtDate(d.created_at)}
             ${d.file_name ? `&nbsp;·&nbsp; <span class="drawing-filename">${escHtml(d.file_name)}</span>` : ""}
@@ -687,51 +699,12 @@ function drawingCard(d) {
 
 // ─── File viewer ──────────────────────────────────────────────────────────────
 async function openFileViewer(filePath, fileName) {
-  const modal   = document.getElementById("fileViewerModal");
-  const titleEl = document.getElementById("fileViewerTitle");
-  const bodyEl  = document.getElementById("fileViewerBody");
-  const loadEl  = document.getElementById("fileViewerLoading");
-  const dlBtn   = document.getElementById("fileViewerDownload");
-
-  titleEl.textContent = fileName || "Drawing";
-  bodyEl.innerHTML = "";
-  loadEl.style.display = "flex";
-  loadEl.innerHTML = `<div class="fv-spinner"></div><span>Loading…</span>`;
-  modal.hidden = false;
-
-  // Wire up the download button in the header
-  dlBtn.onclick = () => downloadFile(filePath, fileName);
-
   try {
     const res = await apiFetch(`/api/drawings/signed-url?path=${encodeURIComponent(filePath)}`);
     const { url } = await res.json();
-    loadEl.style.display = "none";
-
-    const ext = (fileName || "").split(".").pop().toLowerCase();
-
-    if (["png", "jpg", "jpeg", "gif", "webp"].includes(ext)) {
-      const img = document.createElement("img");
-      img.src = url;
-      img.alt = fileName;
-      img.className = "file-viewer-image";
-      img.onload = () => { loadEl.style.display = "none"; };
-      bodyEl.appendChild(img);
-    } else if (ext === "pdf") {
-      const iframe = document.createElement("iframe");
-      iframe.src = url;
-      iframe.className = "file-viewer-iframe";
-      iframe.title = fileName;
-      bodyEl.appendChild(iframe);
-    } else {
-      bodyEl.innerHTML = `
-        <div class="file-viewer-download-prompt">
-          <div class="file-viewer-icon">📄</div>
-          <p class="drawing-title">${escHtml(fileName)}</p>
-          <p class="text-dim">This file type cannot be previewed in the browser.</p>
-        </div>`;
-    }
+    window.open(url, "_blank");
   } catch (err) {
-    loadEl.innerHTML = `<span style="color:var(--danger)">Could not load file: ${escHtml(err.message)}</span>`;
+    alert("Could not open file: " + err.message);
   }
 }
 

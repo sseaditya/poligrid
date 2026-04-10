@@ -906,9 +906,7 @@ function wireInteractions(project) {
       try {
         const res = await apiFetch(`/api/drawings/signed-url?path=${encodeURIComponent(btn.dataset.path)}`);
         const { url } = await res.json();
-        const name = btn.dataset.name || btn.closest("tr")?.querySelector(".proj-tbl-title")?.textContent || "Drawing";
-        const dlHref = `/api/drawings/download?path=${encodeURIComponent(btn.dataset.path)}&name=${encodeURIComponent(btn.dataset.name || name)}`;
-        openDrawingViewer(url, name, dlHref);
+        window.open(url, "_blank");
       } catch { alert("Could not open drawing."); }
     });
   });

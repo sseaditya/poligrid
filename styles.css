@@ -1439,6 +1439,11 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 /* ── Drawing card improvements ────────────────────────────────────────────── */
 .drawing-card-info { display:flex; flex-direction:column; gap:3px; flex:1; min-width:0; }
 .drawing-filename  { font-family:monospace; font-size:11px; color:var(--text-dim); }
+.drawing-card-old  { opacity:0.65; background:var(--bg2); }
+.drawing-latest-badge { display:inline-block; font-size:9px; font-weight:700; letter-spacing:.06em;
+  text-transform:uppercase; background:var(--accent); color:#fff; border-radius:3px; padding:1px 5px; vertical-align:middle; }
+.drawing-old-badge    { display:inline-block; font-size:9px; font-weight:700; letter-spacing:.06em;
+  text-transform:uppercase; background:var(--border); color:var(--text-dim); border-radius:3px; padding:1px 5px; vertical-align:middle; }
 .status-border-approved           { border-left:3px solid var(--success); }
 .status-border-rejected           { border-left:3px solid var(--danger); }
 .status-border-revision_requested { border-left:3px solid var(--gold); }
