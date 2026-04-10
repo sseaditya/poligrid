@@ -5,6 +5,172 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Poligrid — Admin</title>
   <link rel="stylesheet" href="/theme.css" />
+  <style>
+    /* ── Admin-specific overrides ──────────────────────────────────────────── */
+
+    /* Page hero */
+    .admin-hero {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap; margin-bottom: 28px;
+    }
+    .admin-hero-actions { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+
+    /* Stats row */
+    .admin-stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+    @media (max-width: 640px) { .admin-stat-row { grid-template-columns: 1fr 1fr; } }
+    .admin-stat-card {
+      background: var(--color-surface-container-lowest);
+      border: 1px solid var(--color-outline-variant);
+      border-radius: var(--radius-xl); padding: 20px 22px;
+      display: flex; flex-direction: column; gap: 6px;
+      box-shadow: var(--shadow-ambient);
+    }
+    .admin-stat-card.accent {
+      background: linear-gradient(135deg, #526258 0%, #46564c 100%);
+      border-color: #3d4e44;
+    }
+    .admin-stat-card.accent .stat-num { color: var(--color-primary-container); }
+    .admin-stat-card.accent .stat-label { color: rgba(213,231,218,0.65); }
+    .admin-stat-icon {
+      width: 34px; height: 34px; border-radius: var(--radius-lg);
+      background: var(--color-primary-container);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 8px;
+    }
+    .admin-stat-icon .material-symbols-outlined { font-size: 18px; color: var(--color-primary); }
+    .admin-stat-card.accent .admin-stat-icon { background: rgba(213,231,218,0.18); }
+    .admin-stat-card.accent .admin-stat-icon .material-symbols-outlined { color: var(--color-primary-container); }
+
+    /* Invite panel */
+    .invite-panel {
+      background: var(--color-surface-container-lowest);
+      border: 1px solid var(--color-primary);
+      border-radius: var(--radius-xl); padding: 24px;
+      margin-bottom: 24px; box-shadow: var(--shadow-float);
+    }
+    .invite-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .invite-panel-title {
+      font-family: var(--font-headline); font-size: 16px; font-weight: 700;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .invite-panel-title .material-symbols-outlined { font-size: 20px; color: var(--color-primary); }
+    .invite-form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+    .invite-msg-row { margin-top: 10px; min-height: 20px; }
+    .invite-msg { font-size: 13px; }
+    .invite-msg.success { color: var(--success); }
+    .invite-msg.error   { color: var(--color-error); }
+
+    /* Pending invites */
+    .pending-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-outline-variant); }
+    .pending-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-on-surface-variant); margin-bottom: 8px; }
+
+    /* User avatar circle */
+    .user-avatar {
+      width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-headline); font-size: 13px; font-weight: 700;
+      color: var(--color-primary); background: var(--color-primary-container);
+      border: 1.5px solid var(--color-primary-fixed-dim);
+      text-transform: uppercase; letter-spacing: 0.02em;
+    }
+    .user-avatar.avatar-sales        { background: rgba(40,80,184,0.12); color: #3a5ab8; border-color: rgba(40,80,184,0.3); }
+    .user-avatar.avatar-designer     { background: rgba(100,60,200,0.1); color: #7c3aed; border-color: rgba(100,60,200,0.3); }
+    .user-avatar.avatar-lead_designer{ background: rgba(237,248,217,0.6); color: #5a6e2e; border-color: rgba(184,109,53,0.3); }
+    .user-avatar.avatar-admin        { background: var(--color-primary-container); color: var(--color-primary); border-color: var(--color-primary-fixed-dim); }
+    .user-avatar.avatar-ceo          { background: rgba(20,20,20,0.07); color: var(--color-on-surface); border-color: var(--color-outline-variant); }
+
+    /* Member cell */
+    .member-cell { display: flex; align-items: center; gap: 10px; }
+    .member-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+    .member-name { font-weight: 600; font-size: 13px; color: var(--color-on-surface); }
+    .member-email{ font-size: 11px; color: var(--color-on-surface-variant); }
+
+    /* Role badge */
+    .role-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+      padding: 3px 8px; border-radius: 10px; border: 1px solid transparent;
+    }
+    .role-badge.role-sales        { background: rgba(40,80,184,0.1);  color: #3a5ab8; border-color: rgba(40,80,184,0.25); }
+    .role-badge.role-designer     { background: rgba(100,60,200,0.1); color: #7c3aed; border-color: rgba(100,60,200,0.25); }
+    .role-badge.role-lead_designer{ background: rgba(184,109,53,0.1); color: var(--gold); border-color: rgba(184,109,53,0.3); }
+    .role-badge.role-admin        { background: var(--color-primary-container); color: var(--color-primary); border-color: var(--color-primary-fixed-dim); }
+    .role-badge.role-ceo          { background: rgba(20,20,20,0.06); color: var(--color-on-surface); border-color: var(--color-outline-variant); }
+
+    /* Status pill */
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 10px;
+    }
+    .status-pill.active   { background: rgba(46,125,67,0.1); color: var(--success); }
+    .status-pill.inactive { background: rgba(159,64,61,0.08); color: var(--color-error); }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .status-dot.active   { background: var(--success); }
+    .status-dot.inactive { background: var(--color-error); }
+
+    /* Table enhancements */
+    .admin-table th:first-child { border-radius: var(--radius-lg) 0 0 0; }
+    .admin-table th:last-child  { border-radius: 0 var(--radius-lg) 0 0; }
+    .admin-table td { padding: 12px 16px; }
+    .admin-table th { padding: 12px 16px; }
+
+    /* Section header with actions */
+    .section-header-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; margin-bottom: 4px;
+    }
+
+    /* Assign section cards layout */
+    .assign-grid {
+      display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start;
+    }
+    @media (max-width: 800px) { .assign-grid { grid-template-columns: 1fr; } }
+    .assign-form-card {
+      background: var(--color-surface-container-lowest);
+      border: 1px solid var(--color-outline-variant);
+      border-radius: var(--radius-xl); padding: 20px;
+      box-shadow: var(--shadow-ambient);
+    }
+    .assign-form-title {
+      font-family: var(--font-headline); font-size: 15px; font-weight: 700;
+      margin-bottom: 14px; display: flex; align-items: center; gap: 7px;
+    }
+    .assign-form-title .material-symbols-outlined { font-size: 18px; color: var(--color-primary); }
+    .assign-form-fields { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+
+    /* Team panel */
+    .team-panel {
+      background: var(--color-surface-container-lowest);
+      border: 1px solid var(--color-outline-variant);
+      border-radius: var(--radius-xl); padding: 20px;
+      box-shadow: var(--shadow-ambient); flex: 1;
+    }
+    .team-panel-title {
+      font-family: var(--font-headline); font-size: 15px; font-weight: 700;
+      margin-bottom: 14px; display: flex; align-items: center; gap: 7px;
+    }
+    .team-panel-title .material-symbols-outlined { font-size: 18px; color: var(--color-primary); }
+    .team-member-chip {
+      display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+      background: var(--color-surface-container-low); border: 1px solid var(--color-outline-variant);
+      border-radius: var(--radius-lg);
+    }
+    .team-member-chips { display: flex; flex-direction: column; gap: 6px; }
+    .team-member-chip-name { flex: 1; font-size: 13px; font-weight: 600; min-width: 0; }
+    .team-member-chip-role { font-size: 10px; font-weight: 700; }
+
+    /* Saved indicator */
+    .save-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 8px;
+      background: rgba(46,125,67,0.12); color: var(--success); opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .save-badge.visible  { opacity: 1; }
+    .save-badge.error    { background: rgba(159,64,61,0.1); color: var(--color-error); }
+  </style>
 </head>
 <body class="dash-body">
 
@@ -27,23 +193,71 @@
 
   <main class="dash-main">
 
-    <!-- Invite user section -->
-    <section class="dash-section">
-      <div class="dash-section-head">
-        <h2 class="dash-section-title">Invite New User</h2>
-        <p class="dash-section-hint">Add a user by their Google account email. They can log in once invited.</p>
+    <!-- ── Page Hero ──────────────────────────────────────────────────────────── -->
+    <div class="admin-hero">
+      <div>
+        <h1 class="dash-greeting">Team Management</h1>
+        <p class="dash-subline">Manage roles, permissions, and project assignments for your studio.</p>
+      </div>
+      <div class="admin-hero-actions">
+        <button class="primary-btn btn-sm" id="toggleInviteBtn" style="width:auto;gap:6px">
+          <span class="material-symbols-outlined" style="font-size:16px">person_add</span>
+          Invite Member
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Stats Row ──────────────────────────────────────────────────────────── -->
+    <div class="admin-stat-row">
+      <div class="admin-stat-card accent">
+        <div class="admin-stat-icon">
+          <span class="material-symbols-outlined">group</span>
+        </div>
+        <span class="stat-num" id="statTotalUsers">—</span>
+        <span class="stat-label">Total Members</span>
+      </div>
+      <div class="admin-stat-card">
+        <div class="admin-stat-icon">
+          <span class="material-symbols-outlined">verified_user</span>
+        </div>
+        <span class="stat-num" id="statActiveUsers">—</span>
+        <span class="stat-label">Active Members</span>
+      </div>
+      <div class="admin-stat-card">
+        <div class="admin-stat-icon" style="background:rgba(184,109,53,0.12)">
+          <span class="material-symbols-outlined" style="color:var(--gold)">schedule_send</span>
+        </div>
+        <span class="stat-num" id="statPendingInvites">0</span>
+        <span class="stat-label">Pending Invites</span>
+      </div>
+    </div>
+
+    <!-- ── Invite Panel (hidden by default) ───────────────────────────────────── -->
+    <div class="invite-panel" id="invitePanel" hidden>
+      <div class="invite-panel-header">
+        <div class="invite-panel-title">
+          <span class="material-symbols-outlined">person_add</span>
+          Invite New Member
+        </div>
+        <button class="ghost-sm" id="closeInviteBtn" aria-label="Close invite panel">
+          <span class="material-symbols-outlined" style="font-size:16px">close</span>
+        </button>
       </div>
 
-      <div class="dash-toolbar" style="align-items:flex-end;gap:12px">
-        <label class="field-label" style="flex:2;max-width:320px">
-          Email
+      <p style="font-size:13px;color:var(--color-on-surface-variant);margin-bottom:16px">
+        Add a team member by their Google account email. They can sign in immediately once invited.
+      </p>
+
+      <div class="invite-form-row">
+        <label class="field-label" style="flex:2;min-width:200px;max-width:320px">
+          Email Address
           <input type="email" class="ctx-input" id="inviteEmail" placeholder="name@example.com" />
         </label>
-        <label class="field-label" style="flex:1;max-width:200px">
-          Name (optional)
-          <input type="text" class="ctx-input" id="inviteFullName" placeholder="Full name" />
+        <label class="field-label" style="flex:1.5;min-width:160px;max-width:240px">
+          Full Name <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span>
+          <input type="text" class="ctx-input" id="inviteFullName" placeholder="Jane Smith" />
         </label>
-        <label class="field-label" style="flex:1;max-width:180px">
+        <label class="field-label" style="flex:1;min-width:140px;max-width:180px">
           Role
           <select class="ctx-input" id="inviteRole">
             <option value="sales">Sales</option>
@@ -53,70 +267,117 @@
             <option value="ceo">CEO</option>
           </select>
         </label>
-        <button class="primary-btn btn-sm" id="inviteBtn" style="flex-shrink:0">Send Invite</button>
-      </div>
-      <div id="inviteMsg" style="margin-top:8px;font-size:13px"></div>
-
-      <div id="invitationsWrap" style="margin-top:16px"></div>
-    </section>
-
-    <!-- Users section -->
-    <section class="dash-section" style="margin-top:32px">
-      <div class="dash-section-head">
-        <h2 class="dash-section-title">Team Members</h2>
-        <p class="dash-section-hint">Assign roles to control what each person can access.</p>
+        <button class="primary-btn btn-sm" id="inviteBtn" style="width:auto;margin-bottom:0;flex-shrink:0">
+          Send Invite
+        </button>
       </div>
 
-      <div class="table-wrap">
+      <div class="invite-msg-row">
+        <span class="invite-msg" id="inviteMsg"></span>
+      </div>
+
+      <div id="invitationsWrap">
+        <!-- Pending invitations rendered here by admin.js -->
+      </div>
+    </div>
+
+    <!-- ── Team Directory ─────────────────────────────────────────────────────── -->
+    <div class="dash-section">
+      <div class="section-header-row">
+        <div>
+          <h2 class="dash-section-title">Team Directory</h2>
+          <p class="dash-section-hint">Click a role to change it inline. Toggle the status switch to activate or deactivate access.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:8px">
         <table class="admin-table" id="usersTable">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Email</th>
+              <th>Member</th>
               <th>Role</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody id="usersBody">
-            <tr><td colspan="5" class="loading-hint">Loading…</td></tr>
+            <tr><td colspan="4" class="loading-hint" style="padding:24px 16px">Loading team…</td></tr>
           </tbody>
         </table>
       </div>
-    </section>
+    </div>
 
-    <!-- Project assignment section -->
-    <section class="dash-section" style="margin-top:32px">
-      <div class="dash-section-head">
-        <h2 class="dash-section-title">Project Assignments</h2>
-        <p class="dash-section-hint">Assign designers and sales to specific projects.</p>
-      </div>
+    <!-- ── Project Assignments ────────────────────────────────────────────────── -->
+    <div style="margin-top:24px">
+      <div class="dash-section-title" style="margin-bottom:6px">Project Assignments</div>
+      <p class="dash-section-hint" style="margin-bottom:20px">Assign team members to specific projects to control their visibility and task access.</p>
 
-      <div class="dash-toolbar">
-        <label class="field-label" style="flex:1;max-width:280px">
-          Project
-          <select class="ctx-input" id="assignProjectSelect">
-            <option value="">Loading…</option>
-          </select>
-        </label>
-        <label class="field-label" style="flex:1;max-width:280px">
-          User
-          <select class="ctx-input" id="assignUserSelect">
-            <option value="">Select user…</option>
-          </select>
-        </label>
-        <button class="primary-btn btn-sm" id="assignBtn" disabled>Assign</button>
-      </div>
+      <div class="assign-grid">
+        <!-- Assignment form -->
+        <div class="assign-form-card">
+          <div class="assign-form-title">
+            <span class="material-symbols-outlined">folder_shared</span>
+            Assign to Project
+          </div>
+          <div class="assign-form-fields">
+            <label class="field-label">
+              Project
+              <select class="ctx-input" id="assignProjectSelect">
+                <option value="">Loading…</option>
+              </select>
+            </label>
+            <label class="field-label">
+              Team Member
+              <select class="ctx-input" id="assignUserSelect">
+                <option value="">Select member…</option>
+              </select>
+            </label>
+          </div>
+          <button class="primary-btn" id="assignBtn" disabled>
+            <span class="material-symbols-outlined" style="font-size:16px">person_add_alt</span>
+            Assign to Project
+          </button>
+        </div>
 
-      <div id="teamWrap" class="team-wrap">
-        <p class="loading-hint">Select a project to see its team.</p>
+        <!-- Current team for selected project -->
+        <div class="team-panel">
+          <div class="team-panel-title">
+            <span class="material-symbols-outlined">groups</span>
+            Project Team
+          </div>
+          <div id="teamWrap">
+            <p class="loading-hint">Select a project to see its current team.</p>
+          </div>
+        </div>
       </div>
-    </section>
+    </div>
 
   </main>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="client/auth.js"></script>
   <script src="client/admin.js"></script>
+  <script>
+    // Invite panel toggle
+    const invitePanel  = document.getElementById("invitePanel");
+    const toggleBtn    = document.getElementById("toggleInviteBtn");
+    const closeBtn     = document.getElementById("closeInviteBtn");
+
+    function openInvitePanel() {
+      invitePanel.hidden = false;
+      toggleBtn.textContent = "";
+      toggleBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px">close</span> Close';
+      invitePanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    function closeInvitePanel() {
+      invitePanel.hidden = true;
+      toggleBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px">person_add</span> Invite Member';
+    }
+
+    toggleBtn.addEventListener("click", () => {
+      if (invitePanel.hidden) openInvitePanel(); else closeInvitePanel();
+    });
+    closeBtn.addEventListener("click", closeInvitePanel);
+  </script>
 </body>
 </html>
