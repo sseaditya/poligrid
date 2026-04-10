@@ -7,6 +7,10 @@ const ROLE_LABELS = {
   sales: "Sales", designer: "Designer",
   lead_designer: "Lead Designer", admin: "Admin", ceo: "CEO",
 };
+const DEPT_LABELS = {
+  sales: "Sales", designer: "Design Studio",
+  lead_designer: "Design Studio", admin: "Admin", ceo: "Executive",
+};
 
 (async () => {
   try {
@@ -24,25 +28,54 @@ const ROLE_LABELS = {
     _currentProjectId = e.target.value;
     document.getElementById("assignBtn").disabled = !_currentProjectId;
     if (_currentProjectId) loadTeam(_currentProjectId);
-    else document.getElementById("teamWrap").innerHTML = `<p class="loading-hint">Select a project to see its team.</p>`;
+    else document.getElementById("teamWrap").innerHTML =
+      `<div style="font-size:12px;color:#5a6e6f;text-align:center;padding:8px 0">Select a project to see its team</div>`;
   });
 
   document.getElementById("assignBtn").addEventListener("click", handleAssign);
 })();
 
-async function handleInvite() {
-  const email = document.getElementById("inviteEmail").value.trim();
-  const role = document.getElementById("inviteRole").value;
-  const fullName = document.getElementById("inviteFullName").value.trim();
-  const msg = document.getElementById("inviteMsg");
-  const btn = document.getElementById("inviteBtn");
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-  if (!email) { msg.className = "invite-msg error"; msg.textContent = "Email is required."; return; }
+function _initials(name) {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  return parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase();
+}
+
+function _updateComposition(users) {
+  if (!users.length) return;
+  const counts = {};
+  ROLES.forEach(r => counts[r] = 0);
+  users.forEach(u => { if (counts[u.role] != null) counts[u.role]++; });
+  ROLES.forEach(r => {
+    const pct = Math.round((counts[r] / users.length) * 100);
+    const fill = document.getElementById(`comp-${r}`);
+    const lbl  = document.getElementById(`compPct-${r}`);
+    if (fill) fill.style.width = pct + "%";
+    if (lbl)  lbl.textContent  = pct + "%";
+  });
+  const lbl = document.getElementById("memberCountLabel");
+  if (lbl) lbl.textContent = `Showing ${users.length} member${users.length !== 1 ? "s" : ""}`;
+}
+
+// ── Invite ─────────────────────────────────────────────────────────────────────
+
+async function handleInvite() {
+  const email    = document.getElementById("inviteEmail").value.trim();
+  const role     = document.getElementById("inviteRole").value;
+  const fullName = document.getElementById("inviteFullName").value.trim();
+  const msg      = document.getElementById("inviteMsg");
+  const btn      = document.getElementById("inviteBtn");
+
+  if (!email) { msg.className = "adm-invite-msg error"; msg.textContent = "Email is required."; return; }
 
   btn.disabled = true;
   btn.textContent = "Sending…";
   msg.textContent = "";
-  msg.className = "invite-msg";
+  msg.className = "adm-invite-msg";
 
   try {
     const res = await fetch("/api/users/invite", {
@@ -52,13 +85,13 @@ async function handleInvite() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed");
-    msg.className = "invite-msg success";
+    msg.className = "adm-invite-msg success";
     msg.textContent = `Invite sent for ${email}. They can now log in with their Google account.`;
     document.getElementById("inviteEmail").value = "";
     document.getElementById("inviteFullName").value = "";
     await loadInvitations();
   } catch (e) {
-    msg.className = "invite-msg error";
+    msg.className = "adm-invite-msg error";
     msg.textContent = e.message || "Failed to send invite.";
   } finally {
     btn.disabled = false;
@@ -73,22 +106,21 @@ async function loadInvitations() {
       headers: { Authorization: `Bearer ${_session.access_token}` },
     });
     const { invitations } = await res.json();
-    const pendingEl = document.getElementById("statPendingInvites");
-    if (pendingEl) pendingEl.textContent = invitations?.length ?? 0;
 
     if (!invitations?.length) {
-      wrap.innerHTML = `<p class="loading-hint" style="margin:0">No pending invitations.</p>`;
+      wrap.innerHTML = `<p style="font-size:12px;color:#8a9394;margin:0">No pending invitations.</p>`;
       return;
     }
+
     wrap.innerHTML = `
-      <div class="pending-section">
-        <div class="pending-label">Pending — awaiting first login (${invitations.length})</div>
-        <div class="team-chips">
+      <div class="adm-pending-section">
+        <div class="adm-pending-label">Pending — awaiting first login (${invitations.length})</div>
+        <div class="adm-chips">
           ${invitations.map(inv => `
-            <div class="team-chip">
-              <span class="team-chip-name">${inv.full_name ? `${inv.full_name} &lt;${inv.email}&gt;` : inv.email}</span>
-              <span class="team-chip-role role-${inv.role} role-badge" style="text-transform:uppercase">${ROLE_LABELS[inv.role] || inv.role}</span>
-              <button class="ghost-sm danger-sm cancel-invite-btn" data-email="${inv.email}" title="Cancel invite">✕</button>
+            <div class="adm-chip">
+              <span class="adm-chip-name">${inv.full_name ? `${inv.full_name} &lt;${inv.email}&gt;` : inv.email}</span>
+              <span class="adm-chip-role role-${inv.role}">${ROLE_LABELS[inv.role] || inv.role}</span>
+              <button class="adm-chip-cancel cancel-invite-btn" data-email="${inv.email}" title="Cancel invite">✕</button>
             </div>`).join("")}
         </div>
       </div>`;
@@ -109,25 +141,10 @@ async function loadInvitations() {
   }
 }
 
-function _initials(name) {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  return parts.length >= 2
-    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-    : name.slice(0, 2).toUpperCase();
-}
-
-function _updateStats(users, pendingCount) {
-  const total = document.getElementById("statTotalUsers");
-  const active = document.getElementById("statActiveUsers");
-  const pending = document.getElementById("statPendingInvites");
-  if (total)   total.textContent   = users.length;
-  if (active)  active.textContent  = users.filter(u => u.is_active).length;
-  if (pending && pendingCount != null) pending.textContent = pendingCount;
-}
+// ── Users table ────────────────────────────────────────────────────────────────
 
 async function loadUsers() {
-  const tbody = document.getElementById("usersBody");
+  const tbody     = document.getElementById("usersBody");
   const userSelect = document.getElementById("assignUserSelect");
   try {
     const res = await fetch("/api/users/list", {
@@ -136,34 +153,42 @@ async function loadUsers() {
     const { users } = await res.json();
     _allUsers = users || [];
 
-    _updateStats(_allUsers, null);
+    _updateComposition(_allUsers);
 
     tbody.innerHTML = _allUsers.map(u => `
       <tr data-id="${u.id}">
         <td>
-          <div class="member-cell">
-            <div class="user-avatar avatar-${u.role}">${_initials(u.full_name)}</div>
-            <div class="member-info">
-              <span class="member-name">${u.full_name || "—"}</span>
-              <span class="member-email">${u.email}</span>
+          <div class="adm-member-cell">
+            <div class="adm-avatar role-${u.role}">${_initials(u.full_name)}</div>
+            <div class="adm-member-info">
+              <span class="adm-member-name">${u.full_name || "—"}</span>
+              <span class="adm-member-email">${u.email}</span>
             </div>
           </div>
         </td>
+        <td><span class="adm-dept-text">${DEPT_LABELS[u.role] || u.role}</span></td>
         <td>
-          <select class="role-select ctx-input-sm" data-uid="${u.id}" ${u.id === _profile.id ? "disabled title='Cannot change your own role'" : ""}>
+          <select class="role-select-inline role-select" data-uid="${u.id}"
+            ${u.id === _profile.id ? "disabled title='Cannot change your own role'" : ""}>
             ${ROLES.map(r => `<option value="${r}" ${u.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}
           </select>
         </td>
         <td>
-          <label class="toggle-label" style="gap:8px;cursor:${u.id === _profile.id ? 'not-allowed' : 'pointer'}">
-            <input type="checkbox" class="active-toggle" data-uid="${u.id}" ${u.is_active ? "checked" : ""} ${u.id === _profile.id ? "disabled" : ""} />
-            <span class="status-pill ${u.is_active ? 'active' : 'inactive'}" id="status-pill-${u.id}">
-              <span class="status-dot ${u.is_active ? 'active' : 'inactive'}" id="status-dot-${u.id}"></span>
+          <label class="adm-status-toggle" style="cursor:${u.id === _profile.id ? 'not-allowed' : 'pointer'}">
+            <input type="checkbox" class="active-toggle" data-uid="${u.id}"
+              ${u.is_active ? "checked" : ""} ${u.id === _profile.id ? "disabled" : ""}
+              style="display:none" />
+            <span class="adm-status-pill ${u.is_active ? 'active' : 'inactive'}" id="status-pill-${u.id}">
+              <span class="adm-status-dot ${u.is_active ? 'active' : 'inactive'}" id="status-dot-${u.id}"></span>
               <span id="status-text-${u.id}">${u.is_active ? "Active" : "Inactive"}</span>
             </span>
           </label>
         </td>
-        <td><span class="save-badge" id="saved-${u.id}"></span></td>
+        <td>
+          <div class="adm-actions-cell">
+            <span class="adm-save-badge" id="saved-${u.id}"></span>
+          </div>
+        </td>
       </tr>
     `).join("");
 
@@ -171,6 +196,18 @@ async function loadUsers() {
     tbody.querySelectorAll(".role-select").forEach(sel => {
       sel.addEventListener("change", async () => {
         await updateUser(sel.dataset.uid, { role: sel.value });
+        // Refresh avatar/dept after role change
+        const row = document.querySelector(`tr[data-id="${sel.dataset.uid}"]`);
+        if (row) {
+          const av   = row.querySelector(".adm-avatar");
+          const dept = row.querySelector(".adm-dept-text");
+          if (av)   av.className   = `adm-avatar role-${sel.value}`;
+          if (dept) dept.textContent = DEPT_LABELS[sel.value] || sel.value;
+          // Update cached user role for composition
+          const u = _allUsers.find(u => u.id === sel.dataset.uid);
+          if (u) u.role = sel.value;
+          _updateComposition(_allUsers);
+        }
       });
     });
 
@@ -181,48 +218,48 @@ async function loadUsers() {
         const pill = document.getElementById(`status-pill-${chk.dataset.uid}`);
         const dot  = document.getElementById(`status-dot-${chk.dataset.uid}`);
         const txt  = document.getElementById(`status-text-${chk.dataset.uid}`);
-        if (pill) { pill.className = `status-pill ${chk.checked ? "active" : "inactive"}`; }
-        if (dot)  { dot.className  = `status-dot  ${chk.checked ? "active" : "inactive"}`; }
-        if (txt)  { txt.textContent = chk.checked ? "Active" : "Inactive"; }
-        _updateStats(_allUsers.map(u => u.id === chk.dataset.uid ? {...u, is_active: chk.checked} : u), null);
+        if (pill) pill.className   = `adm-status-pill ${chk.checked ? "active" : "inactive"}`;
+        if (dot)  dot.className    = `adm-status-dot  ${chk.checked ? "active" : "inactive"}`;
+        if (txt)  txt.textContent  = chk.checked ? "Active" : "Inactive";
+        const u = _allUsers.find(u => u.id === chk.dataset.uid);
+        if (u) u.is_active = chk.checked;
       });
     });
 
     // Populate user dropdown for assignments
-    userSelect.innerHTML = `<option value="">Select user…</option>` +
+    userSelect.innerHTML = `<option value="">Select member…</option>` +
       _allUsers.filter(u => u.id !== _profile.id).map(u =>
         `<option value="${u.id}">${u.full_name} (${ROLE_LABELS[u.role] || u.role})</option>`
       ).join("");
 
   } catch {
-    tbody.innerHTML = `<tr><td colspan="5">Failed to load users.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="padding:24px;text-align:center;color:#9f403d">Failed to load users.</td></tr>`;
   }
 }
 
 async function updateUser(userId, updates) {
-  const indicator = document.getElementById(`saved-${userId}`);
+  const badge = document.getElementById(`saved-${userId}`);
   try {
     const res = await fetch("/api/users/update-role", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${_session.access_token}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
       body: JSON.stringify({ userId, ...updates }),
     });
     if (!res.ok) throw new Error();
-    if (indicator) {
-      indicator.textContent = "Saved";
-      indicator.className = "save-badge visible";
-      setTimeout(() => { indicator.className = "save-badge"; }, 2000);
+    if (badge) {
+      badge.textContent = "Saved";
+      badge.className = "adm-save-badge show";
+      setTimeout(() => { badge.className = "adm-save-badge"; }, 2000);
     }
   } catch {
-    if (indicator) {
-      indicator.textContent = "Error";
-      indicator.className = "save-badge visible error";
+    if (badge) {
+      badge.textContent = "Error";
+      badge.className = "adm-save-badge show error";
     }
   }
 }
+
+// ── Projects & Assignments ─────────────────────────────────────────────────────
 
 async function loadProjects() {
   const select = document.getElementById("assignProjectSelect");
@@ -233,7 +270,7 @@ async function loadProjects() {
     const { projects } = await res.json();
     select.innerHTML = `<option value="">Select project…</option>` +
       (projects || []).map(p =>
-        `<option value="${p.id}">${p.name || "Untitled"} ${p.client_name ? "· " + p.client_name : ""}</option>`
+        `<option value="${p.id}">${p.name || "Untitled"}${p.client_name ? " · " + p.client_name : ""}</option>`
       ).join("");
   } catch {
     select.innerHTML = `<option value="">Error loading projects</option>`;
@@ -242,23 +279,27 @@ async function loadProjects() {
 
 async function loadTeam(projectId) {
   const wrap = document.getElementById("teamWrap");
-  wrap.innerHTML = `<p class="loading-hint">Loading team…</p>`;
+  wrap.innerHTML = `<div style="font-size:12px;color:#5a6e6f;padding:8px 0">Loading…</div>`;
   try {
     const res = await fetch(`/api/project/team?id=${projectId}`, {
       headers: { Authorization: `Bearer ${_session.access_token}` },
     });
     const { team } = await res.json();
     if (!team?.length) {
-      wrap.innerHTML = `<p class="loading-hint">No team members assigned yet.</p>`;
+      wrap.innerHTML = `<div style="font-size:12px;color:#5a6e6f;text-align:center;padding:8px 0">No members assigned yet.</div>`;
       return;
     }
-    wrap.innerHTML = `<div class="team-member-chips">${team.map(t => `
-      <div class="team-member-chip">
-        <div class="user-avatar avatar-${t.profile?.role}" style="width:30px;height:30px;font-size:11px">${_initials(t.profile?.full_name)}</div>
-        <span class="team-member-chip-name">${t.profile?.full_name || "Unknown"}</span>
-        <span class="role-badge role-${t.profile?.role} team-member-chip-role">${ROLE_LABELS[t.profile?.role] || t.profile?.role}</span>
-        <button class="ghost-sm danger-sm unassign-btn" data-uid="${t.user_id}" title="Remove from project" style="margin-left:auto">✕</button>
-      </div>`).join("")}</div>`;
+    wrap.innerHTML = team.map(t => `
+      <div class="adm-team-member">
+        <div class="adm-avatar role-${t.profile?.role}" style="width:28px;height:28px;font-size:10px;flex-shrink:0">
+          ${_initials(t.profile?.full_name)}
+        </div>
+        <span class="adm-team-member-name">${t.profile?.full_name || "Unknown"}</span>
+        <span class="adm-team-member-role">${ROLE_LABELS[t.profile?.role] || t.profile?.role}</span>
+        <button class="adm-team-remove unassign-btn" data-uid="${t.user_id}" title="Remove">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>`).join("");
 
     wrap.querySelectorAll(".unassign-btn").forEach(btn => {
       btn.addEventListener("click", async () => {
@@ -272,7 +313,7 @@ async function loadTeam(projectId) {
       });
     });
   } catch {
-    wrap.innerHTML = `<p class="loading-hint">Failed to load team.</p>`;
+    wrap.innerHTML = `<div style="font-size:12px;color:#9f403d;padding:8px 0">Failed to load team.</div>`;
   }
 }
 
@@ -281,7 +322,7 @@ async function handleAssign() {
   if (!userId || !_currentProjectId) return;
   const btn = document.getElementById("assignBtn");
   btn.disabled = true;
-  btn.textContent = "Assigning…";
+  btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:15px">hourglass_top</span> Assigning…`;
   try {
     await fetch("/api/project/assign-user", {
       method: "POST",
@@ -291,6 +332,6 @@ async function handleAssign() {
     loadTeam(_currentProjectId);
   } finally {
     btn.disabled = false;
-    btn.textContent = "Assign";
+    btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:15px">person_add_alt</span> Assign to Project`;
   }
 }
