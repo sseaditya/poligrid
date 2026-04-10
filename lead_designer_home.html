@@ -476,15 +476,7 @@
     projects = data.projects || [];
   } catch { /* show empty state on failure */ }
 
-  if (!projects.length) {
-    // ── Empty state ──────────────────────────────────────────────────────────
-    document.getElementById('emptyState').style.display = '';
-    document.getElementById('activeDashboard').style.display = 'none';
-    wireEmptyState();
-    return;
-  }
-
-  // ── Active dashboard ───────────────────────────────────────────────────────
+  // ── Active dashboard (always shown, even with no projects) ───────────────
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('activeDashboard').style.display = '';
 

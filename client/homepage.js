@@ -7,6 +7,21 @@ let _session, _profile;
     ({ session: _session, profile: _profile } = await AuthClient.requireAuth());
   } catch { window.location.href = "/login"; return; }
 
+  // Redirect role-specific users immediately, before rendering anything
+  if (_profile.role === "sales") {
+    const slug = _profile.full_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    window.location.href = `/sales/${slug}`;
+    return;
+  }
+  if (_profile.role === "designer") {
+    window.location.href = "/designer_home";
+    return;
+  }
+  if (_profile.role === "lead_designer") {
+    window.location.href = "/lead_designer_home";
+    return;
+  }
+
   AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
   renderNav(_profile);
 
@@ -16,20 +31,7 @@ let _session, _profile;
   document.getElementById("greeting").textContent = `${greeting}, ${_profile.full_name.split(" ")[0]}`;
   document.getElementById("subline").textContent = `You're signed in as ${roleLabel(_profile.role)}.`;
 
-  // Redirect sales to their dedicated page
-  if (_profile.role === "sales") {
-    const slug = _profile.full_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-    window.location.href = `/sales/${slug}`;
-    return;
-  }
-
-  if (_profile.role === "designer") {
-    window.location.href = "/designer_home";
-    return;
-  } else if (_profile.role === "lead_designer") {
-    window.location.href = "/lead_designer_home";
-    return;
-  } else {
+  {
     // admin / ceo
     document.getElementById("statRow").hidden = false;
     if (_profile.role === "admin") {
