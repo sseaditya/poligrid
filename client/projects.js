@@ -46,6 +46,7 @@ function renderNav(profile) {
   const links = [
     { href: "/homepage", label: "Home" },
     { href: "/projects", label: "Projects", active: true },
+    { href: "/audit", label: "Audit Logs" },
   ];
   if (["sales", "admin", "lead_designer"].includes(profile.role)) {
     links.push({ href: "/projects", label: "Fitout Planner" });
@@ -135,6 +136,7 @@ function renderGrid() {
             <span class="proj-list-date">${date}</span>
             <div class="proj-list-actions">
               <a class="ghost-sm" href="/project?id=${p.id}" onclick="event.stopPropagation()">Details</a>
+              <a class="ghost-sm" href="/audit?projectId=${p.id}" onclick="event.stopPropagation()">Audit</a>
               ${fitoutLink}
               ${drawingsLink}
             </div>

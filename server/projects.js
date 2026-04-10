@@ -2,6 +2,7 @@
 const db = require("../db");
 const { httpError } = require("./utils");
 const { requireAuth } = require("./auth");
+const { logAuditEvent } = require("./audit");
 // ─── Project DB Handlers ─────────────────────────────────────────────────────
 
 async function handleProjectAction(action, body, auth) {
@@ -621,10 +622,27 @@ async function projectUpdateStatus(body, auth) {
   if (!VALID.includes(status)) throw httpError(400, `Invalid status. Must be: ${VALID.join(", ")}`);
 
   const sb = db.getClient();
+  const { data: projectBefore } = await sb
+    .from("projects")
+    .select("name, status")
+    .eq("id", projectId)
+    .maybeSingle();
+
   const { error } = await sb.from("projects")
     .update({ status, updated_at: new Date().toISOString() })
     .eq("id", projectId);
   if (error) throw httpError(500, "Status update failed: " + error.message);
+
+  await logAuditEvent({
+    category: auth?.profile?.role === "sales" ? "sales" : "design",
+    subcategory: "project_status_change",
+    projectId,
+    actionedBy: auth?.profile?.id || null,
+    actionedByName: auth?.profile?.full_name || null,
+    logMessage: `${auth?.profile?.full_name || "User"} changed project status from ${projectBefore?.status || "unknown"} to ${status} for ${projectBefore?.name || "project"}.`,
+    metadata: { previousStatus: projectBefore?.status || null, newStatus: status },
+  });
+
   return { ok: true };
 }
 
@@ -682,21 +700,44 @@ async function projectCreate(req, body) {
     assigned_by: profile.id,
   });
 
+  await logAuditEvent({
+    category: "sales",
+    subcategory: "project_creation",
+    projectId: newId,
+    actionedBy: profile.id,
+    actionedByName: profile.full_name,
+    logMessage: `${profile.full_name} created project ${name.trim()}.`,
+    metadata: { clientName: clientName?.trim() || null },
+  });
+
   return { projectId: newId };
 }
 
 // ─── Toggle advance payment done flag ────────────────────────────────────────
 async function projectAdvancePayment(req, body) {
-  await requireAuth(req, ["sales", "admin"]);
+  const { profile } = await requireAuth(req, ["sales", "admin"]);
   const { projectId, done } = body;
   if (!projectId) throw httpError(400, "projectId required.");
 
   const sb = db.getClient();
+  const { data: project } = await sb.from("projects").select("name").eq("id", projectId).maybeSingle();
   const { error } = await sb
     .from("projects")
     .update({ advance_payment_done: !!done, updated_at: new Date().toISOString() })
     .eq("id", projectId);
   if (error) throw httpError(500, error.message);
+
+  if (done) {
+    await logAuditEvent({
+      category: "sales",
+      subcategory: "marked_paid_by_sales",
+      projectId,
+      actionedBy: profile.id,
+      actionedByName: profile.full_name,
+      logMessage: `${profile.full_name} marked ${project?.name || "project"} as advance paid.`,
+    });
+  }
+
   return { ok: true };
 }
 

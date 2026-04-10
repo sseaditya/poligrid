@@ -5,6 +5,7 @@ const db = require("../db");
 const { requireAuth } = require("./auth");
 const { httpError } = require("./utils");
 const { notifyDrawingUploaded, notifyDrawingReviewed } = require("./notifications");
+const { logAuditEvent } = require("./audit");
 
 const MIME_MAP = {
   pdf:  "application/pdf",
@@ -219,6 +220,18 @@ async function drawingUpload(req, body) {
 
   if (error) throw httpError(500, error.message);
 
+  const { data: proj } = await sb.from("projects").select("name").eq("id", projectId).maybeSingle();
+  const isReupload = versionNumber > 1;
+  await logAuditEvent({
+    category: "design",
+    subcategory: isReupload ? "drawing_reupload" : "drawing_upload",
+    projectId,
+    actionedBy: profile.id,
+    actionedByName: profile.full_name,
+    logMessage: `${profile.full_name} ${isReupload ? "re-uploaded" : "uploaded"} ${drawingType} drawing (${title}) v${versionNumber} for ${proj?.name || "project"}.`,
+    metadata: { drawingId: row.id, drawingType, versionNumber, fileName },
+  });
+
   const nowIso = new Date().toISOString();
 
   // Sync assignment lifecycle → submitted for review
@@ -256,8 +269,6 @@ async function drawingUpload(req, body) {
       priority:     "medium",
     }));
     await sb.from("tasks").insert(tasks);
-
-    const { data: proj } = await sb.from("projects").select("name").eq("id", projectId).single();
     notifyDrawingUploaded({
       projectName:   proj?.name || projectId,
       drawingTitle:  title,
@@ -298,6 +309,26 @@ async function drawingReview(req, body) {
 
   if (drawing) {
     const nowIso = new Date().toISOString();
+
+    const reviewSubcategory =
+      status === "approved" ? "approve" :
+      status === "revision_requested" ? "request_revision" :
+      "review";
+
+    const reviewLabel =
+      status === "approved" ? "approved" :
+      status === "revision_requested" ? "requested revision for" :
+      "reviewed and rejected";
+
+    await logAuditEvent({
+      category: "design",
+      subcategory: reviewSubcategory,
+      projectId: drawing.project_id,
+      actionedBy: profile.id,
+      actionedByName: profile.full_name,
+      logMessage: `${profile.full_name} ${reviewLabel} ${drawing.drawing_type} drawing (${drawing.title}) for ${drawing.projects?.name || "project"}.`,
+      metadata: { drawingId, status, comments: comments || null, drawingType: drawing.drawing_type },
+    });
 
     // Sync assignment status
     const assignmentPatch = {
@@ -399,6 +430,10 @@ async function drawingAssignmentUpsert(req, body) {
 
   const sb = db.getClient();
   const nowIso = new Date().toISOString();
+  const [{ data: project }, { data: assignee }] = await Promise.all([
+    sb.from("projects").select("name").eq("id", projectId).maybeSingle(),
+    sb.from("profiles").select("id, full_name, role").eq("id", assignedTo).maybeSingle(),
+  ]);
 
   const { data: existing, error: existingError } = await sb
     .from("drawing_assignments")
@@ -479,6 +514,16 @@ async function drawingAssignmentUpsert(req, body) {
       due_date:     deadline || null,
     });
   }
+
+  await logAuditEvent({
+    category: "design",
+    subcategory: "drawing_assignment",
+    projectId,
+    actionedBy: profile.id,
+    actionedByName: profile.full_name,
+    logMessage: `${profile.full_name} assigned ${drawingType} drawing to ${assignee?.full_name || "designer"} for ${project?.name || "project"}.`,
+    metadata: { drawingType, assignedTo, deadline: deadline || null, notes: notes || null },
+  });
 
   return { ok: true };
 }

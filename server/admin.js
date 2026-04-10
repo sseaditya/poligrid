@@ -3,6 +3,7 @@
 const db = require("../db");
 const { requireAuth } = require("./auth");
 const { httpError } = require("./utils");
+const { logAuditEvent } = require("./audit");
 
 const VALID_ROLES = ["sales", "designer", "lead_designer", "admin", "ceo"];
 
@@ -87,6 +88,13 @@ async function projectAssignUser(req, body) {
   const { projectId, userId } = body;
   if (!projectId || !userId) throw httpError(400, "projectId, userId required.");
   const sb = db.getClient();
+
+  const [{ data: existing }, { data: project }, { data: assignee }] = await Promise.all([
+    sb.from("project_assignments").select("id").eq("project_id", projectId).eq("user_id", userId).maybeSingle(),
+    sb.from("projects").select("name").eq("id", projectId).maybeSingle(),
+    sb.from("profiles").select("id, full_name, role").eq("id", userId).maybeSingle(),
+  ]);
+
   const { error } = await sb.from("project_assignments").upsert(
     { project_id: projectId, user_id: userId, assigned_by: profile.id },
     { onConflict: "project_id,user_id" }
@@ -95,6 +103,30 @@ async function projectAssignUser(req, body) {
     console.error("[projectAssignUser]", error.message);
     throw httpError(500, error.message);
   }
+
+  if (!existing) {
+    await logAuditEvent({
+      category: "design",
+      subcategory: "team_assignment",
+      projectId,
+      actionedBy: profile.id,
+      actionedByName: profile.full_name,
+      logMessage: `${profile.full_name} assigned ${assignee?.full_name || "team member"} to ${project?.name || "project"} team.`,
+      metadata: { assignedUserId: userId, assignedUserRole: assignee?.role || null },
+    });
+
+    if (profile.role === "lead_designer" && profile.id === userId) {
+      await logAuditEvent({
+        category: "design",
+        subcategory: "lead_designer_took_up_project",
+        projectId,
+        actionedBy: profile.id,
+        actionedByName: profile.full_name,
+        logMessage: `${profile.full_name} took up project ${project?.name || "project"} as lead designer.`,
+      });
+    }
+  }
+
   return { ok: true };
 }
 

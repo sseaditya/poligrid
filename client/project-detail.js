@@ -122,6 +122,7 @@ function renderTopNav() {
   const links = [
     { href: "/homepage",  label: "Home" },
     { href: "/projects",  label: "Projects" },
+    { href: "/audit", label: "Audit Logs" },
   ];
   if (is("admin")) links.push({ href: "/admin", label: "Admin" });
   if (is("ceo", "admin")) links.push({ href: "/ceo", label: "Dashboard" });
@@ -255,6 +256,9 @@ function render({ project, drawingStats, thumbnailUrl }) {
         <div class="proj-detail-hero-actions">
           <div class="proj-detail-status-wrap">${statusHtml}</div>
           ${advPaidHtml}
+          <a class="ghost-btn btn-sm" href="/audit?projectId=${project.id}">
+            <span class="material-symbols-outlined" style="font-size:14px">history</span> Audit Log
+          </a>
           ${can.editProject()
             ? `<button class="ghost-btn btn-sm" id="editDetailsBtn">
                  <span class="material-symbols-outlined" style="font-size:14px">edit</span> Edit

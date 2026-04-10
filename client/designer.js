@@ -88,6 +88,7 @@ function renderTopNav() {
   const links = [
     { href: "/homepage", label: "Home" },
     { href: "/projects",  label: "Projects" },
+    { href: "/audit", label: "Audit Logs" },
     { href: "/designer",  label: "Drawings", active: true },
   ];
   if (_profile.role === "admin") {

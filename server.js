@@ -45,6 +45,7 @@ const {
   projectTeamGet, projectAssignUser, projectUnassignUser,
   ceoDashboard, teamStats
 } = require("./server/admin");
+const { auditLogsList } = require("./server/audit");
 
 loadEnvFile(path.join(ROOT, ".env.local"));
 
@@ -206,6 +207,12 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/ceo/team-stats") {
       return sendJson(res, 200, await teamStats(req));
+    }
+    if (req.method === "GET" && url.pathname === "/api/audit/logs") {
+      return sendJson(res, 200, await auditLogsList(req, {
+        projectId: url.searchParams.get("projectId"),
+        limit: url.searchParams.get("limit"),
+      }));
     }
 
     if (req.method === "GET" && url.pathname === "/api/project/list") {

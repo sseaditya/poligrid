@@ -34,6 +34,7 @@ function renderNav(profile) {
   const links = [
     { href: `/sales/${slug}`, label: "Home", active: true },
     { href: "/projects", label: "Projects" },
+    { href: "/audit", label: "Audit Logs" },
     { href: "/projects", label: "Fitout Planner" },
   ];
   if (profile.role === "admin") {
@@ -73,6 +74,7 @@ async function loadProjects(session, profile) {
               title="${p.advance_payment_done ? "Advance payment received — click to undo" : "Mark advance payment as received"}">
               ${p.advance_payment_done ? "₹ Advance Paid ✓" : "₹ Mark Advance Paid"}
             </button>
+            <a class="ghost-sm proj-mini-open" href="/audit?projectId=${p.id}">Audit</a>
             <a class="ghost-sm proj-mini-open" href="/index?id=${p.id}">Open →</a>
           </div>
         </div>

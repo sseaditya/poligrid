@@ -406,7 +406,28 @@ CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_tasks_project_id  ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_status      ON tasks(status);
 
--- ─── 18. CEO Dashboard View ──────────────────────────────────────────────────
+-- ─── 18. Audit Logs ──────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  category        TEXT        NOT NULL,
+  subcategory     TEXT        NOT NULL,
+  project_id      UUID        REFERENCES projects(id) ON DELETE CASCADE,
+  log_message     TEXT        NOT NULL,
+  actioned_by     UUID        REFERENCES profiles(id) ON DELETE SET NULL,
+  actioned_by_name TEXT,
+  actioned_on     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  metadata        JSONB,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_project_id  ON audit_logs(project_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_category    ON audit_logs(category);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_subcategory ON audit_logs(subcategory);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actioned_by ON audit_logs(actioned_by);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_actioned_on ON audit_logs(actioned_on DESC);
+
+-- ─── 19. CEO Dashboard View ──────────────────────────────────────────────────
 
 CREATE OR REPLACE VIEW ceo_project_dashboard AS
 SELECT

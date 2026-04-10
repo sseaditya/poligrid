@@ -182,6 +182,7 @@ function renderNav(profile) {
   const nav = document.getElementById("dashNav");
   const links = [{ href: "/homepage", label: "Home", active: true }];
   links.push({ href: "/projects", label: "Projects" });
+  links.push({ href: "/audit", label: "Audit Logs" });
 
   if (["sales", "admin", "lead_designer"].includes(profile.role)) {
     links.push({ href: "/projects", label: "Fitout Planner" });
@@ -235,8 +236,11 @@ async function loadProjects() {
           <span class="proj-mini-meta">${escHtml(p.bhk || "")} ${escHtml(p.property_type || "")} ${p.client_name ? "· " + escHtml(p.client_name) : ""}</span>
           ${p.status !== "active" ? `<span class="badge badge-${p.status}">${p.status}</span>` : ""}
         </div>
-        ${["sales", "admin"].includes(_profile.role) ? `<a class="ghost-sm proj-mini-open" href="/index?id=${p.id}">Open →</a>` : ""}
-        ${["designer", "lead_designer"].includes(_profile.role) ? `<a class="ghost-sm proj-mini-open" href="/designer?projectId=${p.id}">Drawings →</a>` : ""}
+        <div style="display:flex;gap:8px;align-items:center">
+          <a class="ghost-sm proj-mini-open" href="/audit?projectId=${p.id}">Audit</a>
+          ${["sales", "admin"].includes(_profile.role) ? `<a class="ghost-sm proj-mini-open" href="/index?id=${p.id}">Open →</a>` : ""}
+          ${["designer", "lead_designer"].includes(_profile.role) ? `<a class="ghost-sm proj-mini-open" href="/designer?projectId=${p.id}">Drawings →</a>` : ""}
+        </div>
       </div>
     `).join("");
 

@@ -22,6 +22,7 @@ function renderNav(profile) {
   const links = [
     { href: "/homepage", label: "Home" },
     { href: "/projects", label: "Projects" },
+    { href: "/audit", label: "Audit Logs" },
     { href: "/ceo", label: "Dashboard", active: true },
   ];
   if (profile.role === "admin") {
@@ -106,6 +107,7 @@ function renderTable() {
       <td class="td-actions">
         <a class="ghost-sm" href="/index?id=${p.project_id}" title="Fitout Planner">Plan</a>
         <a class="ghost-sm" href="/designer?projectId=${p.project_id}" title="View drawings">Drawings</a>
+        <a class="ghost-sm" href="/audit?projectId=${p.project_id}" title="View audit log">Audit</a>
       </td>
     </tr>`;
   }).join("");
