@@ -919,13 +919,14 @@ function wireInteractions(project) {
   document.querySelectorAll(".drawing-dl-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       try {
-        const res = await apiFetch(`/api/drawings/signed-url?path=${encodeURIComponent(btn.dataset.path)}`);
-        const { url } = await res.json();
+        const res = await apiFetch(`/api/drawings/download?path=${encodeURIComponent(btn.dataset.path)}&name=${encodeURIComponent(btn.dataset.name)}`);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         a.download = btn.dataset.name;
-        a.target = "_blank";
         a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
       } catch { alert("Could not download drawing."); }
     });
   });
