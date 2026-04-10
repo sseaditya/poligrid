@@ -150,7 +150,17 @@ function renderSidebar(project) {
     { icon: "cottage",     label: "Home",         href: "/homepage" },
   ];
 
+  const isCollapsed = localStorage.getItem("leftSidebarCollapsed") === "1";
+  if (isCollapsed) sidebar.classList.add("collapsed");
+
   sidebar.innerHTML = `
+    <div class="proj-sidebar-topbar">
+      <button id="leftSidebarToggleBtn" class="proj-sidebar-collapse-btn"
+        title="${isCollapsed ? "Expand sidebar" : "Collapse sidebar"}">
+        <span class="material-symbols-outlined">${isCollapsed ? "left_panel_open" : "left_panel_close"}</span>
+      </button>
+    </div>
+
     <div class="proj-sidebar-ctx">
       <div class="proj-sidebar-ctx-icon">
         <span class="material-symbols-outlined">home_work</span>
@@ -186,6 +196,16 @@ function renderSidebar(project) {
           <span>${l.label}</span>
         </a>`).join("")}
     </div>`;
+
+  // Wire collapse toggle
+  document.getElementById("leftSidebarToggleBtn")?.addEventListener("click", () => {
+    const collapsed = sidebar.classList.toggle("collapsed");
+    localStorage.setItem("leftSidebarCollapsed", collapsed ? "1" : "0");
+    const btn = document.getElementById("leftSidebarToggleBtn");
+    btn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+    btn.querySelector(".material-symbols-outlined").textContent =
+      collapsed ? "left_panel_open" : "left_panel_close";
+  });
 }
 
 // ─── Main render ──────────────────────────────────────────────────────────────
@@ -245,8 +265,16 @@ function render({ project, drawingStats, thumbnailUrl }) {
       <p class="proj-detail-dates">Created ${createdDate} · Updated ${updatedDate}</p>
     </div>
 
+    <!-- ── Workspace controls ───────────────────────────────────────────────────── -->
+    <div class="proj-workspace-controls">
+      <button id="rightSidebarToggleBtn" class="proj-panel-toggle" title="Toggle details panel">
+        <span class="material-symbols-outlined" style="font-size:16px" id="rightPanelIcon">right_panel_close</span>
+        <span id="rightPanelLabel">Details</span>
+      </button>
+    </div>
+
     <!-- ── Workspace grid ─────────────────────────────────────────────────────── -->
-    <div class="proj-workspace-layout">
+    <div class="proj-workspace-layout" id="workspaceLayout">
       <div class="proj-workspace-main">
         ${buildMainSections(project)}
       </div>
@@ -410,9 +438,19 @@ function buildConceptsSection(project) {
 // ── Technical Drawings ────────────────────────────────────────────────────────
 function buildDrawingsSection(drawings, project) {
   const isLead = can.reviewDrawings();
-  const pendingCount = drawings.filter(d => d.status === "pending_review").length;
 
-  const rows = drawings.map(d => {
+  // Latest version per drawing type only
+  const latestByType = {};
+  for (const d of drawings) {
+    const ex = latestByType[d.drawing_type];
+    if (!ex || (d.version_number ?? 0) > (ex.version_number ?? 0)) {
+      latestByType[d.drawing_type] = d;
+    }
+  }
+  const latest = Object.values(latestByType);
+  const pendingCount = latest.filter(d => d.status === "pending_review").length;
+
+  const rows = latest.map(d => {
     const sc = {
       pending_review:     "badge-drawing-pending_review",
       approved:           "badge-drawing-approved",
@@ -420,51 +458,57 @@ function buildDrawingsSection(drawings, project) {
       revision_requested: "badge-drawing-revision_requested",
     }[d.status] || "badge-drawing-pending_review";
 
-    let actionHtml = "";
+    let reviewHtml = "";
     if (isLead) {
       if (d.status === "pending_review") {
-        actionHtml = `<button class="primary-btn btn-sm review-verify-btn"
+        reviewHtml = `<button class="primary-btn btn-sm review-verify-btn"
           data-id="${d.id}" data-title="${escHtml(d.title)}"
           style="width:auto;white-space:nowrap;background:linear-gradient(135deg,#6b46c1,#4c1d95);color:#fff">
-          <span class="material-symbols-outlined" style="font-size:13px">verified</span> Verify Now
+          <span class="material-symbols-outlined" style="font-size:13px">verified</span> Verify
         </button>`;
       } else if (d.status === "revision_requested") {
-        actionHtml = `<button class="ghost-btn btn-sm review-verify-btn"
+        reviewHtml = `<button class="ghost-btn btn-sm review-verify-btn"
           data-id="${d.id}" data-title="${escHtml(d.title)}" style="white-space:nowrap">
-          <span class="material-symbols-outlined" style="font-size:13px">rate_review</span> Review Changes
+          <span class="material-symbols-outlined" style="font-size:13px">rate_review</span> Review
         </button>`;
       } else if (d.status === "approved") {
-        actionHtml = `<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--success);font-weight:600">
+        reviewHtml = `<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--success);font-weight:600">
           <span class="material-symbols-outlined" style="font-size:14px;font-variation-settings:'FILL' 1">check_circle</span>Verified
         </span>`;
       } else {
-        actionHtml = `<button class="ghost-btn btn-sm review-verify-btn"
+        reviewHtml = `<button class="ghost-btn btn-sm review-verify-btn"
           data-id="${d.id}" data-title="${escHtml(d.title)}">Review</button>`;
       }
     }
 
-    const fileIcon = d.file_name?.endsWith(".pdf")
-      ? `<span class="material-symbols-outlined" style="color:var(--color-error)">picture_as_pdf</span>`
-      : `<span class="material-symbols-outlined" style="color:var(--color-primary)">architecture</span>`;
+    const filePath  = escHtml(d.file_path || "");
+    const fileName  = escHtml(d.file_name || (d.drawing_type + ".pdf"));
+    const viewDl = d.file_path ? `
+      <button class="ghost-sm drawing-view-btn" data-path="${filePath}" title="View">
+        <span class="material-symbols-outlined" style="font-size:15px">visibility</span>
+      </button>
+      <button class="ghost-sm drawing-dl-btn" data-path="${filePath}" data-name="${fileName}" title="Download">
+        <span class="material-symbols-outlined" style="font-size:15px">download</span>
+      </button>` : "";
 
     return `
       <tr>
         <td class="px-4 py-3">
-          <div style="display:flex;align-items:center;gap:12px">
-            <div style="width:36px;height:36px;background:var(--color-surface-container);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              ${fileIcon}
-            </div>
-            <div>
-              <p class="proj-tbl-title">${escHtml(d.title || d.file_name || "Untitled")}</p>
-              <p class="proj-tbl-sub">${escHtml(DRAWING_TYPE_LABELS[d.drawing_type] || d.drawing_type || "")} · ${fmt(d.created_at)}</p>
-            </div>
-          </div>
+          <p class="proj-tbl-title">${escHtml(DRAWING_TYPE_LABELS[d.drawing_type] || d.drawing_type)}</p>
+          <p class="proj-tbl-sub">v${d.version_number ?? 1} · ${fmt(d.created_at)}</p>
         </td>
         ${isLead ? `<td class="px-4 py-3"><p class="proj-tbl-sub">${escHtml(d.uploader?.full_name || "—")}</p></td>` : ""}
         <td class="px-4 py-3"><span class="badge ${sc}">${DRAWING_STATUS_LABELS[d.status] || d.status}</span></td>
-        ${isLead ? `<td class="px-4 py-3 text-right"><div class="proj-tbl-actions" style="justify-content:flex-end">${actionHtml}</div></td>` : ""}
+        <td class="px-4 py-3">
+          <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+            ${viewDl}
+            ${reviewHtml}
+          </div>
+        </td>
       </tr>`;
   }).join("");
+
+  const filePaths = latest.filter(d => d.file_path).map(d => d.file_path);
 
   return `
     <div class="dash-section" style="padding:0;overflow:hidden">
@@ -476,9 +520,13 @@ function buildDrawingsSection(drawings, project) {
           </div>
           ${pendingCount > 0 && isLead
             ? `<p class="dash-section-hint" style="margin-top:4px">${pendingCount} drawing${pendingCount > 1 ? "s" : ""} awaiting verification</p>`
-            : `<p class="dash-section-hint" style="margin-top:4px">Stage 2 construction blueprints</p>`}
+            : `<p class="dash-section-hint" style="margin-top:4px">Latest version per type</p>`}
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${filePaths.length > 0
+            ? `<a class="ghost-btn btn-sm" href="/api/drawings/download-zip?projectId=${project.id}" style="gap:5px">
+                 <span class="material-symbols-outlined" style="font-size:14px">folder_zip</span> Download All
+               </a>` : ""}
           ${can.uploadDrawings()
             ? `<a class="ghost-btn btn-sm" href="/designer?projectId=${project.id}" style="gap:5px">
                  <span class="material-symbols-outlined" style="font-size:14px">upload_file</span> Upload
@@ -487,15 +535,15 @@ function buildDrawingsSection(drawings, project) {
         </div>
       </div>
 
-      ${drawings.length > 0 ? `
+      ${latest.length > 0 ? `
         <div class="proj-drawings-wrap" style="border-top:1px solid var(--color-surface-container)">
           <table class="proj-drawings-tbl" style="width:100%;border-collapse:collapse">
             <thead>
               <tr style="background:rgba(242,244,244,0.6)">
-                <th style="padding:10px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--color-on-surface-variant)">Drawing</th>
+                <th style="padding:10px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--color-on-surface-variant)">Type</th>
                 ${isLead ? `<th style="padding:10px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--color-on-surface-variant)">Designer</th>` : ""}
                 <th style="padding:10px 16px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--color-on-surface-variant)">Status</th>
-                ${isLead ? `<th style="padding:10px 16px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--color-on-surface-variant)">Action</th>` : ""}
+                <th style="padding:10px 16px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--color-on-surface-variant)">Actions</th>
               </tr>
             </thead>
             <tbody style="divide-y:var(--color-surface-container)">${rows}</tbody>
@@ -805,6 +853,44 @@ function wireInteractions(project) {
       btn.addEventListener("click", () => handleDrawingAssignmentDelete(btn.dataset.id));
     });
   }
+
+  // Drawing view / download buttons
+  document.querySelectorAll(".drawing-view-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      try {
+        const res = await apiFetch(`/api/drawings/signed-url?path=${encodeURIComponent(btn.dataset.path)}`);
+        const { url } = await res.json();
+        window.open(url, "_blank");
+      } catch { alert("Could not open drawing."); }
+    });
+  });
+  document.querySelectorAll(".drawing-dl-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      try {
+        const a = document.createElement("a");
+        a.href = `/api/drawings/download?path=${encodeURIComponent(btn.dataset.path)}&name=${encodeURIComponent(btn.dataset.name)}`;
+        a.download = btn.dataset.name;
+        a.click();
+      } catch { alert("Could not download drawing."); }
+    });
+  });
+
+  // Right sidebar toggle
+  const workspaceLayout = document.getElementById("workspaceLayout");
+  const rightToggleBtn  = document.getElementById("rightSidebarToggleBtn");
+  const rightPanelIcon  = document.getElementById("rightPanelIcon");
+  const rightPanelLabel = document.getElementById("rightPanelLabel");
+  const rightCollapsed  = localStorage.getItem("rightSidebarCollapsed") === "1";
+  if (rightCollapsed && workspaceLayout) {
+    workspaceLayout.classList.add("right-collapsed");
+    if (rightPanelIcon) rightPanelIcon.textContent = "right_panel_open";
+    if (rightPanelLabel) rightPanelLabel.textContent = "Details";
+  }
+  rightToggleBtn?.addEventListener("click", () => {
+    const collapsed = workspaceLayout.classList.toggle("right-collapsed");
+    localStorage.setItem("rightSidebarCollapsed", collapsed ? "1" : "0");
+    if (rightPanelIcon) rightPanelIcon.textContent = collapsed ? "right_panel_open" : "right_panel_close";
+  });
 }
 
 // ─── Status change ────────────────────────────────────────────────────────────

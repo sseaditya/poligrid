@@ -27,7 +27,8 @@ const DRAWING_TYPES = [
   } catch { window.location.href = "/login"; return; }
 
   AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
-  renderNav(_profile);
+  renderTopNav();
+  renderSidebar();
 
   const isLead = ["lead_designer", "admin"].includes(_profile.role);
   const isDesigner = _profile.role === "designer";
@@ -45,6 +46,7 @@ const DRAWING_TYPES = [
     document.getElementById("assignModalClose").addEventListener("click", closeAssignModal);
     document.getElementById("assignCancelBtn").addEventListener("click", closeAssignModal);
     document.getElementById("assignSaveBtn").addEventListener("click", handleAssignSave);
+    document.getElementById("addAssignRowBtn").addEventListener("click", addAssignRow);
     await loadLeadTimeline();
   }
 
@@ -76,23 +78,103 @@ const DRAWING_TYPES = [
   document.getElementById("reviewRejectBtn").addEventListener("click",   () => submitReview("rejected"));
   document.getElementById("downloadZipBtn").addEventListener("click", handleZipDownload);
   document.getElementById("fileViewerClose").addEventListener("click", () => { document.getElementById("fileViewerModal").hidden = true; });
+
+  wireDropZone();
 })();
 
-// ─── Nav ─────────────────────────────────────────────────────────────────────
-function renderNav(profile) {
+// ─── Top nav ──────────────────────────────────────────────────────────────────
+function renderTopNav() {
   const nav = document.getElementById("dashNav");
-  const links = [{ href: "/homepage", label: "Home" }, { href: "/projects", label: "Projects" }];
-  if (["sales", "admin", "lead_designer"].includes(profile.role)) {
-    links.push({ href: "/projects", label: "Fitout Planner" });
-  }
-  links.push({ href: "/designer", label: "Drawings", active: true });
-  if (profile.role === "admin") {
+  const links = [
+    { href: "/homepage", label: "Home" },
+    { href: "/projects",  label: "Projects" },
+    { href: "/designer",  label: "Drawings", active: true },
+  ];
+  if (_profile.role === "admin") {
     links.push({ href: "/admin", label: "Admin" });
     links.push({ href: "/ceo",   label: "Dashboard" });
   }
   nav.innerHTML = links.map(l =>
     `<a class="dash-nav-link${l.active ? " active" : ""}" href="${l.href}">${l.label}</a>`
   ).join("");
+}
+
+// ─── Left sidebar ─────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const sidebar = document.getElementById("projSidebar");
+  if (!sidebar) return;
+
+  const urlProjectId = new URLSearchParams(location.search).get("projectId");
+  const roleLabel = ROLE_LABELS[_profile.role] || _profile.role;
+  const isCollapsed = localStorage.getItem("leftSidebarCollapsed") === "1";
+  if (isCollapsed) sidebar.classList.add("collapsed");
+
+  const navLinks = [];
+  if (urlProjectId) {
+    navLinks.push({ icon: "home_work", label: "Back to Project", href: `/project?id=${urlProjectId}` });
+  }
+  navLinks.push({ icon: "architecture", label: "Drawings", href: "#", active: true });
+  if (["lead_designer", "admin"].includes(_profile.role)) {
+    navLinks.push({ icon: "design_services", label: "Fitout Planner", href: urlProjectId ? `/index?id=${urlProjectId}` : "/index" });
+  }
+
+  const bottomLinks = [
+    { icon: "folder_open", label: "All Projects", href: "/projects" },
+    { icon: "cottage",     label: "Home",          href: "/homepage" },
+  ];
+
+  sidebar.innerHTML = `
+    <div class="proj-sidebar-topbar">
+      <button id="leftSidebarToggleBtn" class="proj-sidebar-collapse-btn"
+        title="${isCollapsed ? "Expand sidebar" : "Collapse sidebar"}">
+        <span class="material-symbols-outlined">${isCollapsed ? "left_panel_open" : "left_panel_close"}</span>
+      </button>
+    </div>
+
+    <div class="proj-sidebar-ctx">
+      <div class="proj-sidebar-ctx-icon">
+        <span class="material-symbols-outlined">architecture</span>
+      </div>
+      <div class="proj-sidebar-ctx-name" id="sidebarProjectName">Drawings</div>
+      <div class="proj-sidebar-ctx-sub">${escHtml(roleLabel)}</div>
+    </div>
+
+    <p class="proj-sidebar-label">Workspace</p>
+    ${navLinks.map(l => `
+      <a class="proj-sidebar-link${l.active ? " active" : ""}" href="${l.href}">
+        <span class="material-symbols-outlined">${l.icon}</span>
+        <span>${l.label}</span>
+      </a>`).join("")}
+
+    ${_profile.role === "admin" ? `
+      <p class="proj-sidebar-label">Admin</p>
+      <a class="proj-sidebar-link" href="/admin">
+        <span class="material-symbols-outlined">manage_accounts</span>
+        <span>Admin Panel</span>
+      </a>
+      <a class="proj-sidebar-link" href="/ceo">
+        <span class="material-symbols-outlined">analytics</span>
+        <span>CEO Dashboard</span>
+      </a>` : ""}
+
+    <hr class="proj-sidebar-divider" />
+
+    <div class="proj-sidebar-bottom">
+      ${bottomLinks.map(l => `
+        <a class="proj-sidebar-link" href="${l.href}">
+          <span class="material-symbols-outlined">${l.icon}</span>
+          <span>${l.label}</span>
+        </a>`).join("")}
+    </div>`;
+
+  document.getElementById("leftSidebarToggleBtn")?.addEventListener("click", () => {
+    const collapsed = sidebar.classList.toggle("collapsed");
+    localStorage.setItem("leftSidebarCollapsed", collapsed ? "1" : "0");
+    const btn = document.getElementById("leftSidebarToggleBtn");
+    btn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+    btn.querySelector(".material-symbols-outlined").textContent =
+      collapsed ? "left_panel_open" : "left_panel_close";
+  });
 }
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
@@ -129,11 +211,6 @@ async function loadDesigners() {
     _allDesigners = (users || []).filter(u =>
       ["designer", "lead_designer", "admin"].includes(u.role) && u.is_active
     );
-    const sel = document.getElementById("assignDesignerSelect");
-    sel.innerHTML = `<option value="">Select designer…</option>` +
-      _allDesigners.map(u =>
-        `<option value="${u.id}">${u.full_name} (${ROLE_LABELS[u.role] || u.role})</option>`
-      ).join("");
   } catch { /* silently ignore */ }
 }
 
@@ -148,6 +225,19 @@ function selectProject(projectId) {
   document.getElementById("uploadBtn").disabled = !projectId;
   document.getElementById("downloadZipBtn").disabled = !projectId;
   document.getElementById("progressWrap").hidden = !projectId;
+
+  // Update sidebar context name
+  const sel = document.getElementById("projectSelect");
+  const selectedText = sel.options[sel.selectedIndex]?.text || "Drawings";
+  const projectName = selectedText.split(" · ")[0]; // strip client name
+  const sidebarNameEl = document.getElementById("sidebarProjectName");
+  if (sidebarNameEl) sidebarNameEl.textContent = projectId ? projectName : "Drawings";
+
+  // Update subtitle
+  const subtitle = document.getElementById("designerSubtitle");
+  if (subtitle) subtitle.textContent = projectId
+    ? `Managing drawings for ${escHtml(projectName)}`
+    : "Select a project to manage drawings";
 
   if (!projectId) {
     document.getElementById("drawingsHint").textContent = "Select a project to view drawings.";
@@ -367,41 +457,105 @@ async function deleteAssignment(assignmentId) {
   }
 }
 
-// ─── Assign modal ─────────────────────────────────────────────────────────────
+// ─── Assign modal (multi-row) ─────────────────────────────────────────────────
 function openAssignModal() {
-  document.getElementById("assignDrawingType").value = "";
-  document.getElementById("assignDesignerSelect").value = "";
-  document.getElementById("assignDeadline").value = "";
-  document.getElementById("assignNotes").value = "";
+  const rowsWrap = document.getElementById("assignRows");
+  rowsWrap.innerHTML = "";
   document.getElementById("assignError").hidden = true;
   document.getElementById("assignModal").hidden = false;
+  addAssignRow(); // start with one empty row
 }
 
 function closeAssignModal() {
   document.getElementById("assignModal").hidden = true;
 }
 
+const DRAWING_TYPE_ICONS = {
+  civil: "construction", electrical: "bolt", plumbing: "water_drop",
+  hvac: "air", firefighting: "local_fire_department", architectural: "home",
+  structural: "foundation", interior: "chair", landscape: "park", other: "architecture",
+};
+
+function addAssignRow() {
+  const wrap = document.getElementById("assignRows");
+
+  const row = document.createElement("div");
+  row.className = "assign-type-row";
+  row.innerHTML = `
+    <div class="assign-type-row-icon" id="assignRowIcon_${Date.now()}">
+      <span class="material-symbols-outlined">architecture</span>
+    </div>
+    <div class="assign-type-row-fields">
+      <select class="ctx-input assign-row-type" style="font-size:13px">
+        <option value="">Drawing type…</option>
+        ${DRAWING_TYPES.map(t => `<option value="${t.value}">${t.label}</option>`).join("")}
+      </select>
+      <select class="ctx-input assign-row-designer" style="font-size:13px">
+        <option value="">Assign to…</option>
+        ${_allDesigners.map(u =>
+          `<option value="${u.id}">${escHtml(u.full_name)} — ${ROLE_LABELS[u.role] || u.role}</option>`
+        ).join("")}
+      </select>
+      <input class="ctx-input assign-row-deadline" type="date" title="Deadline (optional)" style="font-size:13px" />
+    </div>
+    <button type="button" class="ghost-sm danger-sm assign-row-del" title="Remove row">
+      <span class="material-symbols-outlined" style="font-size:15px">close</span>
+    </button>`;
+
+  // Update icon when type changes
+  const typeSelect = row.querySelector(".assign-row-type");
+  const iconWrap = row.querySelector(".assign-type-row-icon");
+  typeSelect.addEventListener("change", () => {
+    const icon = DRAWING_TYPE_ICONS[typeSelect.value] || "architecture";
+    iconWrap.querySelector(".material-symbols-outlined").textContent = icon;
+  });
+
+  // Remove row
+  row.querySelector(".assign-row-del").addEventListener("click", () => {
+    row.remove();
+    if (!wrap.children.length) addAssignRow();
+  });
+
+  wrap.appendChild(row);
+}
+
 async function handleAssignSave() {
-  const drawingType  = document.getElementById("assignDrawingType").value;
-  const assignedTo   = document.getElementById("assignDesignerSelect").value || null;
-  const deadline     = document.getElementById("assignDeadline").value || null;
-  const notes        = document.getElementById("assignNotes").value.trim() || null;
-  const errEl        = document.getElementById("assignError");
-  const btn          = document.getElementById("assignSaveBtn");
+  const rows = document.querySelectorAll(".assign-type-row");
+  const errEl = document.getElementById("assignError");
+  const btn   = document.getElementById("assignSaveBtn");
   errEl.hidden = true;
 
-  if (!drawingType) { errEl.textContent = "Please select a drawing type."; errEl.hidden = false; return; }
-  if (!assignedTo) { errEl.textContent = "Please select a designer."; errEl.hidden = false; return; }
+  const toSave = [];
+  for (const row of rows) {
+    const drawingType = row.querySelector(".assign-row-type").value;
+    const assignedTo  = row.querySelector(".assign-row-designer").value || null;
+    const deadline    = row.querySelector(".assign-row-deadline").value || null;
+    if (drawingType && assignedTo) toSave.push({ drawingType, assignedTo, deadline });
+    else if (drawingType && !assignedTo) {
+      errEl.textContent = `Please select a designer for "${drawingType}".`;
+      errEl.hidden = false;
+      return;
+    }
+  }
+
+  if (!toSave.length) {
+    errEl.textContent = "Add at least one drawing type with a designer.";
+    errEl.hidden = false;
+    return;
+  }
 
   btn.disabled = true;
-  btn.textContent = "Saving…";
+  btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:15px">hourglass_empty</span> Saving…`;
+
   try {
-    const res = await apiFetch("/api/drawings/assignments/upsert", {
-      method: "POST",
-      body: JSON.stringify({ projectId: _currentProjectId, drawingType, assignedTo, deadline, notes }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed");
+    for (const a of toSave) {
+      const res = await apiFetch("/api/drawings/assignments/upsert", {
+        method: "POST",
+        body: JSON.stringify({ projectId: _currentProjectId, ...a }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save assignment.");
+    }
     closeAssignModal();
     loadAll(_currentProjectId);
   } catch (err) {
@@ -409,7 +563,7 @@ async function handleAssignSave() {
     errEl.hidden = false;
   } finally {
     btn.disabled = false;
-    btn.textContent = "Save Assignment";
+    btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:15px">person_add</span> Save Assignments`;
   }
 }
 
@@ -691,10 +845,18 @@ function closeUploadModal() {
   document.getElementById("uploadModal").hidden = true;
   document.getElementById("uploadForm").reset();
   document.getElementById("uploadError").hidden = true;
+  // Reset drop zone
+  const chip = document.getElementById("uploadFileChip");
+  const zone = document.getElementById("uploadDropZone");
+  if (chip) chip.hidden = true;
+  if (zone) zone.hidden = false;
   const title = document.getElementById("uploadModalTitle");
   if (title) title.textContent = "Upload Drawing";
   const submitBtn = document.getElementById("uploadSubmitBtn");
-  if (submitBtn) { submitBtn.style.background = ""; submitBtn.textContent = "Upload"; }
+  if (submitBtn) {
+    submitBtn.style.background = "";
+    submitBtn.innerHTML = `<span class="material-symbols-outlined" style="font-size:15px">upload_file</span> Upload Drawing`;
+  }
 }
 
 async function handleUpload(e) {
@@ -774,6 +936,60 @@ async function submitReview(status) {
     errEl.textContent = err.message;
     errEl.hidden = false;
     btns.forEach(b => b.disabled = false);
+  }
+}
+
+// ─── Drop zone ────────────────────────────────────────────────────────────────
+function wireDropZone() {
+  const zone     = document.getElementById("uploadDropZone");
+  const fileInput = document.getElementById("drawingFile");
+  const chip     = document.getElementById("uploadFileChip");
+  const nameEl   = document.getElementById("uploadFileName");
+  const sizeEl   = document.getElementById("uploadFileSize");
+  const iconEl   = document.getElementById("uploadFileIcon");
+  const clearBtn = document.getElementById("uploadFileClear");
+
+  if (!zone) return;
+
+  zone.addEventListener("click", () => fileInput.click());
+  zone.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") fileInput.click(); });
+
+  zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag-over"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("drag-over"));
+  zone.addEventListener("drop", e => {
+    e.preventDefault();
+    zone.classList.remove("drag-over");
+    const file = e.dataTransfer?.files[0];
+    if (file) applyFile(file);
+  });
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (file) applyFile(file);
+  });
+
+  clearBtn?.addEventListener("click", () => {
+    fileInput.value = "";
+    chip.hidden = true;
+    zone.hidden = false;
+  });
+
+  function applyFile(file) {
+    // Sync file to the input via DataTransfer (where supported)
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.files = dt.files;
+    } catch { /* Safari fallback — file comes from input already */ }
+
+    const ext = file.name.split(".").pop().toLowerCase();
+    iconEl.textContent = ext === "pdf"
+      ? "picture_as_pdf"
+      : ["png","jpg","jpeg","gif","webp"].includes(ext) ? "image" : "description";
+    nameEl.textContent = file.name;
+    sizeEl.textContent = fmtBytes(file.size);
+    chip.hidden = false;
+    zone.hidden = true;
   }
 }
 

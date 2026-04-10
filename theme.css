@@ -726,11 +726,42 @@
   grid-template-columns: minmax(0, 1fr) 340px;
   gap: 20px;
   align-items: start;
-  margin-top: 20px;
+  margin-top: 8px;
+  transition: grid-template-columns 0.22s ease;
 }
 @media (max-width: 920px) { .proj-workspace-layout { grid-template-columns: 1fr; } }
+.proj-workspace-layout.right-collapsed { grid-template-columns: 1fr !important; }
+.proj-workspace-layout.right-collapsed .proj-workspace-sidebar { display: none; }
 .proj-workspace-main    { display: flex; flex-direction: column; gap: 20px; }
 .proj-workspace-sidebar { display: flex; flex-direction: column; gap: 20px; }
+
+/* Workspace controls row */
+.proj-workspace-controls {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  margin-bottom: 0;
+}
+.proj-panel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-on-surface-variant);
+  background: none;
+  border: 1px solid var(--color-surface-container);
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.13s;
+}
+.proj-panel-toggle:hover {
+  background: var(--color-surface-container);
+  color: var(--color-on-surface);
+}
 
 /* Enhanced hero for project workspace */
 .proj-hero-stage {
@@ -982,14 +1013,66 @@
   top: var(--topbar-h);
   height: calc(100vh - var(--topbar-h));
   overflow-y: auto;
-  padding: 24px 12px;
+  overflow-x: hidden;
+  padding: 16px 12px 24px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   scrollbar-width: none;
+  transition: width 0.22s ease, padding 0.22s ease;
+  border-right: 1px solid rgba(45,52,53,0.07);
 }
 .proj-sidebar::-webkit-scrollbar { display: none; }
 @media (max-width: 800px) { .proj-sidebar { display: none; } }
+
+/* Sidebar top bar with collapse toggle */
+.proj-sidebar-topbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+.proj-sidebar-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-lg);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-on-surface-variant);
+  transition: background 0.13s, color 0.13s;
+}
+.proj-sidebar-collapse-btn:hover {
+  background: var(--color-surface-container);
+  color: var(--color-on-surface);
+}
+.proj-sidebar-collapse-btn .material-symbols-outlined { font-size: 18px; }
+
+/* Collapsed state */
+.proj-sidebar.collapsed {
+  width: 52px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.proj-sidebar.collapsed .proj-sidebar-topbar { justify-content: center; }
+.proj-sidebar.collapsed .proj-sidebar-label { display: none; }
+.proj-sidebar.collapsed .proj-sidebar-ctx-name,
+.proj-sidebar.collapsed .proj-sidebar-ctx-sub { display: none; }
+.proj-sidebar.collapsed .proj-sidebar-ctx {
+  padding: 8px 4px 12px;
+  align-items: center;
+}
+.proj-sidebar.collapsed .proj-sidebar-ctx-icon { margin-bottom: 0; }
+.proj-sidebar.collapsed .proj-sidebar-link {
+  justify-content: center;
+  padding: 9px 4px;
+}
+.proj-sidebar.collapsed .proj-sidebar-link > span:last-child { display: none; }
+.proj-sidebar.collapsed .proj-sidebar-bottom > a > span:last-child { display: none; }
+.proj-sidebar.collapsed .proj-sidebar-divider { margin: 6px 2px; }
 
 /* Main canvas */
 .proj-canvas {
@@ -1173,4 +1256,172 @@
   display: inline-block;
   padding: 4px 10px; border-radius: 6px;
   font-size: 11px; font-weight: 700; color: var(--color-on-surface);
+}
+
+
+/* ════════════════════════════════════════════════════════════════
+   DRAWINGS MANAGER — Upload drop zone, assign rows, file chip
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Upload drop zone ────────────────────────────────────────── */
+.upload-dropzone {
+  position: relative;
+  border: 2px dashed var(--color-surface-container);
+  border-radius: 12px;
+  padding: 32px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: var(--color-surface-container-low);
+  user-select: none;
+}
+.upload-dropzone:hover,
+.upload-dropzone:focus,
+.upload-dropzone.drag-over {
+  border-color: var(--color-primary);
+  background: var(--color-primary-container);
+  outline: none;
+}
+.upload-dropzone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* handled by click event */
+}
+.upload-dropzone .material-symbols-outlined {
+  font-size: 38px;
+  color: var(--color-on-surface-variant);
+  opacity: .3;
+  display: block;
+  margin: 0 auto 10px;
+}
+.upload-dropzone:hover .material-symbols-outlined,
+.upload-dropzone.drag-over .material-symbols-outlined {
+  opacity: .6;
+  color: var(--color-primary);
+}
+.upload-dropzone-main {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-on-surface-variant);
+  margin-bottom: 4px;
+}
+.upload-dropzone-link {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.upload-dropzone-sub {
+  font-size: 11px;
+  color: var(--color-on-surface-variant);
+  opacity: .7;
+}
+
+/* ── File chip (selected file preview) ───────────────────────── */
+.upload-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--color-surface-container-low);
+  border: 1px solid var(--color-surface-container);
+  border-radius: 10px;
+}
+.upload-file-chip > .material-symbols-outlined {
+  font-size: 24px;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+/* ── Assign rows (Stitch multi-department style) ──────────────── */
+.assign-rows-header {
+  display: grid;
+  /* mirrors: icon(40) | [type(1fr) designer(1fr) deadline(130px)] | del(32px) + gaps */
+  grid-template-columns: 52px 1fr 1fr 130px 44px;
+  gap: 8px;
+  padding: 0 16px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--color-on-surface-variant);
+}
+.assign-rows-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.assign-type-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--color-surface-container-low);
+  border: 1px solid var(--color-surface-container);
+  border-radius: 10px;
+  transition: border-color 0.13s, box-shadow 0.13s;
+}
+.assign-type-row:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(45,52,53,0.06);
+}
+.assign-type-row-icon {
+  width: 36px;
+  height: 36px;
+  background: var(--color-primary-container);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.13s;
+}
+.assign-type-row:hover .assign-type-row-icon {
+  background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+.assign-type-row-icon .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--color-primary);
+}
+.assign-type-row-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 130px;
+  gap: 8px;
+}
+@media (max-width: 580px) {
+  .assign-type-row-fields { grid-template-columns: 1fr 1fr; }
+  .assign-type-row-fields > :last-child { grid-column: 1 / -1; }
+  .assign-rows-header { display: none; }
+}
+
+/* ── Drawing cards inside dash-section ───────────────────────── */
+#drawingsByType .drawings-group {
+  padding: 16px 24px 20px;
+  border-bottom: 1px solid var(--color-surface-container);
+}
+#drawingsByType .drawings-group:last-child { border-bottom: none; }
+#drawingsByType .drawings-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--color-on-surface-variant);
+  margin-bottom: 10px;
+}
+
+/* ── Assignment tables inside dash-section ───────────────────── */
+#assignmentList .assignment-table,
+#myAssignmentList .assignment-table,
+#leadTimelineList .assignment-table {
+  border-radius: 8px;
+  border: 1px solid var(--color-surface-container);
+  overflow: hidden;
+}
+#assignmentList .assignment-header,
+#myAssignmentList .assignment-header,
+#leadTimelineList .assignment-header {
+  background: var(--color-surface-container-low);
 }
