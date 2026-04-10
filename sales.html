@@ -131,8 +131,8 @@
           Fitout Planner
         </button>
         <button onclick="window.location='/projects'" class="ai-gradient text-white px-8 py-3 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-purple-500/20 hover:scale-105 transition-all">
-          <span class="material-symbols-outlined text-lg">add_circle</span>
-          New Project
+          <span class="material-symbols-outlined text-lg">home_work</span>
+          Project Screen
         </button>
       </div>
     </section>
@@ -200,46 +200,31 @@
           <div class="flex justify-between items-center mb-6">
             <h3 class="text-xl font-extrabold headline">Quick Actions</h3>
           </div>
-          <div class="space-y-3">
-            <button onclick="window.location='/projects'" class="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-100 hover:border-gray-300 hover:bg-gray-50 transition-all text-left">
-              <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                <span class="material-symbols-outlined text-gray-700">add_circle</span>
-              </div>
-              <div>
-                <p class="text-sm font-bold text-black">New Project</p>
-                <p class="text-[11px] text-gray-500">Start fitout planning</p>
-              </div>
-            </button>
-            <button onclick="window.location='/index'" class="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-100 hover:border-gray-300 hover:bg-gray-50 transition-all text-left">
-              <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                <span class="material-symbols-outlined text-gray-700">architecture</span>
-              </div>
-              <div>
-                <p class="text-sm font-bold text-black">Fitout Planner</p>
-                <p class="text-[11px] text-gray-500">Open last project</p>
-              </div>
-            </button>
-            <button onclick="window.location='/homepage'" class="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-100 hover:border-gray-300 hover:bg-gray-50 transition-all text-left">
-              <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                <span class="material-symbols-outlined text-gray-700">home</span>
-              </div>
-              <div>
-                <p class="text-sm font-bold text-black">Homepage</p>
-                <p class="text-[11px] text-gray-500">Back to main dashboard</p>
-              </div>
-            </button>
-          </div>
-
-          <!-- AI gradient CTA -->
-          <div class="mt-6 ai-gradient rounded-xl p-6 text-white">
-            <div class="flex items-center gap-2 mb-3">
-              <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
-              <p class="text-xs font-bold uppercase tracking-widest">AI Design Tool</p>
+          <!-- Two primary action buttons -->
+          <a href="/index" class="w-full flex items-center gap-4 p-5 rounded-xl border-2 border-gray-200 hover:border-black hover:bg-gray-50 transition-all">
+            <div class="w-11 h-11 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+              <span class="material-symbols-outlined text-gray-700">architecture</span>
             </div>
-            <p class="text-sm leading-relaxed opacity-90 mb-4">Generate floor plan renders and BOQ estimates automatically from inspiration images.</p>
-            <button onclick="window.location='/index'" class="w-full bg-white text-purple-700 font-bold text-xs py-3 rounded-lg hover:bg-gray-50 transition-all">
-              Open AI Planner →
-            </button>
+            <div>
+              <p class="text-sm font-extrabold text-black">Fitout Planner</p>
+              <p class="text-[11px] text-gray-500 mt-0.5">AI floor plan + renders + BOQ</p>
+            </div>
+            <span class="material-symbols-outlined text-gray-300 ml-auto">arrow_forward</span>
+          </a>
+
+          <a href="/projects" class="w-full flex items-center gap-4 p-5 rounded-xl bg-black text-white hover:bg-gray-800 transition-all mt-3">
+            <div class="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+              <span class="material-symbols-outlined text-white">home_work</span>
+            </div>
+            <div>
+              <p class="text-sm font-extrabold">Project Screen</p>
+              <p class="text-[11px] text-white/60 mt-0.5">Manage all projects</p>
+            </div>
+            <span class="material-symbols-outlined text-white/40 ml-auto">arrow_forward</span>
+          </a>
+
+          <div class="mt-4 pt-4 border-t border-gray-100 text-center">
+            <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Select a project below to open it in either screen</p>
           </div>
         </div>
       </div>
@@ -314,7 +299,7 @@ function renderProjectCards(projects, session) {
       : `<div class="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center"><span class="material-symbols-outlined text-gray-400 text-4xl">home_work</span></div>`;
 
     return `
-    <div class="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-all group border border-gray-100 cursor-pointer" onclick="window.location='/index?id=${p.id}'">
+    <div class="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-all group border border-gray-100">
       <div class="flex justify-between items-start mb-4">
         <div>
           <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${escHtml(p.property_type || "")}${p.bhk ? " · " + escHtml(p.bhk) : ""}</span>
@@ -327,12 +312,21 @@ function renderProjectCards(projects, session) {
         ${thumb}
         <div class="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
       </div>
-      <div class="flex justify-between items-center">
-        <button class="advance-toggle text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${p.advance_payment_done ? "advance-btn-done border-green-200" : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"}"
+      <div class="flex items-center gap-2 mb-3">
+        <button class="advance-toggle flex-1 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all ${p.advance_payment_done ? "advance-btn-done border-green-200" : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"}"
           data-id="${p.id}" data-done="${p.advance_payment_done ? "1" : "0"}"
-          onclick="event.stopPropagation(); toggleAdvance(this, _currentSession)"
+          onclick="toggleAdvance(this, _currentSession)"
         >${p.advance_payment_done ? "₹ Advance Paid ✓" : "₹ Mark Advance Paid"}</button>
-        <a href="/index?id=${p.id}" onclick="event.stopPropagation()" class="text-xs font-bold text-black border-b border-black hover:opacity-60">Open →</a>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <a href="/index?id=${p.id}" class="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg border border-gray-200 text-xs font-bold text-gray-700 hover:bg-gray-50 transition-all">
+          <span class="material-symbols-outlined text-sm">architecture</span>
+          Fitout Planner
+        </a>
+        <a href="/project?id=${p.id}" class="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-black text-white text-xs font-bold hover:bg-gray-800 transition-all">
+          <span class="material-symbols-outlined text-sm">folder_open</span>
+          View Project
+        </a>
       </div>
     </div>`;
   }).join("");
@@ -359,7 +353,7 @@ function renderTableRows(projects) {
   }
 
   tbody.innerHTML = projects.map(p => `
-    <tr class="hover:bg-gray-50/50 transition-colors cursor-pointer" onclick="window.location='/index?id=${p.id}'">
+    <tr class="hover:bg-gray-50/50 transition-colors">
       <td class="px-8 py-5">
         <div class="flex flex-col">
           <span class="text-sm font-bold text-black">${escHtml(p.name || "Untitled")}</span>
@@ -371,11 +365,20 @@ function renderTableRows(projects) {
       <td class="px-8 py-5">
         <button class="advance-toggle text-xs font-bold px-2.5 py-1 rounded border transition-all ${p.advance_payment_done ? "advance-btn-done" : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"}"
           data-id="${p.id}" data-done="${p.advance_payment_done ? "1" : "0"}"
-          onclick="event.stopPropagation(); toggleAdvance(this, _currentSession)"
+          onclick="toggleAdvance(this, _currentSession)"
         >${p.advance_payment_done ? "Advance Paid ✓" : "Mark Paid"}</button>
       </td>
-      <td class="px-8 py-5 text-right">
-        <a href="/index?id=${p.id}" onclick="event.stopPropagation()" class="text-xs font-bold text-black border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-all">Open →</a>
+      <td class="px-8 py-5">
+        <div class="flex items-center justify-end gap-2">
+          <a href="/index?id=${p.id}" class="flex items-center gap-1.5 text-xs font-bold text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-all whitespace-nowrap">
+            <span class="material-symbols-outlined text-sm">architecture</span>
+            Fitout Planner
+          </a>
+          <a href="/project?id=${p.id}" class="flex items-center gap-1.5 text-xs font-bold text-white bg-black px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-all whitespace-nowrap">
+            <span class="material-symbols-outlined text-sm">folder_open</span>
+            View Project
+          </a>
+        </div>
       </td>
     </tr>
   `).join("");
