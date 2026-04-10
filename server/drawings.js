@@ -256,6 +256,14 @@ async function drawingUpload(req, body) {
   }
   await assignmentUpdate;
 
+  // Mark the designer's upload task as completed now that drawing is submitted
+  await sb.from("tasks")
+    .update({ status: "completed", updated_at: new Date().toISOString() })
+    .eq("project_id", projectId)
+    .eq("assigned_to", profile.id)
+    .eq("title", `Complete ${drawingType} drawing`)
+    .eq("status", "pending");
+
   // Auto-create review task for all active lead designers
   const { data: leads } = await sb
     .from("profiles")
