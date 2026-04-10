@@ -345,7 +345,8 @@
     : 'Your workspace is all clear today.';
 
   // ── Stats ──────────────────────────────────────────────────────────────────
-  document.getElementById('statTasksDue').textContent  = dueTodayCount || tasks.length;
+  const pendingUploadCount = assignments.filter(a => new Set(['assigned', 'pending', 'in_progress']).has(a.status)).length;
+  document.getElementById('statTasksDue').textContent  = dueTodayCount || (tasks.length + pendingUploadCount);
   document.getElementById('statRevisions').textContent = revisions.length;
 
   // ── Action Cards (revision notices) ───────────────────────────────────────
@@ -373,9 +374,13 @@
     }).join('');
   }
 
-  // ── Task Table (tasks + revision requests) ─────────────────────────────────
+  // ── Task Table (tasks + pending assignments + revision requests) ──────────
+  // Include drawing assignments not yet submitted as "pending upload" rows
+  const pendingUploadStatuses = new Set(['assigned', 'pending', 'in_progress']);
+  const pendingAssignments = assignments.filter(a => pendingUploadStatuses.has(a.status));
+
   document.getElementById('tasksSkeleton').style.display = 'none';
-  if (!tasks.length && !revisions.length) {
+  if (!tasks.length && !revisions.length && !pendingAssignments.length) {
     document.getElementById('tasksEmpty').style.display = '';
   } else {
     const tbody = document.getElementById('tasksBody');
@@ -441,7 +446,36 @@
           </td>
         </tr>`;
     });
-    tbody.innerHTML = [...revisionRows, ...taskRows].join('');
+    // Pending upload rows (drawing assignments not yet submitted)
+    const pendingUploadRows = pendingAssignments.map(a => {
+      const isOverdue = a.deadline && new Date(a.deadline) < new Date();
+      const deadlineLabel = a.deadline
+        ? `<span class="text-[10px] ${isOverdue ? 'font-bold' : ''}" style="${isOverdue ? 'color:#9f403d' : ''}">${fmtDt(a.deadline)}${isOverdue ? ' ⚠' : ''}</span>`
+        : `<span class="text-[10px] text-on-surface-variant">—</span>`;
+      return `
+        <tr class="hover:bg-surface-container-low transition-colors">
+          <td class="px-5 py-4">
+            <div class="font-semibold text-on-surface text-sm">${esc(a.drawing_type)}</div>
+            <div class="text-[10px] text-on-surface-variant mt-0.5">${esc(a.project?.name || '—')}${a.project?.client_name ? ' · ' + esc(a.project.client_name) : ''}</div>
+          </td>
+          <td class="px-5 py-4">
+            <span class="bg-secondary-container text-on-secondary-container text-[10px] font-bold px-2 py-1 rounded-full uppercase">medium</span>
+          </td>
+          <td class="px-5 py-4">
+            <span class="text-[10px] text-on-surface-variant">${fmtDt(a.assigned_at)}</span>
+            ${a.assigner?.full_name ? `<div class="text-[9px] text-on-surface-variant/60 mt-0.5">by ${esc(a.assigner.full_name)}</div>` : ''}
+          </td>
+          <td class="px-5 py-4">${deadlineLabel}</td>
+          <td class="px-5 py-4">
+            <span class="bg-surface-container text-on-surface-variant text-[10px] font-bold px-2 py-1 rounded-full uppercase">⬆ Pending Upload</span>
+          </td>
+          <td class="px-5 py-4 text-right">
+            <a href="/project?id=${esc(a.project_id)}" class="text-primary font-semibold text-xs hover:underline">Open →</a>
+          </td>
+        </tr>`;
+    });
+
+    tbody.innerHTML = [...revisionRows, ...pendingUploadRows, ...taskRows].join('');
     document.getElementById('tasksTable').style.display = '';
   }
 
