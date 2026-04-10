@@ -102,7 +102,12 @@ function renderHeader() {
   const subline = document.getElementById("auditSubline");
 
   const firstProjectName = _logs.find(l => l.project?.name)?.project?.name;
-  const scopeLabel = _scope === "all" ? "all platform actions" : "your actions";
+  const deptCategory = _scope.startsWith("department:") ? _scope.split(":")[1] : "";
+  const scopeLabel = _scope === "all"
+    ? "all platform actions"
+    : deptCategory
+      ? `all ${deptCategory} department actions`
+      : "your actions";
 
   if (_projectId) {
     title.textContent = firstProjectName ? `${firstProjectName} Audit Log` : "Project Audit Log";
@@ -110,7 +115,11 @@ function renderHeader() {
     return;
   }
 
-  title.textContent = _scope === "all" ? "All Audit Logs" : "My Audit Logs";
+  title.textContent = _scope === "all"
+    ? "All Audit Logs"
+    : deptCategory
+      ? `${capitalize(deptCategory)} Audit Logs`
+      : "My Audit Logs";
   subline.textContent = `Showing ${scopeLabel} across projects.`;
 }
 

@@ -5,9 +5,17 @@ const { requireAuth } = require("./auth");
 const { httpError } = require("./utils");
 
 const ADMIN_ROLES = new Set(["admin", "ceo"]);
+const DEPARTMENT_CATEGORY_BY_ROLE = {
+  sales: "sales",
+  designer: "design",
+  lead_designer: "design",
+  procurement: "procurement",
+};
 
 function roleScope(role) {
-  return ADMIN_ROLES.has(role) ? "all" : "own";
+  if (ADMIN_ROLES.has(role)) return "all";
+  if (DEPARTMENT_CATEGORY_BY_ROLE[role]) return `department:${DEPARTMENT_CATEGORY_BY_ROLE[role]}`;
+  return "own";
 }
 
 function safeLimit(rawLimit) {
@@ -61,38 +69,60 @@ async function auditLogsList(req, opts = {}) {
   const projectId = opts.projectId || null;
   const limit = safeLimit(opts.limit);
 
-  let query = sb
-    .from("audit_logs")
-    .select(`
-      id,
-      category,
-      subcategory,
-      project_id,
-      log_message,
-      actioned_by,
-      actioned_by_name,
-      actioned_on,
-      metadata,
-      project:projects(id, name, client_name)
-    `)
-    .order("actioned_on", { ascending: false })
-    .limit(limit);
+  const baseSelect = `
+    id,
+    category,
+    subcategory,
+    project_id,
+    log_message,
+    actioned_by,
+    actioned_by_name,
+    actioned_on,
+    metadata,
+    project:projects(id, name, client_name)
+  `;
 
-  if (projectId) query = query.eq("project_id", projectId);
-
-  if (!ADMIN_ROLES.has(profile.role)) {
-    query = query.eq("actioned_by", profile.id);
+  if (ADMIN_ROLES.has(profile.role)) {
+    let query = sb
+      .from("audit_logs")
+      .select(baseSelect)
+      .order("actioned_on", { ascending: false })
+      .limit(limit);
+    if (projectId) query = query.eq("project_id", projectId);
+    const { data, error } = await query;
+    if (error) throw httpError(500, error.message);
+    return { logs: data || [], scope: "all", role: profile.role, projectId };
   }
 
-  const { data, error } = await query;
-  if (error) throw httpError(500, error.message);
+  const departmentCategory = DEPARTMENT_CATEGORY_BY_ROLE[profile.role];
+  if (departmentCategory) {
+    let departmentQuery = sb
+      .from("audit_logs")
+      .select(baseSelect)
+      .eq("category", departmentCategory)
+      .order("actioned_on", { ascending: false })
+      .limit(limit);
+    if (projectId) departmentQuery = departmentQuery.eq("project_id", projectId);
+    const { data, error } = await departmentQuery;
+    if (error) throw httpError(500, error.message);
+    return {
+      logs: data || [],
+      scope: `department:${departmentCategory}`,
+      role: profile.role,
+      projectId,
+    };
+  }
 
-  return {
-    logs: data || [],
-    scope: roleScope(profile.role),
-    role: profile.role,
-    projectId,
-  };
+  let ownQuery = sb
+    .from("audit_logs")
+    .select(baseSelect)
+    .eq("actioned_by", profile.id)
+    .order("actioned_on", { ascending: false })
+    .limit(limit);
+  if (projectId) ownQuery = ownQuery.eq("project_id", projectId);
+  const { data, error } = await ownQuery;
+  if (error) throw httpError(500, error.message);
+  return { logs: data || [], scope: "own", role: profile.role, projectId };
 }
 
 module.exports = {
