@@ -919,9 +919,12 @@ function wireInteractions(project) {
   document.querySelectorAll(".drawing-dl-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       try {
+        const res = await apiFetch(`/api/drawings/signed-url?path=${encodeURIComponent(btn.dataset.path)}`);
+        const { url } = await res.json();
         const a = document.createElement("a");
-        a.href = `/api/drawings/download?path=${encodeURIComponent(btn.dataset.path)}&name=${encodeURIComponent(btn.dataset.name)}`;
+        a.href = url;
         a.download = btn.dataset.name;
+        a.target = "_blank";
         a.click();
       } catch { alert("Could not download drawing."); }
     });
