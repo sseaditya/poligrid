@@ -64,6 +64,7 @@ const {
   ceoDashboard,
   teamStats,
 } = require("../server/admin");
+const { auditLogsList } = require("../server/audit");
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -285,6 +286,12 @@ module.exports = async (req, res) => {
     }
     if (req.method === "GET" && pathname === "/api/ceo/team-stats") {
       return sendJson(res, 200, await teamStats(req));
+    }
+    if (req.method === "GET" && pathname === "/api/audit/logs") {
+      return sendJson(res, 200, await auditLogsList(req, {
+        projectId: url.searchParams.get("projectId"),
+        limit: url.searchParams.get("limit"),
+      }));
     }
 
     return sendJson(res, 404, { error: "Not found." });
