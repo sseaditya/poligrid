@@ -907,11 +907,12 @@ function wireInteractions(project) {
   // Drawing view / download buttons
   document.querySelectorAll(".drawing-view-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
+      const win = window.open("", "_blank");
       try {
         const res = await apiFetch(`/api/drawings/signed-url?path=${encodeURIComponent(btn.dataset.path)}`);
         const { url } = await res.json();
-        window.open(url, "_blank");
-      } catch { alert("Could not open drawing."); }
+        win.location.href = url;
+      } catch { win.close(); alert("Could not open drawing."); }
     });
   });
   document.querySelectorAll(".drawing-dl-btn").forEach(btn => {
