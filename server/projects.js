@@ -713,23 +713,28 @@ async function projectDetail(req, id) {
     { data: drawings },
     { data: fps },
     { data: renders },
+    { data: assignments },
   ] = await Promise.all([
     sb.from("projects").select("*").eq("id", id).single(),
     sb.from("project_assignments").select("*, profile:profiles!user_id(id, full_name, email, role)").eq("project_id", id),
     sb.from("drawings").select("id, status, drawing_type, title, file_name, created_at, uploaded_by, uploader:profiles!uploaded_by(full_name)").eq("project_id", id).order("created_at", { ascending: false }),
     sb.from("floor_plans").select("storage_path").eq("project_id", id).order("created_at", { ascending: false }).limit(1),
     sb.from("renders").select("id").eq("project_id", id),
+    sb.from("drawing_assignments").select("id, drawing_type, status").eq("project_id", id),
   ]);
 
   if (!project) throw httpError(404, "Project not found");
 
   const drawingList = drawings || [];
+  // total = number of assigned drawing types; approved = how many of those are approved
+  const assignmentList = assignments || [];
+  const assignedTotal = assignmentList.length || drawingList.length; // fallback to uploads if no assignments
   const drawingStats = {
-    total: drawingList.length,
-    approved: drawingList.filter(d => d.status === "approved").length,
-    pending: drawingList.filter(d => d.status === "pending_review").length,
-    revision: drawingList.filter(d => d.status === "revision_requested").length,
-    rejected: drawingList.filter(d => d.status === "rejected").length,
+    total: assignedTotal,
+    approved: assignmentList.filter(a => a.status === "approved").length,
+    pending: assignmentList.filter(a => a.status === "pending_review").length,
+    revision: assignmentList.filter(a => a.status === "revision_requested").length,
+    rejected: assignmentList.filter(a => a.status === "rejected").length,
   };
 
   const fp = fps && fps[0];

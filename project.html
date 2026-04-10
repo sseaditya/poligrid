@@ -139,6 +139,41 @@
     </div>
   </div>
 
+  <!-- ── Drawing Viewer Modal ───────────────────────────────────────────────── -->
+  <div id="drawingViewerModal" hidden
+    style="position:fixed;inset:0;z-index:900;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);
+           display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:12px 20px;flex-shrink:0;background:rgba(0,0,0,0.6);border-bottom:1px solid rgba(255,255,255,0.08)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="material-symbols-outlined" style="font-size:18px;color:#a0aec0">architecture</span>
+        <span id="drawingViewerTitle" style="font-size:14px;font-weight:600;color:#e2e8f0;letter-spacing:.01em">Drawing</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <a id="drawingViewerDlBtn"
+          style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+                 padding:6px 14px;border-radius:7px;border:1px solid rgba(255,255,255,0.18);
+                 color:#e2e8f0;background:rgba(255,255,255,0.07);cursor:pointer;text-decoration:none;
+                 transition:background .15s">
+          <span class="material-symbols-outlined" style="font-size:15px">download</span> Download
+        </a>
+        <button id="drawingViewerClose"
+          style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
+                 border-radius:7px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.07);
+                 color:#e2e8f0;cursor:pointer;font-size:18px;line-height:1">✕</button>
+      </div>
+    </div>
+    <div style="flex:1;overflow:hidden;position:relative">
+      <!-- PDF/image embed -->
+      <iframe id="drawingViewerIframe"
+        style="width:100%;height:100%;border:none;background:#fff"
+        src="about:blank"></iframe>
+      <!-- fallback for non-PDF (images) -->
+      <img id="drawingViewerImg" src=""
+        style="display:none;width:100%;height:100%;object-fit:contain;padding:24px;box-sizing:border-box" />
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="client/auth.js"></script>
   <script src="client/project-detail.js"></script>

@@ -483,12 +483,17 @@ function buildDrawingsSection(drawings, project) {
 
     const filePath  = escHtml(d.file_path || "");
     const fileName  = escHtml(d.file_name || (d.drawing_type + ".pdf"));
+    const typeLabel = escHtml(DRAWING_TYPE_LABELS[d.drawing_type] || d.drawing_type);
     const viewDl = d.file_path ? `
-      <button class="ghost-sm drawing-view-btn" data-path="${filePath}" title="View">
-        <span class="material-symbols-outlined" style="font-size:15px">visibility</span>
+      <button class="ghost-sm drawing-view-btn" data-path="${filePath}" data-name="${typeLabel}" title="View drawing"
+        style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px">
+        <span class="material-symbols-outlined" style="font-size:14px">visibility</span>
+        <span style="font-size:12px">View</span>
       </button>
-      <button class="ghost-sm drawing-dl-btn" data-path="${filePath}" data-name="${fileName}" title="Download">
-        <span class="material-symbols-outlined" style="font-size:15px">download</span>
+      <button class="ghost-sm drawing-dl-btn" data-path="${filePath}" data-name="${fileName}" title="Download"
+        style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px">
+        <span class="material-symbols-outlined" style="font-size:14px">download</span>
+        <span style="font-size:12px">Download</span>
       </button>` : "";
 
     return `
@@ -854,13 +859,56 @@ function wireInteractions(project) {
     });
   }
 
+  // ── Drawing viewer modal ──────────────────────────────────────────────────
+  const viewerModal   = document.getElementById("drawingViewerModal");
+  const viewerIframe  = document.getElementById("drawingViewerIframe");
+  const viewerImg     = document.getElementById("drawingViewerImg");
+  const viewerTitle   = document.getElementById("drawingViewerTitle");
+  const viewerDlBtn   = document.getElementById("drawingViewerDlBtn");
+  const viewerClose   = document.getElementById("drawingViewerClose");
+
+  function openDrawingViewer(url, title, dlHref) {
+    viewerTitle.textContent = title || "Drawing";
+    viewerDlBtn.href = dlHref || url;
+    viewerDlBtn.download = title || "drawing";
+    const isImage = /\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(url);
+    if (isImage) {
+      viewerIframe.style.display = "none";
+      viewerImg.style.display = "block";
+      viewerImg.src = url;
+    } else {
+      viewerImg.style.display = "none";
+      viewerIframe.style.display = "block";
+      viewerIframe.src = url;
+    }
+    viewerModal.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeDrawingViewer() {
+    viewerModal.hidden = true;
+    viewerIframe.src = "about:blank";
+    viewerImg.src = "";
+    document.body.style.overflow = "";
+  }
+
+  if (viewerClose) viewerClose.addEventListener("click", closeDrawingViewer);
+  if (viewerModal) viewerModal.addEventListener("click", e => {
+    if (e.target === viewerModal) closeDrawingViewer();
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && viewerModal && !viewerModal.hidden) closeDrawingViewer();
+  });
+
   // Drawing view / download buttons
   document.querySelectorAll(".drawing-view-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
       try {
         const res = await apiFetch(`/api/drawings/signed-url?path=${encodeURIComponent(btn.dataset.path)}`);
         const { url } = await res.json();
-        window.open(url, "_blank");
+        const name = btn.dataset.name || btn.closest("tr")?.querySelector(".proj-tbl-title")?.textContent || "Drawing";
+        const dlHref = `/api/drawings/download?path=${encodeURIComponent(btn.dataset.path)}&name=${encodeURIComponent(btn.dataset.name || name)}`;
+        openDrawingViewer(url, name, dlHref);
       } catch { alert("Could not open drawing."); }
     });
   });
