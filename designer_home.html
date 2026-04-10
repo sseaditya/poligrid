@@ -328,8 +328,10 @@
   const revisions   = revisionsData.drawings || [];
   const assignments = assignmentsData.assignments || [];
 
-  // Assignments pending upload (actionable for designer, excludes pending_review)
+  // Assignments pending upload (actionable for designer)
   const pendingAssignments = assignments.filter(a => a.status === 'assigned');
+  // Assignments uploaded but awaiting lead designer approval
+  const pendingApprovalAssignments = assignments.filter(a => a.status === 'pending_review');
 
   // ── Welcome subtext ────────────────────────────────────────────────────────
   const dueTodayCount = tasks.filter(t => {
@@ -379,7 +381,7 @@
 
   // ── Task Table (tasks + pending upload assignments + revision requests) ──────────
   document.getElementById('tasksSkeleton').style.display = 'none';
-  if (!tasks.length && !revisions.length && !pendingAssignments.length) {
+  if (!tasks.length && !revisions.length && !pendingAssignments.length && !pendingApprovalAssignments.length) {
     document.getElementById('tasksEmpty').style.display = '';
   } else {
     const tbody = document.getElementById('tasksBody');
@@ -463,7 +465,33 @@
         </tr>`;
     });
 
-    tbody.innerHTML = [...revisionRows, ...pendingUploadRows, ...taskRows].join('');
+    // Pending approval rows (uploaded, awaiting lead designer review)
+    const pendingApprovalRows = pendingApprovalAssignments.map(a => {
+      const isOverdue = a.deadline && new Date(a.deadline) < new Date();
+      const deadlineLabel = a.deadline
+        ? `<span class="text-[10px] ${isOverdue ? 'font-bold' : ''}" style="${isOverdue ? 'color:#9f403d' : ''}">${fmtDt(a.deadline)}${isOverdue ? ' ⚠' : ''}</span>`
+        : `<span class="text-[10px] text-on-surface-variant">—</span>`;
+      return `
+        <tr class="hover:bg-surface-container-low transition-colors">
+          <td class="px-5 py-4">
+            <div class="font-semibold text-on-surface text-sm">${esc(a.drawing_type)}</div>
+            <div class="text-[10px] text-on-surface-variant mt-0.5">${esc(a.project?.name || '—')}${a.project?.client_name ? ' · ' + esc(a.project.client_name) : ''}</div>
+          </td>
+          <td class="px-5 py-4">
+            <span class="text-[10px] text-on-surface-variant">${fmtDt(a.assigned_at)}</span>
+            ${a.assigner?.full_name ? `<div class="text-[9px] text-on-surface-variant/60 mt-0.5">by ${esc(a.assigner.full_name)}</div>` : ''}
+          </td>
+          <td class="px-5 py-4">${deadlineLabel}</td>
+          <td class="px-5 py-4">
+            <span class="text-[10px] font-bold px-2 py-1 rounded-full" style="background:#fef9c3;color:#a16207">⏳ Pending Approval</span>
+          </td>
+          <td class="px-5 py-4 text-right">
+            <a href="/project?id=${esc(a.project_id)}" class="text-primary font-semibold text-xs hover:underline">Open →</a>
+          </td>
+        </tr>`;
+    });
+
+    tbody.innerHTML = [...revisionRows, ...pendingUploadRows, ...pendingApprovalRows, ...taskRows].join('');
     document.getElementById('tasksTable').style.display = '';
   }
 
