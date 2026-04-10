@@ -118,6 +118,12 @@ function renderSidebar() {
   if (["lead_designer", "admin"].includes(_profile.role)) {
     navLinks.push({ icon: "design_services", label: "Fitout Planner", href: urlProjectId ? `/index?id=${urlProjectId}` : "/index" });
   }
+  navLinks.push({
+    icon: "history",
+    label: "Audit Log",
+    href: urlProjectId ? `/audit?projectId=${urlProjectId}` : "/audit",
+    id: "sidebarAuditLink",
+  });
 
   const bottomLinks = [
     { icon: "folder_open", label: "All Projects", href: "/projects" },
@@ -142,7 +148,7 @@ function renderSidebar() {
 
     <p class="proj-sidebar-label">Workspace</p>
     ${navLinks.map(l => `
-      <a class="proj-sidebar-link${l.active ? " active" : ""}" href="${l.href}">
+      <a class="proj-sidebar-link${l.active ? " active" : ""}" href="${l.href}"${l.id ? ` id="${l.id}"` : ""}>
         <span class="material-symbols-outlined">${l.icon}</span>
         <span>${l.label}</span>
       </a>`).join("")}
@@ -233,6 +239,10 @@ function selectProject(projectId) {
   const projectName = selectedText.split(" · ")[0]; // strip client name
   const sidebarNameEl = document.getElementById("sidebarProjectName");
   if (sidebarNameEl) sidebarNameEl.textContent = projectId ? projectName : "Drawings";
+  const sidebarAuditLink = document.getElementById("sidebarAuditLink");
+  if (sidebarAuditLink) {
+    sidebarAuditLink.href = projectId ? `/audit?projectId=${projectId}` : "/audit";
+  }
 
   // Update subtitle
   const subtitle = document.getElementById("designerSubtitle");

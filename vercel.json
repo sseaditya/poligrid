@@ -13,6 +13,7 @@
     { "src": "^/homepage$",     "dest": "/homepage.html" },
     { "src": "^/projects$",     "dest": "/projects.html" },
     { "src": "^/project$",      "dest": "/project.html" },
+    { "src": "^/audit$",        "dest": "/audit.html" },
     { "src": "^/index$",        "dest": "/index.html" },
     { "src": "^/designer$",     "dest": "/designer.html" },
     { "src": "^/lead_designer_home$", "dest": "/lead_designer_home.html" },

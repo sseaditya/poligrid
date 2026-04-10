@@ -145,6 +145,7 @@ function renderSidebar(project) {
     navLinks.push({ icon: "design_services", label: "Fitout Planner", href: `/index?id=${project.id}` });
   if (can.seeDrawings() || can.uploadDrawings())
     navLinks.push({ icon: "architecture", label: "Drawings", href: `/designer?projectId=${project.id}` });
+  navLinks.push({ icon: "history", label: "Audit Log", href: `/audit?projectId=${project.id}` });
 
   const bottomLinks = [
     { icon: "folder_open", label: "All Projects", href: "/projects" },
