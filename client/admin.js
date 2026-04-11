@@ -21,6 +21,7 @@ const DEPT_LABELS = {
   AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(_profile);
+  AppNav.setupCollapse();
 
   await Promise.all([loadUsers(), loadProjects(), loadInvitations()]);
 

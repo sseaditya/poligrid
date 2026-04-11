@@ -12,6 +12,7 @@
   AppNav.renderSidebar(profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(profile);
+  AppNav.setupCollapse();
 
   // ── Greeting ────────────────────────────────────────────────────────────────
   const firstName = (profile.full_name || 'Designer').split(' ')[0];

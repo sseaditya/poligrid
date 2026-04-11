@@ -81,28 +81,33 @@
 <body class="bg-background text-on-background font-body antialiased min-h-screen">
 
 <!-- Sidebar -->
-<aside class="hidden md:flex h-screen w-64 fixed left-0 top-0 bg-surface-container-lowest flex-col py-6 px-4 z-30 border-r border-outline-variant/10">
-  <div class="px-4 mb-8">
-    <span class="text-xs font-bold tracking-[0.2em] text-on-surface-variant/50">POLIGRID STUDIO</span>
-    <h1 class="text-xl font-extrabold tracking-tighter text-on-surface mt-1 font-headline">GOD'S EYE</h1>
+<aside id="appSidebar" class="hidden md:flex h-screen w-64 fixed left-0 top-0 bg-surface-container-lowest flex-col py-6 px-4 z-30 border-r border-outline-variant/10">
+  <div class="sidebar-brand px-4 mb-8 flex items-start justify-between gap-2">
+    <div class="sidebar-brand-text min-w-0">
+      <span class="text-xs font-bold tracking-[0.2em] text-on-surface-variant/50">POLIGRID STUDIO</span>
+      <h1 class="text-xl font-extrabold tracking-tighter text-on-surface mt-1 font-headline">GOD'S EYE</h1>
+    </div>
+    <button id="sidebarToggle" class="flex-shrink-0 mt-1 p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all" title="Toggle sidebar">
+      <span class="material-symbols-outlined sidebar-toggle-icon" style="font-size:18px">chevron_left</span>
+    </button>
   </div>
   <nav class="flex-1 space-y-1" id="sidebarNav">
     <!-- Rendered by JS -->
   </nav>
   <div class="mt-auto border-t border-outline-variant/20 pt-4 space-y-1">
-    <a id="sidebarProfileLink" href="/profile" class="flex items-center gap-3 px-4 py-2 text-primary bg-primary/5 font-bold rounded-lg border-r-2 border-primary">
+    <a id="sidebarProfileLink" href="/profile" class="sidebar-footer-item flex items-center gap-3 px-4 py-2 text-primary bg-primary/5 font-bold rounded-lg border-r-2 border-primary" data-nav-tip="My Profile">
       <span class="material-symbols-outlined text-[20px]" style="font-variation-settings:'FILL' 1">account_circle</span>
-      <span class="text-xs font-medium">My Profile</span>
+      <span class="nav-label text-xs font-medium">My Profile</span>
     </a>
-    <button id="logoutBtn" class="w-full flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface transition-colors rounded-lg hover:bg-surface-container-low text-left">
+    <button id="logoutBtn" class="sidebar-footer-item w-full flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface transition-colors rounded-lg hover:bg-surface-container-low text-left" data-nav-tip="Sign Out">
       <span class="material-symbols-outlined text-[20px]">logout</span>
-      <span class="text-xs font-medium">Sign Out</span>
+      <span class="nav-label text-xs font-medium">Sign Out</span>
     </button>
   </div>
 </aside>
 
 <!-- Main Content -->
-<main class="md:ml-64 min-h-screen">
+<main id="sidebarMain" class="md:ml-64 min-h-screen">
 
   <!-- Top Bar -->
   <header class="flex justify-between items-center px-8 h-16 w-full bg-surface/80 backdrop-blur-md sticky top-0 z-20 border-b border-outline-variant/10">

@@ -30,6 +30,7 @@ const STATUS_CLS = {
   AppNav.renderSidebar(_profile, document.getElementById("sidebarNav"));
   AppNav.renderMobileNav(_profile, document.getElementById("mobileNav"));
   AppNav.setupUserSection(_profile);
+  AppNav.setupCollapse();
 
   // Also wire topbar profile links (projects.html has both sidebarProfileLink + topbarProfileLink)
   const slug = (_profile.email || "").split("@")[0].toLowerCase().replace(/[^a-z0-9-]/g, "-");

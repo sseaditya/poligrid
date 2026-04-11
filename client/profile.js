@@ -13,6 +13,7 @@ let _profile;
   AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(_profile);
+  AppNav.setupCollapse();
 
   const emailSlug = emailToSlug(_profile.email);
   const pageSlug  = getPageSlug();

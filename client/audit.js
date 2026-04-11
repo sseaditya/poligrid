@@ -31,6 +31,7 @@ const SUBCATEGORY_LABELS = {
   AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(_profile);
+  AppNav.setupCollapse();
 
   // If arriving from a project's Audit Log sub-link, show the project context in the sidebar
   if (_projectId) {

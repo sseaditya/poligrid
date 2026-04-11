@@ -12,6 +12,7 @@
   AppNav.renderSidebar(profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(profile);
+  AppNav.setupCollapse();
 
   const firstName = (profile.full_name || 'Lead').split(' ')[0];
   document.getElementById('welcomeName').textContent = firstName + '.';

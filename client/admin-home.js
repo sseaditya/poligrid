@@ -43,6 +43,7 @@ const dotColor = s => ({ approved: '#526258', pending_review: '#d97706', revisio
   AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(_profile);
+  AppNav.setupCollapse();
 
   // Role label in header
   document.getElementById('roleLabel').textContent =

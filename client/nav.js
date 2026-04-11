@@ -5,8 +5,100 @@
 //   AppNav.renderSidebar(profile, document.getElementById('sidebarNav'));
 //   AppNav.renderMobileNav(profile, document.getElementById('mobileNav'));
 //   AppNav.setupUserSection(profile);
+//   AppNav.setupCollapse();  ← call once after setupUserSection
 
 const AppNav = (() => {
+
+  // ── Collapse CSS (injected once into <head>) ─────────────────────────────────
+  function _injectCollapseStyles() {
+    if (document.getElementById('nav-collapse-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'nav-collapse-styles';
+    s.textContent = `
+      #appSidebar { transition: width 0.25s cubic-bezier(0.4,0,0.2,1); }
+      #sidebarMain { transition: margin-left 0.25s cubic-bezier(0.4,0,0.2,1); }
+
+      #appSidebar.nav-collapsed {
+        width: 64px !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+      }
+      @media (min-width: 768px) {
+        #sidebarMain.nav-collapsed { margin-left: 64px !important; }
+      }
+
+      /* Hide text labels */
+      #appSidebar.nav-collapsed .sidebar-brand-text,
+      #appSidebar.nav-collapsed .nav-label { display: none !important; }
+
+      /* Brand area: reset side padding so toggle button is centered */
+      #appSidebar.nav-collapsed .sidebar-brand {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        justify-content: center;
+      }
+
+      /* Top-level links: center icon, strip side padding */
+      #appSidebar.nav-collapsed .nav-link {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      /* Project sub-block: flush to edge so icon fits inside narrow sidebar */
+      #appSidebar.nav-collapsed .nav-sub-wrap {
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+      }
+      #appSidebar.nav-collapsed .nav-sub-link {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      /* Project name: swap text for icon */
+      #appSidebar.nav-collapsed .nav-proj-name {
+        display: flex;
+        justify-content: center;
+        padding: 5px 0;
+      }
+      #appSidebar.nav-collapsed .nav-proj-name .nav-proj-icon {
+        display: inline-block !important;
+      }
+
+      /* Footer items */
+      #appSidebar.nav-collapsed .sidebar-footer-item {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      /* Toggle chevron */
+      .sidebar-toggle-icon { transition: transform 0.25s ease; display: block; }
+      #appSidebar.nav-collapsed .sidebar-toggle-icon { transform: rotate(180deg); }
+
+      /* Tooltip on collapsed items — appear to the right of the sidebar */
+      #appSidebar.nav-collapsed [data-nav-tip] { position: relative; }
+      #appSidebar.nav-collapsed [data-nav-tip]:hover::after {
+        content: attr(data-nav-tip);
+        position: absolute;
+        left: calc(100% + 10px);
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(12, 12, 16, 0.92);
+        color: #f0f0f0;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 500;
+        white-space: nowrap;
+        z-index: 9999;
+        pointer-events: none;
+        letter-spacing: 0.02em;
+      }
+    `;
+    document.head.appendChild(s);
+  }
 
   // ── Nav link definitions per role ───────────────────────────────────────────
 
@@ -66,9 +158,9 @@ const AppNav = (() => {
       ? 'text-primary bg-primary/5 font-bold border-r-2 border-primary'
       : 'text-on-surface-variant hover:bg-surface-container-low';
     const fill = l.active ? "style=\"font-variation-settings:'FILL' 1\"" : '';
-    return `<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-200 ${cls}" href="${l.href}">
+    return `<a class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-200 ${cls}" href="${l.href}" data-nav-tip="${l.label}">
   <span class="material-symbols-outlined" ${fill}>${l.icon}</span>
-  <span>${l.label}</span>
+  <span class="nav-label">${l.label}</span>
 </a>`;
   }
 
@@ -112,17 +204,20 @@ const AppNav = (() => {
     const projName = (project.name || 'Project').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
     const subHtml = `
-<div class="pl-3 ml-5 border-l-2 border-primary/20 space-y-0.5 pb-1">
-  <a class="px-2 pt-0.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-primary/80 hover:text-primary truncate block transition-colors" title="${projName}" href="/project?id=${project.id}">${projName}</a>
+<div class="nav-sub-wrap pl-3 ml-5 border-l-2 border-primary/20 space-y-0.5 pb-1">
+  <a class="nav-proj-name px-2 pt-0.5 pb-1 flex items-center gap-1.5 hover:text-primary transition-colors" title="${projName}" href="/project?id=${project.id}" data-nav-tip="${projName}">
+    <span class="nav-proj-icon material-symbols-outlined text-primary/80 flex-shrink-0" style="font-size:14px;display:none">home</span>
+    <span class="nav-label text-[10px] font-bold uppercase tracking-widest text-primary/80 truncate">${projName}</span>
+  </a>
   ${subLinks.map(l => {
     const cls = l.active
-      ? 'flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] text-primary bg-primary/5 font-bold border-r-2 border-primary transition-all duration-150'
-      : 'flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all duration-150';
+      ? 'nav-sub-link flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] text-primary bg-primary/5 font-bold border-r-2 border-primary transition-all duration-150'
+      : 'nav-sub-link flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all duration-150';
     const fill = l.active ? "style=\"font-variation-settings:'FILL' 1\"" : '';
     return `
-  <a class="${cls}" href="${l.href}">
-    <span class="material-symbols-outlined" style="font-size:15px" ${fill}>${l.icon}</span>
-    <span>${l.label}</span>
+  <a class="${cls}" href="${l.href}" data-nav-tip="${l.label}">
+    <span class="material-symbols-outlined flex-shrink-0" style="font-size:15px" ${fill}>${l.icon}</span>
+    <span class="nav-label">${l.label}</span>
   </a>`;
   }).join('')}
 </div>`;
@@ -179,5 +274,31 @@ const AppNav = (() => {
     }
   }
 
-  return { buildNavLinks, renderSidebar, renderSidebarWithProject, renderMobileNav, setupUserSection };
+  // ── Collapsible sidebar ──────────────────────────────────────────────────────
+  // Call once per page after setupUserSection. Reads/writes localStorage key
+  // 'pg_sidebar_collapsed'. Requires id="appSidebar" on <aside> and
+  // id="sidebarMain" on the main content wrapper, plus id="sidebarToggle"
+  // on the toggle button inside the sidebar header.
+  function setupCollapse() {
+    _injectCollapseStyles();
+    const sidebar = document.getElementById('appSidebar');
+    const main    = document.getElementById('sidebarMain');
+    const btn     = document.getElementById('sidebarToggle');
+    if (!sidebar || !btn) return;
+
+    const KEY = 'pg_sidebar_collapsed';
+
+    function apply(collapsed) {
+      sidebar.classList.toggle('nav-collapsed', collapsed);
+      if (main) main.classList.toggle('nav-collapsed', collapsed);
+      localStorage.setItem(KEY, collapsed ? '1' : '0');
+    }
+
+    // Restore saved state immediately (before paint) to avoid layout flash
+    apply(localStorage.getItem(KEY) === '1');
+
+    btn.addEventListener('click', () => apply(!sidebar.classList.contains('nav-collapsed')));
+  }
+
+  return { buildNavLinks, renderSidebar, renderSidebarWithProject, renderMobileNav, setupUserSection, setupCollapse };
 })();
