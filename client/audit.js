@@ -34,9 +34,6 @@ const SUBCATEGORY_LABELS = {
 
   // If arriving from a project's Audit Log sub-link, show the project context in the sidebar
   if (_projectId) {
-    const backBtn = document.getElementById("projectAuditBack");
-    backBtn.href = `/project?id=${encodeURIComponent(_projectId)}`;
-    backBtn.hidden = false;
     const bc = document.getElementById("auditBreadcrumb");
     if (bc) bc.textContent = "Project Audit Log";
     const topTitle = document.getElementById("auditTopbarTitle");
@@ -57,6 +54,7 @@ const SUBCATEGORY_LABELS = {
       }
     } catch { /* sidebar stays flat if fetch fails */ }
   }
+
 
   document.getElementById("searchInput").addEventListener("input", renderTable);
   document.getElementById("categoryFilter").addEventListener("change", renderTable);
