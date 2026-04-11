@@ -88,6 +88,13 @@ const AppNav = (() => {
     const hasProjectParam = new URLSearchParams(window.location.search).get('projectId');
 
     const subLinks = [];
+    if (['sales', 'lead_designer', 'admin'].includes(role)) {
+      subLinks.push({
+        icon: 'design_services', label: 'Fitout Planner',
+        href: `/index?id=${project.id}`,
+        active: false,
+      });
+    }
     if (['designer', 'lead_designer', 'admin'].includes(role)) {
       subLinks.push({
         icon: 'architecture', label: 'Drawings',
@@ -106,7 +113,7 @@ const AppNav = (() => {
 
     const subHtml = `
 <div class="pl-3 ml-5 border-l-2 border-primary/20 space-y-0.5 pb-1">
-  <a class="px-2 pt-0.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-primary/80 hover:text-primary truncate block transition-colors" title="${projName}" href="/project?id=${project.id}">${projName} ↗</a>
+  <a class="px-2 pt-0.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-primary/80 hover:text-primary truncate block transition-colors" title="${projName}" href="/project?id=${project.id}">${projName}</a>
   ${subLinks.map(l => {
     const cls = l.active
       ? 'flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] text-primary bg-primary/5 font-bold border-r-2 border-primary transition-all duration-150'
