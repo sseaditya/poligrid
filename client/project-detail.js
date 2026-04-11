@@ -119,7 +119,8 @@ async function loadAll() {
         <span class="font-headline font-extrabold tracking-tighter text-on-background text-base">${escHtml(_project.name || 'Project')}</span>
       `;
     }
-    renderSidebar(_project);
+    // Re-render global sidebar with project-specific sub-links injected
+    AppNav.renderSidebarWithProject(_profile, document.getElementById('sidebarNav'), _project);
     render(data);
   } catch (err) {
     main.innerHTML = `<p class="loading-hint">Failed to load project.</p>`;
@@ -128,90 +129,6 @@ async function loadAll() {
 }
 
 
-// ─── Left sidebar ─────────────────────────────────────────────────────────────
-function renderSidebar(project) {
-  const sidebar = document.getElementById("projSidebar");
-  if (!sidebar) return;
-
-  const roleLabel = ROLE_LABELS[_profile.role] || _profile.role;
-
-  const navLinks = [];
-  navLinks.push({ icon: "home_work", label: "Overview", href: "#", active: true });
-  if (can.fitoutPlanner())
-    navLinks.push({ icon: "design_services", label: "Fitout Planner", href: `/index?id=${project.id}` });
-  if (can.seeDrawings() || can.uploadDrawings())
-    navLinks.push({ icon: "architecture", label: "Drawings", href: `/designer?projectId=${project.id}` });
-  navLinks.push({ icon: "history", label: "Audit Log", href: `/audit?projectId=${project.id}` });
-
-  const homeHref2 = {
-    admin:         "/admin_home",
-    ceo:           "/ceo",
-    designer:      "/designer_home",
-    lead_designer: "/lead_designer_home",
-    sales:         "/projects",
-  }[_profile.role] || "/homepage";
-  const bottomLinks = [
-    { icon: "folder_open", label: "All Projects", href: "/projects" },
-    { icon: "cottage",     label: "Home",         href: homeHref2 },
-  ];
-
-  const isCollapsed = localStorage.getItem("leftSidebarCollapsed") === "1";
-  if (isCollapsed) sidebar.classList.add("collapsed");
-
-  sidebar.innerHTML = `
-    <div class="proj-sidebar-topbar">
-      <button id="leftSidebarToggleBtn" class="proj-sidebar-collapse-btn"
-        title="${isCollapsed ? "Expand sidebar" : "Collapse sidebar"}">
-        <span class="material-symbols-outlined">${isCollapsed ? "left_panel_open" : "left_panel_close"}</span>
-      </button>
-    </div>
-
-    <div class="proj-sidebar-ctx">
-      <div class="proj-sidebar-ctx-icon">
-        <span class="material-symbols-outlined">home_work</span>
-      </div>
-      <div class="proj-sidebar-ctx-name">${escHtml(project.name || "Project")}</div>
-      <div class="proj-sidebar-ctx-sub">${escHtml(roleLabel)}</div>
-    </div>
-
-    <p class="proj-sidebar-label">Workspace</p>
-    ${navLinks.map(l => `
-      <a class="proj-sidebar-link${l.active ? " active" : ""}" href="${l.href}">
-        <span class="material-symbols-outlined">${l.icon}</span>
-        <span>${l.label}</span>
-      </a>`).join("")}
-
-    ${is("admin") ? `
-      <p class="proj-sidebar-label">Admin</p>
-      <a class="proj-sidebar-link" href="/admin">
-        <span class="material-symbols-outlined">manage_accounts</span>
-        <span>Admin Panel</span>
-      </a>
-      <a class="proj-sidebar-link" href="/ceo">
-        <span class="material-symbols-outlined">analytics</span>
-        <span>CEO Dashboard</span>
-      </a>` : ""}
-
-    <hr class="proj-sidebar-divider" />
-
-    <div class="proj-sidebar-bottom">
-      ${bottomLinks.map(l => `
-        <a class="proj-sidebar-link" href="${l.href}">
-          <span class="material-symbols-outlined">${l.icon}</span>
-          <span>${l.label}</span>
-        </a>`).join("")}
-    </div>`;
-
-  // Wire collapse toggle
-  document.getElementById("leftSidebarToggleBtn")?.addEventListener("click", () => {
-    const collapsed = sidebar.classList.toggle("collapsed");
-    localStorage.setItem("leftSidebarCollapsed", collapsed ? "1" : "0");
-    const btn = document.getElementById("leftSidebarToggleBtn");
-    btn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
-    btn.querySelector(".material-symbols-outlined").textContent =
-      collapsed ? "left_panel_open" : "left_panel_close";
-  });
-}
 
 // ─── Main render ──────────────────────────────────────────────────────────────
 function render({ project, drawingStats, thumbnailUrl }) {

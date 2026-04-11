@@ -82,6 +82,52 @@ const AppNav = (() => {
     navEl.innerHTML = buildNavLinks(profile, currentPath).map(_sidebarLinkHtml).join('');
   }
 
+  // Renders the sidebar with an indented project-context block injected
+  // under the "Projects" link, showing project-specific sub-navigation.
+  function renderSidebarWithProject(profile, navEl, project, currentPath) {
+    if (!navEl) return;
+    const role = profile.role;
+
+    // Determine which project-specific sub-links to show based on role
+    const subLinks = [];
+    if (['sales', 'lead_designer', 'admin'].includes(role)) {
+      subLinks.push({ icon: 'design_services', label: 'Fitout Planner', href: `/index?id=${project.id}` });
+    }
+    if (['designer', 'lead_designer', 'admin'].includes(role)) {
+      subLinks.push({ icon: 'architecture',    label: 'Drawings',       href: `/designer?projectId=${project.id}` });
+    }
+    subLinks.push({ icon: 'history', label: 'Audit Log', href: `/audit?projectId=${project.id}` });
+
+    // Escape project name for HTML
+    const projName = (project.name || 'Project').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    const subHtml = `
+<div class="pl-3 ml-5 border-l-2 border-primary/20 space-y-0.5 pb-1">
+  <p class="px-2 pt-0.5 pb-1 text-[10px] font-bold uppercase tracking-widest text-primary/60 truncate" title="${projName}">${projName}</p>
+  ${subLinks.map(l => `
+  <a class="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all duration-150" href="${l.href}">
+    <span class="material-symbols-outlined" style="font-size:15px">${l.icon}</span>
+    <span>${l.label}</span>
+  </a>`).join('')}
+</div>`;
+
+    const links = buildNavLinks(profile, currentPath);
+    let html = '';
+    let injected = false;
+    for (const l of links) {
+      html += _sidebarLinkHtml(l);
+      // Inject project sub-menu right after the "Projects" link
+      if (!injected && l.href === '/projects') {
+        html += subHtml;
+        injected = true;
+      }
+    }
+    // Fallback: append if Projects link wasn't in nav (e.g. CEO)
+    if (!injected) html += subHtml;
+    navEl.innerHTML = html;
+  }
+
+
   function renderMobileNav(profile, navEl, currentPath) {
     if (!navEl) return;
     const links = buildNavLinks(profile, currentPath).slice(0, 4);
@@ -115,5 +161,5 @@ const AppNav = (() => {
     }
   }
 
-  return { buildNavLinks, renderSidebar, renderMobileNav, setupUserSection };
+  return { buildNavLinks, renderSidebar, renderSidebarWithProject, renderMobileNav, setupUserSection };
 })();
