@@ -2,7 +2,7 @@
   "name": "poligrid",
   "version": "1.0.0",
   "description": "A no-database web app for interior furniture concepting in India.",
-  "main": "server.js",
+  "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js"

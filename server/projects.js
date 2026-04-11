@@ -1,47 +1,13 @@
 "use strict";
-
 const db = require("../db");
 const { httpError } = require("./utils");
-
-const FULL_ACCESS_ROLES = new Set(["admin", "ceo", "sales"]);
-
-function publicStorageUrl(bucket, storagePath) {
-  if (!storagePath) return null;
-  return `${process.env.SUPABASE_URL}/storage/v1/object/public/${bucket}/${storagePath}`;
-}
-
-async function assertProjectAccess(projectId, auth, existingProject) {
-  if (!projectId) throw httpError(400, "Missing projectId");
-  if (!auth || !auth.profile) throw httpError(401, "Authentication required.");
-  if (FULL_ACCESS_ROLES.has(auth.profile.role)) return existingProject || null;
-
-  const sb = db.getClient();
-  const project = existingProject || (
-    await sb.from("projects").select("id, created_by").eq("id", projectId).maybeSingle()
-  ).data;
-  if (!project) throw httpError(404, "Project not found");
-  if (project.created_by === auth.profile.id) return project;
-
-  const { data: assignment } = await sb.from("project_assignments")
-    .select("id")
-    .eq("project_id", projectId)
-    .eq("user_id", auth.profile.id)
-    .maybeSingle();
-  if (!assignment) throw httpError(403, "You do not have access to this project.");
-  return project;
-}
+const { requireAuth } = require("./auth");
+const { logAuditEvent } = require("./audit");
+// ─── Project DB Handlers ─────────────────────────────────────────────────────
 
 async function handleProjectAction(action, body, auth) {
-  if (!body || typeof body !== "object") throw httpError(400, "Invalid request body.");
-  const projectId = body.projectId;
-
-  if (action === "save-analysis") {
-    return projectSaveAnalysis(body, auth);
-  }
-
-  await assertProjectAccess(projectId, auth);
-
   switch (action) {
+    case "save-analysis": return projectSaveAnalysis(body, auth);
     case "save-rooms": return projectSaveRooms(body);
     case "save-inspiration": return projectSaveInspiration(body);
     case "save-pin": return projectSavePin(body);
@@ -57,11 +23,13 @@ async function handleProjectAction(action, body, auth) {
   }
 }
 
+// ── Create a new design version for a project ─────────────────────────────────
 async function projectCreateVersion(body) {
-  const { projectId, designBrief, regenInspirationImages, regenExistingInspirationPaths } = body;
+  const { projectId, designBrief, regenInspirationImages } = body;
   if (!projectId) throw httpError(400, "Missing projectId");
   const sb = db.getClient();
 
+  // Determine next version number
   const { data: existing } = await sb
     .from("project_versions")
     .select("version_number")
@@ -70,6 +38,7 @@ async function projectCreateVersion(body) {
     .limit(1);
   const nextNum = existing?.length ? existing[0].version_number + 1 : 1;
 
+  // Upload version-specific inspiration images if provided
   let regenInspirationPaths = null;
   if (Array.isArray(regenInspirationImages) && regenInspirationImages.length > 0) {
     const paths = [];
@@ -86,8 +55,6 @@ async function projectCreateVersion(body) {
       if (storagePath) paths.push(storagePath);
     }
     if (paths.length) regenInspirationPaths = paths;
-  } else if (Array.isArray(regenExistingInspirationPaths) && regenExistingInspirationPaths.length) {
-    regenInspirationPaths = regenExistingInspirationPaths.filter(Boolean);
   }
 
   const { data, error } = await sb
@@ -98,85 +65,72 @@ async function projectCreateVersion(body) {
       design_brief: designBrief || null,
       regen_inspiration_paths: regenInspirationPaths
     })
-    .select("id, project_id, version_number, design_brief, regen_inspiration_paths, created_at")
+    .select()
     .single();
-  if (error) throw httpError(500, "Failed to create version: " + error.message);
 
+  if (error) throw httpError(500, "Failed to create version: " + error.message);
   return { version: data };
 }
 
-async function projectLoadVersions(projectId, auth) {
+// ── Load all versions for a project with their renders + BOQ ──────────────────
+async function projectLoadVersions(projectId) {
   if (!projectId) throw httpError(400, "Missing projectId");
-  await assertProjectAccess(projectId, auth);
   const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const pubUrl = (bucket, storagePath) =>
+    storagePath ? `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}` : null;
 
   const [{ data: versions }, { data: insps }] = await Promise.all([
-    sb.from("project_versions")
-      .select("id, project_id, version_number, design_brief, regen_inspiration_paths, created_at")
-      .eq("project_id", projectId)
-      .order("version_number", { ascending: true }),
-    sb.from("inspiration_images")
-      .select("storage_path")
-      .eq("project_id", projectId)
-      .order("sort_order", { ascending: true }),
+    sb.from("project_versions").select("*").eq("project_id", projectId).order("version_number", { ascending: true }),
+    sb.from("inspiration_images").select("*").eq("project_id", projectId).order("sort_order", { ascending: true })
   ]);
 
-  const versionIds = (versions || []).map((v) => v.id);
+  // Batch-fetch renders + BOQ for all versions in 2 queries (avoids N+1)
+  const versionIds = (versions || []).map(v => v.id);
   const [allRendersRes, allBoqRes] = versionIds.length
     ? await Promise.all([
-        sb.from("renders")
-          .select("version_id, room_label, camera_pin_client_id, storage_path, created_at")
-          .in("version_id", versionIds)
-          .order("created_at", { ascending: true }),
-        sb.from("boq_items")
-          .select("version_id, category, item, qty, unit, rate, amount")
-          .in("version_id", versionIds),
+        sb.from("renders").select("*").in("version_id", versionIds).order("created_at", { ascending: true }),
+        sb.from("boq_items").select("*").in("version_id", versionIds)
       ])
     : [{ data: [] }, { data: [] }];
 
   const rendersByVersion = {};
   const boqByVersion = {};
   for (const r of allRendersRes.data || []) {
-    (rendersByVersion[r.version_id] = rendersByVersion[r.version_id] || []).push({
-      ...r,
-      url: publicStorageUrl("poligrid-renders", r.storage_path),
-    });
+    (rendersByVersion[r.version_id] = rendersByVersion[r.version_id] || []).push(r);
   }
   for (const b of allBoqRes.data || []) {
     (boqByVersion[b.version_id] = boqByVersion[b.version_id] || []).push(b);
   }
 
-  return {
-    versions: (versions || []).map((v) => {
-      const inspPaths = v.regen_inspiration_paths;
-      const inspirationUrls = inspPaths
-        ? inspPaths.map((p) => publicStorageUrl("poligrid-inspiration", p))
-        : (insps || []).map((i) => publicStorageUrl("poligrid-inspiration", i.storage_path));
-      return {
-        ...v,
-        renders: rendersByVersion[v.id] || [],
-        boqItems: boqByVersion[v.id] || [],
-        inspirationUrls: inspirationUrls.filter(Boolean),
-      };
-    }),
-  };
+  const versionsWithData = (versions || []).map(v => {
+    const renders = rendersByVersion[v.id] || [];
+    const boq = boqByVersion[v.id] || [];
+    // Version-specific inspiration overrides project-level inspiration
+    const inspPaths = v.regen_inspiration_paths;
+    const inspUrls = inspPaths
+      ? inspPaths.map(p => pubUrl("poligrid-inspiration", p))
+      : (insps || []).map(i => pubUrl("poligrid-inspiration", i.storage_path));
+    return {
+      ...v,
+      renders: renders.map(r => ({ ...r, url: pubUrl("poligrid-renders", r.storage_path) })),
+      boqItems: boq,
+      inspirationUrls: inspUrls.filter(Boolean)
+    };
+  });
+
+  return { versions: versionsWithData };
 }
 
 async function projectSaveAnalysis(body, auth) {
   const { projectId, floorPlanBase64, fileName, analysis, context } = body;
   if (!projectId) throw httpError(400, "Missing projectId");
+
   const sb = db.getClient();
+  // Preserve created_by if already set; otherwise stamp the current user
+  const { data: existingProj } = await sb.from("projects").select("created_by").eq("id", projectId).maybeSingle();
+  const createdBy = existingProj?.created_by ?? (auth?.profile?.id ?? null);
 
-  const { data: existingProj } = await sb
-    .from("projects")
-    .select("id, created_by")
-    .eq("id", projectId)
-    .maybeSingle();
-  if (existingProj) {
-    await assertProjectAccess(projectId, auth, existingProj);
-  }
-
-  const createdBy = existingProj?.created_by ?? auth.profile.id;
   await db.upsertProject(projectId, {
     property_type: context?.propertyType,
     bhk: context?.bhk,
@@ -185,7 +139,7 @@ async function projectSaveAnalysis(body, auth) {
     bhk_type: analysis?.bhkType,
     orientation: analysis?.orientation,
     summary: analysis?.summary,
-    created_by: createdBy,
+    created_by: createdBy
   });
 
   const storagePath = await db.uploadBase64(
@@ -195,19 +149,15 @@ async function projectSaveAnalysis(body, auth) {
     "image/png"
   );
 
-  const { data: existingFp } = await sb
-    .from("floor_plans")
-    .select("id")
-    .eq("project_id", projectId)
-    .limit(1)
-    .maybeSingle();
+  // Floor plan is static per project — upsert in place rather than inserting a new row
+  const { data: existingFp } = await sb.from("floor_plans").select("id").eq("project_id", projectId).limit(1).single();
   let fpId;
   if (existingFp) {
     await sb.from("floor_plans").update({
       file_name: fileName || "floorplan.png",
       storage_path: storagePath,
       analysis_raw: analysis,
-      analyzed_at: new Date().toISOString(),
+      analyzed_at: new Date().toISOString()
     }).eq("id", existingFp.id);
     fpId = existingFp.id;
   } else {
@@ -216,13 +166,13 @@ async function projectSaveAnalysis(body, auth) {
       file_name: fileName || "floorplan.png",
       storage_path: storagePath,
       analysis_raw: analysis,
-      analyzed_at: new Date().toISOString(),
+      analyzed_at: new Date().toISOString()
     });
   }
 
   const rooms = analysis?.rooms || [];
   if (rooms.length) {
-    await db.replaceRows("rooms", { project_id: projectId }, rooms.map((r) => ({
+    await db.replaceRows("rooms", { project_id: projectId }, rooms.map(r => ({
       project_id: projectId,
       floor_plan_id: fpId,
       label: r.label,
@@ -236,22 +186,26 @@ async function projectSaveAnalysis(body, auth) {
       length_m: r.lengthM,
       notes: r.notes,
       walls: r.walls || null,
-      fp_placements: r.placements || null,
+      fp_placements: r.placements || null
     })));
   }
 
   const boq = analysis?.globalBoq || [];
   if (boq.length) {
-    await db.replaceRows("boq_items", { project_id: projectId, source: "floor_plan_analysis" }, boq.map((b) => ({
-      project_id: projectId,
-      source: "floor_plan_analysis",
-      category: b.category,
-      item: b.item,
-      qty: b.qty,
-      unit: b.unit,
-      rate: b.rate,
-      amount: b.amount,
-    })));
+    await db.replaceRows(
+      "boq_items",
+      { project_id: projectId, source: "floor_plan_analysis" },
+      boq.map(b => ({
+        project_id: projectId,
+        source: "floor_plan_analysis",
+        category: b.category,
+        item: b.item,
+        qty: b.qty,
+        unit: b.unit,
+        rate: b.rate,
+        amount: b.amount
+      }))
+    );
   }
 
   return { ok: true };
@@ -261,7 +215,7 @@ async function projectSaveRooms(body) {
   const { projectId, rooms } = body;
   if (!projectId) throw httpError(400, "Missing projectId");
 
-  await db.replaceRows("rooms", { project_id: projectId }, (rooms || []).map((r) => ({
+  await db.replaceRows("rooms", { project_id: projectId }, (rooms || []).map(r => ({
     project_id: projectId,
     label: r.label,
     name: r.name,
@@ -272,9 +226,7 @@ async function projectSaveRooms(body) {
     bbox_h_pct: r.bbox?.hPct,
     width_m: r.widthM,
     length_m: r.lengthM,
-    notes: r.notes,
-    walls: r.walls || null,
-    fp_placements: r.placements || null,
+    notes: r.notes
   })));
 
   return { ok: true };
@@ -283,10 +235,14 @@ async function projectSaveRooms(body) {
 async function projectSaveInspiration(body) {
   const { projectId, images } = body;
   if (!projectId) throw httpError(400, "Missing projectId");
-  await db.upsertProject(projectId, {});
-  const sb = db.getClient();
 
-  const { data: existing } = await sb.from("inspiration_images")
+  // Ensure the project row exists before inserting child rows (FK constraint)
+  await db.upsertProject(projectId, {});
+
+  // Get current max sort_order so new images append rather than collide
+  const sb = db.getClient();
+  const { data: existing } = await sb
+    .from("inspiration_images")
     .select("sort_order")
     .eq("project_id", projectId)
     .order("sort_order", { ascending: false })
@@ -308,7 +264,7 @@ async function projectSaveInspiration(body) {
       project_id: projectId,
       file_name: img.fileName || `${i}.${ext}`,
       storage_path: storagePath,
-      sort_order: offset + i,
+      sort_order: offset + i
     });
   }
 
@@ -385,7 +341,7 @@ async function projectSavePlacements(body) {
   const { projectId, placements } = body;
   if (!projectId) throw httpError(400, "Missing projectId");
 
-  await db.replaceRows("furniture_placements", { project_id: projectId }, (placements || []).map((p) => ({
+  await db.replaceRows("furniture_placements", { project_id: projectId }, (placements || []).map(p => ({
     project_id: projectId,
     client_id: p.id,
     module_id: p.moduleId,
@@ -413,7 +369,8 @@ async function projectSaveBoq(body) {
   const sb = db.getClient();
 
   if (versionId) {
-    const rows = (boqItems || []).map((b) => ({
+    // Version-specific: insert without deleting (each version owns its BOQ)
+    const rows = (boqItems || []).map(b => ({
       project_id: projectId,
       source: "furniture_generated",
       version_id: versionId,
@@ -431,16 +388,21 @@ async function projectSaveBoq(body) {
     return { ok: true };
   }
 
-  await db.replaceRows("boq_items", { project_id: projectId, source: "furniture_generated" }, (boqItems || []).map((b) => ({
-    project_id: projectId,
-    source: "furniture_generated",
-    category: b.category,
-    item: b.item,
-    qty: b.qty,
-    unit: b.unit,
-    rate: b.rate,
-    amount: b.amount
-  })));
+  // Legacy path (no version): replace all furniture_generated items
+  await db.replaceRows(
+    "boq_items",
+    { project_id: projectId, source: "furniture_generated" },
+    (boqItems || []).map(b => ({
+      project_id: projectId,
+      source: "furniture_generated",
+      category: b.category,
+      item: b.item,
+      qty: b.qty,
+      unit: b.unit,
+      rate: b.rate,
+      amount: b.amount
+    }))
+  );
 
   return { ok: true };
 }
@@ -450,24 +412,30 @@ async function projectUpdateBoq(body) {
   if (!projectId) throw httpError(400, "Missing projectId");
   const sb = db.getClient();
 
+  // Replace project-level (floor plan) BOQ items
   if (Array.isArray(projectItems)) {
-    await db.replaceRows("boq_items", { project_id: projectId, source: "floor_plan_analysis" }, projectItems.map((b) => ({
-      project_id: projectId,
-      source: "floor_plan_analysis",
-      category: b.category,
-      item: b.item,
-      qty: b.qty,
-      unit: b.unit,
-      rate: b.rate,
-      amount: b.amount
-    })));
+    await db.replaceRows(
+      "boq_items",
+      { project_id: projectId, source: "floor_plan_analysis" },
+      projectItems.map(b => ({
+        project_id: projectId,
+        source: "floor_plan_analysis",
+        category: b.category,
+        item: b.item,
+        qty: b.qty,
+        unit: b.unit,
+        rate: b.rate,
+        amount: b.amount
+      }))
+    );
   }
 
+  // Replace version-level BOQ items
   if (versionId && Array.isArray(versionItems)) {
     const { error: delErr } = await sb.from("boq_items").delete().eq("version_id", versionId);
     if (delErr) console.error("[DB] Delete version BOQ failed:", delErr.message);
     if (versionItems.length) {
-      const rows = versionItems.map((b) => ({
+      const rows = versionItems.map(b => ({
         project_id: projectId,
         version_id: versionId,
         source: "furniture_generated",
@@ -511,106 +479,120 @@ async function projectSaveScene(body) {
 
 async function projectList(auth) {
   const sb = db.getClient();
-  const userId = auth.profile.id;
-  const role = auth.profile.role;
+  const supabaseUrl = process.env.SUPABASE_URL;
 
-  let query = sb.from("projects")
-    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, status, updated_at, created_by")
+  let query = sb
+    .from("projects")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by, advance_payment_done, floor_plans(storage_path)")
     .order("updated_at", { ascending: false });
 
-  if (!FULL_ACCESS_ROLES.has(role)) {
-    const { data: assigned } = await sb.from("project_assignments")
+  // Filter by role when auth is present
+  if (auth && !["admin", "ceo", "sales"].includes(auth.profile.role)) {
+    const userId = auth.profile.id;
+    const { data: assigned } = await sb
+      .from("project_assignments")
       .select("project_id")
       .eq("user_id", userId);
-    const assignedIds = (assigned || []).map((a) => a.project_id).filter(Boolean);
-    const orParts = [`created_by.eq.${userId}`];
-    if (assignedIds.length) {
-      orParts.push(`id.in.(${assignedIds.join(",")})`);
-    }
-    query = query.or(orParts.join(","));
+    const assignedIds = (assigned || []).map(a => a.project_id);
+
+    // Designers / lead designers see only explicitly assigned projects
+    if (assignedIds.length === 0) return { projects: [] };
+    query = query.in("id", assignedIds);
   }
 
   const { data, error } = await query;
   if (error) throw httpError(500, "Failed to list projects: " + error.message);
-  const projects = data || [];
-  if (!projects.length) return { projects: [] };
 
-  const ids = projects.map((p) => p.id);
-  const { data: floorPlans } = await sb.from("floor_plans")
-    .select("project_id, storage_path, created_at")
-    .in("project_id", ids)
-    .order("created_at", { ascending: false });
-
-  const latestByProject = {};
-  for (const fp of floorPlans || []) {
-    if (!latestByProject[fp.project_id]) latestByProject[fp.project_id] = fp.storage_path;
-  }
-
-  return {
-    projects: projects.map((p) => ({
+  const projects = (data || []).map(({ floor_plans, ...p }) => {
+    const fp = Array.isArray(floor_plans) ? floor_plans[0] : floor_plans;
+    return {
       ...p,
-      thumbnail_url: publicStorageUrl("poligrid-floor-plans", latestByProject[p.id]),
-    })),
-  };
+      thumbnail_url: fp?.storage_path
+        ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
+        : null
+    };
+  });
+  return { projects };
 }
 
-async function projectLoad(id, auth) {
+async function projectLoad(id) {
   if (!id) throw httpError(400, "Missing project id");
   const sb = db.getClient();
-
-  const { data: project, error: projectError } = await sb
-    .from("projects")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (projectError) throw httpError(500, "Failed to load project: " + projectError.message);
-  if (!project) throw httpError(404, "Project not found");
-  await assertProjectAccess(id, auth, { id: project.id, created_by: project.created_by });
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const pubUrl = (bucket, storagePath) =>
+    storagePath ? `${supabaseUrl}/storage/v1/object/public/${bucket}/${storagePath}` : null;
 
   const [
+    { data: project },
     { data: fps },
     { data: rooms },
     { data: cameraPins },
     { data: furniturePlacements },
     { data: boqItems },
     { data: inspirationImages },
+    { data: versions }
   ] = await Promise.all([
-    sb.from("floor_plans")
-      .select("id, storage_path")
-      .eq("project_id", id)
-      .order("created_at", { ascending: false })
-      .limit(1),
+    sb.from("projects").select("*").eq("id", id).single(),
+    sb.from("floor_plans").select("*").eq("project_id", id).order("created_at", { ascending: false }).limit(1),
     sb.from("rooms").select("*").eq("project_id", id),
     sb.from("camera_pins").select("*").eq("project_id", id),
     sb.from("furniture_placements").select("*").eq("project_id", id),
-    sb.from("boq_items")
-      .select("category, item, qty, unit, rate, amount")
-      .eq("project_id", id)
-      .eq("source", "floor_plan_analysis"),
-    sb.from("inspiration_images")
-      .select("storage_path, sort_order")
-      .eq("project_id", id)
-      .order("sort_order", { ascending: true }),
+    sb.from("boq_items").select("*").eq("project_id", id).eq("source", "floor_plan_analysis"),
+    sb.from("inspiration_images").select("*").eq("project_id", id).order("sort_order", { ascending: true }),
+    sb.from("project_versions").select("*").eq("project_id", id).order("version_number", { ascending: true })
   ]);
 
-  const fp = fps && fps[0]
-    ? { ...fps[0], url: publicStorageUrl("poligrid-floor-plans", fps[0].storage_path) }
-    : null;
+  if (!project) throw httpError(404, "Project not found");
+  const fp = fps && fps[0] ? { ...fps[0], url: pubUrl("poligrid-floor-plans", fps[0].storage_path) } : null;
+
+  // Batch-fetch renders + BOQ for all versions in 2 queries (avoids N+1)
+  const versionIds = (versions || []).map(v => v.id);
+  const [allRendersRes, allBoqRes] = versionIds.length
+    ? await Promise.all([
+        sb.from("renders").select("*").in("version_id", versionIds).order("created_at", { ascending: true }),
+        sb.from("boq_items").select("*").in("version_id", versionIds)
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  const rendersByVersion = {};
+  const boqByVersion = {};
+  for (const r of allRendersRes.data || []) {
+    (rendersByVersion[r.version_id] = rendersByVersion[r.version_id] || []).push(r);
+  }
+  for (const b of allBoqRes.data || []) {
+    (boqByVersion[b.version_id] = boqByVersion[b.version_id] || []).push(b);
+  }
+
+  const versionsWithData = (versions || []).map(v => {
+    const renders = rendersByVersion[v.id] || [];
+    const boq = boqByVersion[v.id] || [];
+    const inspPaths = v.regen_inspiration_paths;
+    const inspUrls = inspPaths
+      ? inspPaths.map(p => pubUrl("poligrid-inspiration", p))
+      : (inspirationImages || []).map(i => pubUrl("poligrid-inspiration", i.storage_path));
+    return {
+      ...v,
+      renders: renders.map(r => ({ ...r, url: pubUrl("poligrid-renders", r.storage_path) })),
+      boqItems: boq,
+      inspirationUrls: inspUrls.filter(Boolean)
+    };
+  });
 
   return {
     project,
     floorPlan: fp,
     rooms: rooms || [],
-    cameraPins: (cameraPins || []).map((p) => ({
+    cameraPins: (cameraPins || []).map(p => ({
       ...p,
-      photo_url: publicStorageUrl("poligrid-pin-photos", p.photo_storage_path),
+      photo_url: pubUrl("poligrid-pin-photos", p.photo_storage_path)
     })),
     furniturePlacements: furniturePlacements || [],
     boqItems: boqItems || [],
-    inspirationImages: (inspirationImages || []).map((i) => ({
+    inspirationImages: (inspirationImages || []).map(i => ({
       ...i,
-      url: publicStorageUrl("poligrid-inspiration", i.storage_path),
+      url: pubUrl("poligrid-inspiration", i.storage_path)
     })),
+    versions: versionsWithData
   };
 }
 
@@ -632,9 +614,249 @@ async function projectSaveBrief(body) {
   return { ok: true };
 }
 
+async function projectUpdateStatus(body, auth) {
+  const { projectId, status } = body;
+  if (!projectId || !status) throw httpError(400, "projectId, status required.");
+
+  const VALID = ["active", "advanced_paid", "in_progress", "completed", "on_hold", "cancelled"];
+  if (!VALID.includes(status)) throw httpError(400, `Invalid status. Must be: ${VALID.join(", ")}`);
+
+  const sb = db.getClient();
+  const { data: projectBefore } = await sb
+    .from("projects")
+    .select("name, status")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  const { error } = await sb.from("projects")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", projectId);
+  if (error) throw httpError(500, "Status update failed: " + error.message);
+
+  await logAuditEvent({
+    category: auth?.profile?.role === "sales" ? "sales" : "design",
+    subcategory: "project_status_change",
+    projectId,
+    actionedBy: auth?.profile?.id || null,
+    actionedByName: auth?.profile?.full_name || null,
+    logMessage: `${auth?.profile?.full_name || "User"} changed project status from ${projectBefore?.status || "unknown"} to ${status} for ${projectBefore?.name || "project"}.`,
+    metadata: { previousStatus: projectBefore?.status || null, newStatus: status },
+  });
+
+  return { ok: true };
+}
+
+// ─── Sales-specific: all projects split into mine vs others ───────────────────
+async function salesProjectList(auth) {
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const userId = auth.profile.id;
+
+  const FIELDS = "id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by, floor_plans(storage_path)";
+  const toProject = ({ floor_plans, ...p }) => {
+    const fp = Array.isArray(floor_plans) ? floor_plans[0] : floor_plans;
+    return {
+      ...p,
+      thumbnail_url: fp?.storage_path
+        ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
+        : null
+    };
+  };
+
+  const [{ data: mine, error: e1 }, { data: others, error: e2 }] = await Promise.all([
+    sb.from("projects").select(FIELDS).eq("created_by", userId).order("updated_at", { ascending: false }),
+    sb.from("projects").select(FIELDS).neq("created_by", userId).order("updated_at", { ascending: false }),
+  ]);
+  if (e1 || e2) throw httpError(500, "Failed to list projects: " + (e1 || e2).message);
+
+  return {
+    mine:   (mine   || []).map(toProject),
+    others: (others || []).map(toProject),
+  };
+}
+
+// ─── Create a new project (self-serve for designer / sales) ──────────────────
+async function projectCreate(req, body) {
+  const { profile } = await requireAuth(req, ["designer", "lead_designer", "admin", "sales"]);
+  const { name, clientName } = body;
+  if (!name || !name.trim()) throw httpError(400, "Project name required.");
+
+  const sb = db.getClient();
+  const newId = require("crypto").randomUUID();
+
+  const { error } = await sb.from("projects").insert({
+    id:          newId,
+    name:        name.trim(),
+    client_name: clientName?.trim() || null,
+    created_by:  profile.id,
+    status:      "active",
+  });
+  if (error) throw httpError(500, error.message);
+
+  // Auto-assign creator
+  await sb.from("project_assignments").insert({
+    project_id:  newId,
+    user_id:     profile.id,
+    assigned_by: profile.id,
+  });
+
+  await logAuditEvent({
+    category: "sales",
+    subcategory: "project_creation",
+    projectId: newId,
+    actionedBy: profile.id,
+    actionedByName: profile.full_name,
+    logMessage: `${profile.full_name} created project ${name.trim()}.`,
+    metadata: { clientName: clientName?.trim() || null },
+  });
+
+  return { projectId: newId };
+}
+
+// ─── Toggle advance payment done flag ────────────────────────────────────────
+async function projectAdvancePayment(req, body) {
+  const { profile } = await requireAuth(req, ["sales", "admin"]);
+  const { projectId, done } = body;
+  if (!projectId) throw httpError(400, "projectId required.");
+
+  const sb = db.getClient();
+  const { data: project } = await sb.from("projects").select("name").eq("id", projectId).maybeSingle();
+  const { error } = await sb
+    .from("projects")
+    .update({ advance_payment_done: !!done, updated_at: new Date().toISOString() })
+    .eq("id", projectId);
+  if (error) throw httpError(500, error.message);
+
+  if (done) {
+    await logAuditEvent({
+      category: "sales",
+      subcategory: "marked_paid_by_sales",
+      projectId,
+      actionedBy: profile.id,
+      actionedByName: profile.full_name,
+      logMessage: `${profile.full_name} marked ${project?.name || "project"} as advance paid.`,
+    });
+  }
+
+  return { ok: true };
+}
+
+// ─── Project detail (lightweight — includes team + drawing stats) ─────────────
+async function projectDetail(req, id) {
+  await requireAuth(req);
+  if (!id) throw httpError(400, "Missing id");
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+
+  const [
+    { data: project },
+    { data: team },
+    { data: drawings },
+    { data: fps },
+    { data: renders },
+    { data: assignments },
+  ] = await Promise.all([
+    sb.from("projects").select("*").eq("id", id).single(),
+    sb.from("project_assignments").select("*, profile:profiles!user_id(id, full_name, email, role)").eq("project_id", id),
+    sb.from("drawings").select("id, status, drawing_type, title, file_name, file_path, version_number, created_at, uploaded_by, uploader:profiles!uploaded_by(full_name)").eq("project_id", id).order("created_at", { ascending: false }),
+    sb.from("floor_plans").select("storage_path").eq("project_id", id).order("created_at", { ascending: false }).limit(1),
+    sb.from("renders").select("id").eq("project_id", id),
+    sb.from("drawing_assignments").select("id, drawing_type, status").eq("project_id", id),
+  ]);
+
+  if (!project) throw httpError(404, "Project not found");
+
+  const drawingList = drawings || [];
+  // total = number of assigned drawing types; approved = how many of those are approved
+  const assignmentList = assignments || [];
+  const assignedTotal = assignmentList.length || drawingList.length; // fallback to uploads if no assignments
+  const drawingStats = {
+    total: assignedTotal,
+    approved: assignmentList.filter(a => a.status === "approved").length,
+    pending: assignmentList.filter(a => a.status === "pending_review").length,
+    revision: assignmentList.filter(a => a.status === "revision_requested").length,
+    rejected: assignmentList.filter(a => a.status === "rejected").length,
+  };
+
+  const fp = fps && fps[0];
+  const thumbnailUrl = fp?.storage_path
+    ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
+    : null;
+
+  return { project, team: team || [], drawings: drawingList, drawingStats, thumbnailUrl, rendersCount: (renders || []).length };
+}
+
+// ─── Update editable project fields ──────────────────────────────────────────
+async function projectUpdate(req, body) {
+  await requireAuth(req, ["admin", "lead_designer", "sales", "designer"]);
+  const { projectId, name, clientName, propertyType, bhk, bhkType, totalAreaM2, globalBrief } = body;
+  if (!projectId) throw httpError(400, "projectId required.");
+
+  const updates = {};
+  if (name          !== undefined) updates.name            = name?.trim() || null;
+  if (clientName    !== undefined) updates.client_name     = clientName?.trim() || null;
+  if (propertyType  !== undefined) updates.property_type   = propertyType || null;
+  if (bhk           !== undefined) updates.bhk             = bhk;
+  if (bhkType       !== undefined) updates.bhk_type        = bhkType || null;
+  if (totalAreaM2   !== undefined) updates.total_area_m2   = totalAreaM2;
+  if (globalBrief   !== undefined) updates.global_brief    = globalBrief?.trim() || null;
+  if (!Object.keys(updates).length) throw httpError(400, "Nothing to update.");
+  updates.updated_at = new Date().toISOString();
+
+  const sb = db.getClient();
+  const { error } = await sb.from("projects").update(updates).eq("id", projectId);
+  if (error) throw httpError(500, error.message);
+  return { ok: true };
+}
+
+// ─── Paid projects not yet assigned to the requesting lead_designer ───────────
+async function projectListAvailable(req) {
+  const { profile } = await requireAuth(req, ["lead_designer", "admin"]);
+  const sb = db.getClient();
+  const supabaseUrl = process.env.SUPABASE_URL;
+
+  // All assignments for this user
+  const { data: assigned } = await sb
+    .from("project_assignments")
+    .select("project_id")
+    .eq("user_id", profile.id);
+  const assignedIds = (assigned || []).map(a => a.project_id);
+
+  let query = sb
+    .from("projects")
+    .select("id, name, property_type, bhk, bhk_type, client_name, status, created_at, advance_payment_done, floor_plans(storage_path)")
+    .eq("advance_payment_done", true)
+    .order("updated_at", { ascending: false });
+
+  const { data, error } = await query;
+  if (error) throw httpError(500, error.message);
+
+  // Exclude already-assigned projects
+  const available = (data || [])
+    .filter(p => !assignedIds.includes(p.id))
+    .map(({ floor_plans, ...p }) => {
+      const fp = Array.isArray(floor_plans) ? floor_plans[0] : floor_plans;
+      return {
+        ...p,
+        thumbnail_url: fp?.storage_path
+          ? `${supabaseUrl}/storage/v1/object/public/poligrid-floor-plans/${fp.storage_path}`
+          : null,
+      };
+    });
+
+  return { projects: available };
+}
+
 module.exports = {
   handleProjectAction,
   projectList,
   projectLoad,
   projectLoadVersions,
+  salesProjectList,
+  projectUpdateStatus,
+  projectCreate,
+  projectAdvancePayment,
+  projectDetail,
+  projectUpdate,
+  projectListAvailable,
 };

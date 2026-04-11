@@ -19,13 +19,6 @@ async function onGenerate() {
   const renderSources = [];
 
   if (pins.length) {
-    // Hydrate persisted pin photos only when needed for generation.
-    await Promise.all(pins.map(async (pin) => {
-      if (!pin.photoDataUrl && pin.photoUrl) {
-        pin.photoDataUrl = await loadUrlToDataUrl(pin.photoUrl).catch(() => null);
-      }
-    }));
-
     for (const pin of pins) {
       const roomLabel = pin.roomLabel || "unknown";
       const detectedRoom = confirmedRooms.find(r => r.label === roomLabel);

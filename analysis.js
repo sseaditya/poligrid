@@ -24,7 +24,7 @@ const FURNITURE_COLORS = [
 
 async function analyzeFloorPlan(canvas, context) {
   const imageBase64 = canvasToPngBase64(canvas);
-  // Use postJson so the Debugger panel captures this call (postJson is defined in client/utils.js, same page scope)
+  // Use postJson so the Debugger panel captures this call (postJson is defined in app.js, same page scope)
   const result = await postJson("/api/analyze/floorplan", { imageBase64, mimeType: "image/png", context });
   return result.analysis; // { rooms, totalAreaM2, bhkType, orientation, summary, globalBoq }
 }
@@ -565,7 +565,7 @@ function wrapText(text, maxWidth, ctx) {
   return lines;
 }
 
-// Export to window for planner modules
+// Export to window for use in app.js
 window.PoligridAnalysis = {
   analyzeFloorPlan,
   matchRoomImage,

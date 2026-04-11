@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poligrid — Project</title>
+  <link rel="stylesheet" href="/theme.css" />
+</head>
+<body class="dash-body page-project">
+
+  <!-- Light frosted-glass top bar (overridden via .page-project) -->
+  <header class="top-bar" id="topBar">
+    <div class="top-bar-left">
+      <a href="/homepage" class="logo-link"><span class="logo-text">Poligrid</span></a>
+    </div>
+    <nav class="dash-nav" id="dashNav"></nav>
+    <div class="top-bar-right" id="userChipWrap"></div>
+  </header>
+
+  <!-- Sidebar + canvas layout -->
+  <div class="proj-page-layout">
+    <aside class="proj-sidebar" id="projSidebar">
+      <!-- rendered by JS -->
+    </aside>
+    <div class="proj-canvas" id="projectMain">
+      <p class="loading-hint">Loading project…</p>
+    </div>
+  </div>
+
+  <!-- ── Edit Details Modal ──────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="editModal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Edit Project Details</h2>
+        <button class="ghost-sm" id="editModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="field-label">Project name
+          <input class="ctx-input" id="editName" type="text" />
+        </label>
+        <label class="field-label">Client name
+          <input class="ctx-input" id="editClient" type="text" />
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label class="field-label">Property type
+            <input class="ctx-input" id="editPropertyType" type="text" placeholder="e.g. Apartment" />
+          </label>
+          <label class="field-label">BHK
+            <input class="ctx-input" id="editBhk" type="text" placeholder="e.g. 3BHK" />
+          </label>
+          <label class="field-label">Configuration
+            <input class="ctx-input" id="editBhkType" type="text" placeholder="e.g. 3+2" />
+          </label>
+          <label class="field-label">Area (m²)
+            <input class="ctx-input" id="editArea" type="number" min="0" step="0.1" />
+          </label>
+        </div>
+        <label class="field-label">Design Brief
+          <textarea class="ctx-input" id="editBrief" rows="4" style="resize:vertical"></textarea>
+        </label>
+        <div class="auth-error" id="editError" hidden></div>
+        <div class="modal-footer">
+          <button class="ghost-btn" id="editCancel">Cancel</button>
+          <button class="primary-btn" id="editSave">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Drawing Review Modal ────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="reviewModal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Review Drawing</h2>
+        <button class="ghost-sm" id="reviewModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="review-drawing-name" id="reviewDrawingTitle">—</div>
+        <label class="field-label">Comments / Feedback
+          <textarea class="ctx-input" id="reviewComments" rows="4"
+            placeholder="Optional notes for the designer…" style="resize:vertical"></textarea>
+        </label>
+        <div class="auth-error" id="reviewError" hidden></div>
+        <div class="modal-footer review-actions">
+          <div style="display:flex;gap:8px">
+            <button class="ghost-btn btn-sm danger-btn" id="reviewRejectBtn">Reject</button>
+            <button class="ghost-btn btn-sm" id="reviewRevisionBtn">Request Revision</button>
+          </div>
+          <button class="primary-btn btn-sm" id="reviewApproveBtn" style="width:auto">
+            <span class="material-symbols-outlined" style="font-size:15px">check</span>
+            Approve
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Assign Designer Modal ─────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="assignDesignerModal" hidden>
+    <div class="modal-card" style="max-width:560px;width:100%">
+      <div class="modal-header">
+        <h2 class="modal-title">Assign Designer</h2>
+        <button class="ghost-sm" id="assignDesignerModalClose">✕</button>
+      </div>
+      <div class="modal-body" style="gap:16px">
+        <label class="field-label">Designer
+          <select class="ctx-input" id="modalDesignerSelect">
+            <option value="">Loading…</option>
+          </select>
+        </label>
+        <div id="designerTeamNote" hidden
+          style="font-size:12px;padding:8px 12px;border-radius:6px;margin-top:-8px"></div>
+
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+              color:var(--color-on-surface-variant);margin:0">Drawing Assignments</p>
+            <button class="ghost-sm" id="modalAddDrawingRowBtn" type="button">+ Add Type</button>
+          </div>
+          <div id="modalDrawingRows" style="display:flex;flex-direction:column;gap:8px"></div>
+          <p id="modalNoRowsHint" style="font-size:12px;color:var(--color-on-surface-variant)">
+            Add at least one drawing type to assign.</p>
+        </div>
+
+        <label class="field-label">Notes (optional)
+          <input class="ctx-input" id="modalAssignNotes" type="text"
+            placeholder="Special instructions for the designer…" />
+        </label>
+
+        <div class="auth-error" id="assignDesignerError" hidden></div>
+        <div class="modal-footer">
+          <button class="ghost-btn" id="assignDesignerCancelBtn">Cancel</button>
+          <button class="primary-btn" id="assignDesignerConfirmBtn" style="gap:6px;width:auto">
+            <span class="material-symbols-outlined" style="font-size:15px">person_add</span>
+            Assign Designer
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Drawing Viewer Modal ───────────────────────────────────────────────── -->
+  <div id="drawingViewerModal"
+    style="display:none;position:fixed;inset:0;z-index:900;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);
+           flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:12px 20px;flex-shrink:0;background:rgba(0,0,0,0.6);border-bottom:1px solid rgba(255,255,255,0.08)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="material-symbols-outlined" style="font-size:18px;color:#a0aec0">architecture</span>
+        <span id="drawingViewerTitle" style="font-size:14px;font-weight:600;color:#e2e8f0;letter-spacing:.01em">Drawing</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <a id="drawingViewerDlBtn"
+          style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+                 padding:6px 14px;border-radius:7px;border:1px solid rgba(255,255,255,0.18);
+                 color:#e2e8f0;background:rgba(255,255,255,0.07);cursor:pointer;text-decoration:none;
+                 transition:background .15s">
+          <span class="material-symbols-outlined" style="font-size:15px">download</span> Download
+        </a>
+        <button id="drawingViewerClose"
+          style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;
+                 border-radius:7px;border:1px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.07);
+                 color:#e2e8f0;cursor:pointer;font-size:18px;line-height:1">✕</button>
+      </div>
+    </div>
+    <div style="flex:1;overflow:hidden;position:relative">
+      <!-- PDF/image embed -->
+      <iframe id="drawingViewerIframe"
+        style="width:100%;height:100%;border:none;background:#fff"
+        src="about:blank"></iframe>
+      <!-- fallback for non-PDF (images) -->
+      <img id="drawingViewerImg" src=""
+        style="display:none;width:100%;height:100%;object-fit:contain;padding:24px;box-sizing:border-box" />
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="client/auth.js"></script>
+  <script src="client/project-detail.js"></script>
+</body>
+</html>

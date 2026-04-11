@@ -293,14 +293,20 @@
       el.hidden = false;
     }
 
-    // If already signed in, redirect directly to planner.
+    // If already signed in, redirect directly to the role-appropriate home
     AuthClient.getSession().then(async session => {
       if (!session) return;
       try {
         const profile = await AuthClient.getProfile();
         if (!profile) return;
-        window.location.href = "/";
-      } catch { window.location.href = "/"; }
+        if (profile.role === "designer") { window.location.href = "/designer_home"; return; }
+        if (profile.role === "lead_designer") { window.location.href = "/lead_designer_home"; return; }
+        if (profile.role === "sales") {
+          const slug = profile.full_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+          window.location.href = `/sales/${slug}`; return;
+        }
+        window.location.href = "/homepage";
+      } catch { window.location.href = "/homepage"; }
     }).catch(err => {
       const el = document.getElementById("authError");
       el.textContent = err.message || "Configuration error. Contact your administrator.";

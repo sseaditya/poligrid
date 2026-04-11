@@ -243,8 +243,8 @@ function init() {
     }, 800);
   });
 
-  // Back to project picker
-  el("backToProjects")?.addEventListener("click", () => { showProjectPicker(); });
+  // Back to projects
+  el("backToProjects")?.addEventListener("click", () => { window.location.href = "/projects"; });
 
   // New project button
   el("newProjectBtn")?.addEventListener("click", () => {
@@ -755,14 +755,13 @@ function refreshPinsList() {
   for (const pin of pins) {
     const item = document.createElement("div");
     item.className = "pin-item";
-    const photoSrc = pin.photoDataUrl || pin.photoUrl || "";
-    const hasPhoto = !!photoSrc;
+    const hasPhoto = !!pin.photoDataUrl;
     const hasPhoto_badge = hasPhoto
       ? `<span class="pin-badge photo">📷 Photo</span>`
       : `<span class="pin-badge no-photo">No photo</span>`;
     item.innerHTML = `
       <div class="pin-item-head">
-        ${hasPhoto ? `<img class="pin-item-thumb" src="${photoSrc}" alt=""/>` : `<div class="pin-item-thumb-empty">📍</div>`}
+        ${hasPhoto ? `<img class="pin-item-thumb" src="${pin.photoDataUrl}" alt=""/>` : `<div class="pin-item-thumb-empty">📍</div>`}
         <div class="pin-item-info">
           <span class="pin-item-label">${escapeHtml(pin.roomLabel || "Untitled pin")}</span>
           <div class="pin-item-meta">${hasPhoto_badge} · ${Math.round(pin.angleDeg || 0)}° · FOV ${pin.fovDeg || 60}°</div>
@@ -783,28 +782,12 @@ function openPinPopover(pin) {
   if (dom.pinAngle) dom.pinAngle.value = Math.round(pin.angleDeg || 0);
   dom.pinFov.value = pin.fovDeg || 60;
   dom.pinBrief.value = pin.brief || "";
-  const previewSrc = pin.photoDataUrl || pin.photoUrl || "";
-  dom.pinPhotoPreview.hidden = !previewSrc;
-  if (previewSrc) {
-    dom.pinPhotoPreview.innerHTML = `<img src="${previewSrc}" alt="Photo preview"/>`;
+  dom.pinPhotoPreview.hidden = !pin.photoDataUrl;
+  if (pin.photoDataUrl) {
+    dom.pinPhotoPreview.innerHTML = `<img src="${pin.photoDataUrl}" alt="Photo preview"/>`;
   }
   dom.pinPhotoInput.value = ""; // Always reset so change event fires even if same file
   dom.pinPopover.hidden = false;
-
-  // Lazy-hydrate public URL into data URL for edit/regenerate flows.
-  if (!pin.photoDataUrl && pin.photoUrl) {
-    loadUrlToDataUrl(pin.photoUrl).then((dataUrl) => {
-      if (!dataUrl || !planner) return;
-      const livePin = planner.cameraPins.find(p => p.id === pin.id);
-      if (!livePin) return;
-      livePin.photoDataUrl = dataUrl;
-      if (activePinId === pin.id) {
-        dom.pinPhotoPreview.hidden = false;
-        dom.pinPhotoPreview.innerHTML = `<img src="${dataUrl}" alt="Photo preview"/>`;
-      }
-      refreshPinsList();
-    }).catch(() => {});
-  }
 }
 
 function saveAllPins() {
@@ -900,7 +883,7 @@ function onPinFieldChange() {
 (async () => {
   let profile;
   try {
-    ({ profile } = await AuthClient.requireAuth());
+    ({ profile } = await AuthClient.requireAuth(['sales', 'lead_designer', 'admin']));
   } catch {
     window.location.href = '/login';
     return;
@@ -915,10 +898,10 @@ function onPinFieldChange() {
   const params = new URLSearchParams(location.search);
   const projectId = params.get('id');
   if (projectId) {
-    // Linked directly to a project
+    // Linked directly to a project (e.g. from projects page)
     await loadProject(projectId);
   } else {
-    // No project selected — open picker in-place
-    showProjectPicker();
+    // No project selected — send to projects list
+    window.location.href = '/projects';
   }
 })();

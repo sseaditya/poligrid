@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poligrid — Home</title>
+  <link rel="stylesheet" href="/theme.css" />
+</head>
+<body class="dash-body">
+
+  <!-- Top bar -->
+  <header class="top-bar">
+    <div class="top-bar-left">
+      <a href="/homepage" class="logo-link">
+        <span class="logo-text">Poligrid</span>
+      </a>
+    </div>
+    <nav class="dash-nav" id="dashNav"></nav>
+    <div class="top-bar-right" id="userChipWrap"></div>
+  </header>
+
+  <main class="dash-main">
+    <div class="dash-hero">
+      <h1 class="dash-greeting" id="greeting">Good morning</h1>
+      <p class="dash-subline" id="subline"></p>
+    </div>
+
+    <!-- Stats row (shown for admin / lead_designer) -->
+    <div class="stat-row" id="statRow" hidden>
+      <div class="stat-card" id="statProjects">
+        <span class="stat-num" id="statProjectsNum">—</span>
+        <span class="stat-label">Projects</span>
+      </div>
+      <div class="stat-card" id="statPending">
+        <span class="stat-num" id="statPendingNum">—</span>
+        <span class="stat-label">Drawings to review</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num" id="statTasksNum">—</span>
+        <span class="stat-label">Open tasks</span>
+      </div>
+    </div>
+
+    <!-- Designer start screen (no projects assigned) -->
+    <div id="designerStart" hidden>
+      <div class="empty-state-card">
+        <div class="empty-state-icon">✏️</div>
+        <h2 class="empty-state-title">You're not assigned to any projects yet</h2>
+        <p class="empty-state-body">
+          Wait for a lead designer to assign you, or create a new project yourself
+          and start uploading drawings right away.
+        </p>
+        <button class="primary-btn" id="designerCreateBtn">+ Create New Project</button>
+      </div>
+    </div>
+
+    <!-- Lead designer welcome screen (no projects assigned) -->
+    <div id="leadStart" hidden>
+      <div class="lead-welcome">
+        <p class="lead-welcome-sub">What would you like to do?</p>
+        <div class="lead-action-grid">
+          <div class="lead-action-card" id="leadActionPickup">
+            <div class="lead-action-icon">📋</div>
+            <div class="lead-action-body">
+              <h3 class="lead-action-title">Pick Up a Paid Project</h3>
+              <p class="lead-action-desc">Browse projects approved by the sales team and assign yourself to one.</p>
+              <span class="badge badge-success" id="leadAvailableBadge" hidden></span>
+            </div>
+            <button class="primary-btn" id="leadBrowseBtn">Browse →</button>
+          </div>
+          <div class="lead-action-card" id="leadActionCreate">
+            <div class="lead-action-icon">➕</div>
+            <div class="lead-action-body">
+              <h3 class="lead-action-title">Start a New Project</h3>
+              <p class="lead-action-desc">Create a project from scratch, assign your team, and begin design work.</p>
+            </div>
+            <button class="primary-btn" id="leadCreateBtn">Create Project →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-grid" id="dashGrid">
+      <!-- Designer: Actions Required (revision requests) -->
+      <section class="dash-section dash-section--full" id="actionsSection" hidden>
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">Actions Required</h2>
+        </div>
+        <div id="actionsList" class="drawings-list">
+          <p class="loading-hint">Loading…</p>
+        </div>
+      </section>
+
+      <!-- Projects section -->
+      <section class="dash-section" id="projectsSection">
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">My Projects</h2>
+          <div id="projectsAction"></div>
+        </div>
+        <div id="projectsList" class="projects-mini-list">
+          <p class="loading-hint">Loading…</p>
+        </div>
+      </section>
+
+      <!-- Tasks section (hidden for designer — replaced by actionsSection) -->
+      <section class="dash-section" id="tasksSection">
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">My Tasks</h2>
+        </div>
+        <div id="tasksList" class="tasks-list">
+          <p class="loading-hint">Loading…</p>
+        </div>
+      </section>
+
+      <!-- Drawings pending review (lead_designer only) -->
+      <section class="dash-section" id="reviewSection" hidden>
+        <div class="dash-section-head">
+          <h2 class="dash-section-title">Drawings Awaiting Review</h2>
+        </div>
+        <div id="reviewList" class="drawings-list">
+          <p class="loading-hint">Loading…</p>
+        </div>
+      </section>
+    </div>
+
+    <!-- Browse paid projects modal (lead_designer) -->
+    <div class="modal-overlay" id="browseProjectsModal" hidden>
+      <div class="modal-card" style="max-width:640px;width:100%">
+        <div class="modal-header">
+          <h2 class="modal-title">Paid Projects Available</h2>
+          <button class="ghost-sm" id="browseProjectsClose">✕</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+            These projects have been marked as paid by the sales team. Assign yourself to take ownership.
+          </p>
+          <div id="browseProjectsList" class="projects-mini-list">
+            <p class="loading-hint">Loading…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create project modal (designer) -->
+    <div class="modal-overlay" id="createProjectModal" hidden>
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 class="modal-title">New Project</h2>
+          <button class="ghost-sm" id="createProjectClose">✕</button>
+        </div>
+        <div class="modal-body">
+          <label class="field-label">
+            Project name <span style="color:var(--danger)">*</span>
+            <input class="ctx-input" id="newProjectName" type="text" placeholder="e.g. Sharma Residence" />
+          </label>
+          <label class="field-label">
+            Client name (optional)
+            <input class="ctx-input" id="newProjectClient" type="text" placeholder="e.g. Rajesh Sharma" />
+          </label>
+          <div class="auth-error" id="createProjectError" hidden></div>
+          <div class="modal-footer">
+            <button class="ghost-btn" id="createProjectCancel">Cancel</button>
+            <button class="primary-btn" id="createProjectSubmit">Create & Open</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="client/auth.js"></script>
+  <script src="client/homepage.js"></script>
+</body>
+</html>

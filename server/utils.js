@@ -142,7 +142,7 @@ function sendJson(res, statusCode, payload) {
 // ─── Static file server ───────────────────────────────────────────────────────
 
 function serveStatic(pathname, headOnly, res) {
-  const normalized = pathname === "/" ? "/index" : pathname;
+  const normalized = pathname === "/" ? "/login" : pathname;
   const safePath   = path.normalize(decodeURIComponent(normalized));
   const absolute   = path.resolve(ROOT, `.${safePath}`);
 
@@ -154,7 +154,7 @@ function serveStatic(pathname, headOnly, res) {
   if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
     filePath = path.join(filePath, "index.html");
   }
-  // Support extensionless URLs: /login -> login.html, /index -> index.html
+  // Support extensionless URLs: /login → login.html, /homepage → homepage.html
   if (!fs.existsSync(filePath) && !path.extname(filePath)) {
     const withHtml = filePath + ".html";
     if (fs.existsSync(withHtml)) filePath = withHtml;

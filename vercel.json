@@ -6,12 +6,22 @@
     }
   },
   "routes": [
-    { "src": "^/api/(.*)", "dest": "/api/route" },
-    { "src": "^/login$", "dest": "/login.html" },
-    { "src": "^/index$", "dest": "/index.html" },
-    { "src": "^/(homepage|projects|project|audit|profile|designer|designer_home|lead_designer_home|admin|admin_home|ceo)$", "dest": "/index.html" },
-    { "src": "^/profile/(.*)$", "dest": "/index.html" },
-    { "src": "^/sales/(.*)$", "dest": "/index.html" },
-    { "src": "^/$", "dest": "/index.html" }
+    { "src": "^/api/(.*)",      "dest": "/api/route" },
+    { "src": "^/sales/(.*)",    "dest": "/sales.html" },
+    { "src": "^/profile$",     "dest": "/profile.html" },
+    { "src": "^/profile/(.*)", "dest": "/profile.html" },
+    { "src": "^/login$",        "dest": "/login.html" },
+    { "src": "^/homepage$",     "dest": "/homepage.html" },
+    { "src": "^/projects$",     "dest": "/projects.html" },
+    { "src": "^/project$",      "dest": "/project.html" },
+    { "src": "^/audit$",        "dest": "/audit.html" },
+    { "src": "^/index$",        "dest": "/index.html" },
+    { "src": "^/designer$",     "dest": "/designer.html" },
+    { "src": "^/lead_designer_home$", "dest": "/lead_designer_home.html" },
+    { "src": "^/designer_home$",     "dest": "/designer_home.html" },
+    { "src": "^/admin$",        "dest": "/admin.html" },
+    { "src": "^/ceo$",          "dest": "/admin_home.html" },
+    { "src": "^/admin_home$",   "dest": "/admin_home.html" },
+    { "src": "^/$",             "dest": "/login.html" }
   ]
 }

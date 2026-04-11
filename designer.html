@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poligrid — Drawings</title>
+  <link rel="stylesheet" href="/theme.css" />
+</head>
+<body class="dash-body page-project">
+
+  <header class="top-bar" id="topBar">
+    <div class="top-bar-left">
+      <a href="/homepage" class="logo-link"><span class="logo-text">Poligrid</span></a>
+    </div>
+    <nav class="dash-nav" id="dashNav"></nav>
+    <div class="top-bar-right" id="userChipWrap"></div>
+  </header>
+
+  <!-- Sidebar + canvas layout -->
+  <div class="proj-page-layout">
+    <aside class="proj-sidebar" id="projSidebar"><!-- rendered by JS --></aside>
+
+    <div class="proj-canvas" id="designerCanvas">
+
+      <!-- ── Hero / Project Picker ──────────────────────────────────────────── -->
+      <div class="proj-detail-hero" style="margin-bottom:28px">
+        <nav style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-on-surface-variant);margin-bottom:10px">
+          <a href="/projects" style="color:inherit;text-decoration:none;transition:color 0.15s" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color=''">Projects</a>
+          <span class="material-symbols-outlined" style="font-size:13px">chevron_right</span>
+          <span style="color:var(--color-primary)">Drawings Manager</span>
+        </nav>
+        <div class="proj-detail-title-row" style="flex-wrap:wrap;gap:16px">
+          <div>
+            <h1 class="proj-detail-name">Drawings Manager</h1>
+            <p class="proj-detail-client" id="designerSubtitle" style="margin-top:4px">Select a project to manage drawings</p>
+          </div>
+          <div class="proj-detail-hero-actions" style="flex-wrap:wrap">
+            <div style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--color-on-surface-variant)">Project</span>
+              <select class="ctx-input" id="projectSelect" style="min-width:220px;font-size:13px">
+                <option value="">Loading projects…</option>
+              </select>
+            </div>
+            <button class="ghost-btn btn-sm" id="downloadZipBtn" disabled style="gap:5px">
+              <span class="material-symbols-outlined" style="font-size:14px">folder_zip</span>
+              Download All
+            </button>
+            <button class="primary-btn btn-sm" id="uploadBtn" disabled style="gap:5px;width:auto">
+              <span class="material-symbols-outlined" style="font-size:14px">upload_file</span>
+              Upload Drawing
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Designer start screen ──────────────────────────────────────────── -->
+      <div id="designerStartScreen" hidden>
+        <div class="empty-state-card" style="margin-bottom:28px">
+          <div class="empty-state-icon">✏️</div>
+          <h2 class="empty-state-title">Not assigned to any projects yet</h2>
+          <p class="empty-state-body">Wait for a lead designer to assign you to a project, or create one yourself and start uploading drawings right away.</p>
+          <button class="primary-btn" id="startCreateBtn" style="gap:6px;width:auto">
+            <span class="material-symbols-outlined" style="font-size:15px">add</span>
+            Create New Project
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Progress bar ───────────────────────────────────────────────────── -->
+      <div id="progressWrap" hidden style="margin-bottom:24px">
+        <div class="dash-section" style="gap:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="dash-section-icon">
+              <span class="material-symbols-outlined">bar_chart</span>
+              <h2 class="dash-section-title">Drawing Progress</h2>
+            </div>
+            <span id="progressFraction" style="font-size:13px;font-weight:700;color:var(--color-on-surface)">0 / 0 approved</span>
+          </div>
+          <div class="drawing-progress-track">
+            <div class="drawing-progress-fill approved" id="progressFillApproved" style="width:0%"></div>
+            <div class="drawing-progress-fill review" id="progressFillReview" style="width:0%"></div>
+          </div>
+          <div class="drawing-progress-legend">
+            <span class="dpleg approved">Approved</span>
+            <span class="dpleg review">Under Review</span>
+            <span class="dpleg pending">Not Uploaded</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── My Assignments (designer only) ────────────────────────────────── -->
+      <div id="myAssignmentPanel" hidden style="margin-bottom:24px">
+        <div class="dash-section" style="padding:0;overflow:hidden">
+          <div style="padding:20px 24px 16px">
+            <div class="dash-section-icon">
+              <span class="material-symbols-outlined">assignment_ind</span>
+              <h2 class="dash-section-title">My Assignments</h2>
+            </div>
+            <p class="dash-section-hint" style="margin-top:4px">Drawing types assigned to you for this project</p>
+          </div>
+          <div id="myAssignmentList" style="border-top:1px solid var(--color-surface-container);padding:16px 24px 20px">
+            <p class="loading-hint">Select a project to view your assignments.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Assignment panel (lead/admin) ─────────────────────────────────── -->
+      <div id="assignmentPanel" hidden style="margin-bottom:24px">
+        <div class="dash-section" style="padding:0;overflow:hidden">
+          <div style="padding:20px 24px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div>
+              <div class="dash-section-icon">
+                <span class="material-symbols-outlined">manage_accounts</span>
+                <h2 class="dash-section-title">Drawing Assignments</h2>
+              </div>
+              <p class="dash-section-hint" style="margin-top:4px">Assign drawing types to designers and track completion</p>
+            </div>
+            <button class="primary-btn btn-sm" id="addAssignmentBtn" style="width:auto;gap:5px">
+              <span class="material-symbols-outlined" style="font-size:14px">person_add</span>
+              Assign Drawing Type
+            </button>
+          </div>
+          <div id="assignmentList" style="border-top:1px solid var(--color-surface-container);padding:16px 24px 20px">
+            <p class="loading-hint">No drawing types assigned yet. Use "Assign Drawing Type" to get started.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Lead timeline (lead/admin) ─────────────────────────────────────── -->
+      <div id="leadTimelinePanel" hidden style="margin-bottom:24px">
+        <div class="dash-section" style="padding:0;overflow:hidden">
+          <div style="padding:20px 24px 16px">
+            <div class="dash-section-icon">
+              <span class="material-symbols-outlined">timeline</span>
+              <h2 class="dash-section-title">Assignment Timeline</h2>
+            </div>
+            <p class="dash-section-hint" style="margin-top:4px">Cross-project view of all assignments you've made</p>
+          </div>
+          <div id="leadTimelineList" style="border-top:1px solid var(--color-surface-container);padding:16px 24px 20px">
+            <p class="loading-hint">Loading assignment timeline…</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Drawings list ───────────────────────────────────────────────────── -->
+      <div id="drawingsWrap" style="margin-bottom:40px">
+        <div class="dash-section" style="padding:0;overflow:hidden">
+          <div style="padding:20px 24px 16px;display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div class="dash-section-icon">
+                <span class="material-symbols-outlined">architecture</span>
+                <h2 class="dash-section-title">Technical Drawings</h2>
+              </div>
+            </div>
+          </div>
+          <div style="border-top:1px solid var(--color-surface-container)">
+            <p class="loading-hint" id="drawingsHint" style="padding:20px 24px">Select a project to view drawings.</p>
+            <div id="drawingsByType"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /proj-canvas -->
+  </div><!-- /proj-page-layout -->
+
+
+  <!-- ── Upload Modal ─────────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="uploadModal" hidden>
+    <div class="modal-card" style="max-width:520px;width:100%">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title" id="uploadModalTitle">Upload Drawing</h2>
+          <p style="font-size:12px;color:var(--color-on-surface-variant);margin-top:2px">Supported: PDF, PNG, JPG, DWG, DXF · Max 50 MB</p>
+        </div>
+        <button class="ghost-sm" id="uploadModalClose">✕</button>
+      </div>
+      <form class="modal-body" id="uploadForm" style="gap:16px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label class="field-label" style="margin:0">Drawing type
+            <select class="ctx-input" id="drawingType" required>
+              <option value="">Select type…</option>
+              <option value="civil">Civil</option>
+              <option value="electrical">Electrical</option>
+              <option value="plumbing">Plumbing</option>
+              <option value="hvac">HVAC</option>
+              <option value="firefighting">Fire Fighting</option>
+              <option value="architectural">Architectural</option>
+              <option value="structural">Structural</option>
+              <option value="interior">Interior</option>
+              <option value="landscape">Landscape</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+          <label class="field-label" style="margin:0">Title
+            <input class="ctx-input" id="drawingTitle" type="text" placeholder="e.g. Ground Floor Plan" required />
+          </label>
+        </div>
+
+        <!-- Drop zone -->
+        <div class="upload-dropzone" id="uploadDropZone" tabindex="0" role="button" aria-label="Click or drag file here">
+          <span class="material-symbols-outlined">upload_file</span>
+          <p class="upload-dropzone-main">Drag & drop or <span class="upload-dropzone-link">browse files</span></p>
+          <p class="upload-dropzone-sub">PDF · PNG · JPG · DWG · DXF</p>
+          <input type="file" id="drawingFile" accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf" required />
+        </div>
+        <div class="upload-file-chip" id="uploadFileChip" hidden>
+          <span class="material-symbols-outlined" id="uploadFileIcon">description</span>
+          <div style="flex:1;min-width:0">
+            <p id="uploadFileName" style="font-size:13px;font-weight:600;color:var(--color-on-surface);white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></p>
+            <p id="uploadFileSize" style="font-size:11px;color:var(--color-on-surface-variant);margin-top:1px"></p>
+          </div>
+          <button type="button" class="ghost-sm" id="uploadFileClear" title="Remove file">✕</button>
+        </div>
+
+        <label class="field-label" style="margin:0">Notes (optional)
+          <textarea class="ctx-input" id="drawingDesc" rows="2" style="resize:vertical" placeholder="Context or special instructions…"></textarea>
+        </label>
+
+        <div class="auth-error" id="uploadError" hidden></div>
+        <div class="modal-footer">
+          <button type="button" class="ghost-btn" id="uploadCancelBtn">Cancel</button>
+          <button type="submit" class="primary-btn" id="uploadSubmitBtn" style="width:auto;gap:6px">
+            <span class="material-symbols-outlined" style="font-size:15px">upload_file</span>
+            Upload Drawing
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Review Modal ──────────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="reviewModal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">Review Drawing</h2>
+        <button class="ghost-sm" id="reviewModalClose">✕</button>
+      </div>
+      <div class="modal-body" id="reviewModalBody">
+        <div class="review-drawing-name" id="reviewDrawingTitle"></div>
+        <label class="field-label">Comments / Feedback
+          <textarea class="ctx-input" id="reviewComments" rows="4" placeholder="Optional notes for the designer…" style="resize:vertical"></textarea>
+        </label>
+        <div class="auth-error" id="reviewError" hidden></div>
+        <div class="modal-footer review-actions">
+          <div style="display:flex;gap:8px">
+            <button class="ghost-btn btn-sm danger-btn" id="reviewRejectBtn">Reject</button>
+            <button class="ghost-btn btn-sm" id="reviewRevisionBtn">Request Revision</button>
+          </div>
+          <button class="primary-btn btn-sm" id="reviewApproveBtn" style="width:auto;gap:5px">
+            <span class="material-symbols-outlined" style="font-size:14px">check</span>
+            Approve
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Assign Modal (multi-row, Stitch-inspired) ─────────────────────────── -->
+  <div class="modal-overlay" id="assignModal" hidden>
+    <div class="modal-card" style="max-width:660px;width:100%">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title">Assign Drawing Types</h2>
+          <p id="assignModalSubtitle" style="font-size:12px;color:var(--color-on-surface-variant);margin-top:2px">Assign one or more drawing types to designers for this project</p>
+        </div>
+        <button class="ghost-sm" id="assignModalClose">✕</button>
+      </div>
+      <div class="modal-body" style="gap:14px">
+
+        <!-- Column headers -->
+        <div class="assign-rows-header">
+          <span style="grid-column:2">Drawing Type</span>
+          <span>Assign To</span>
+          <span>Deadline</span>
+          <span></span>
+        </div>
+
+        <!-- Rows -->
+        <div id="assignRows" class="assign-rows-wrap"></div>
+
+        <button type="button" class="ghost-btn btn-sm" id="addAssignRowBtn" style="align-self:flex-start;gap:5px">
+          <span class="material-symbols-outlined" style="font-size:15px">add</span>
+          Add Drawing Type
+        </button>
+
+        <div class="auth-error" id="assignError" hidden></div>
+
+        <div class="modal-footer">
+          <button type="button" class="ghost-btn" id="assignCancelBtn">Cancel</button>
+          <button type="button" class="primary-btn" id="assignSaveBtn" style="width:auto;gap:6px">
+            <span class="material-symbols-outlined" style="font-size:15px">person_add</span>
+            Save Assignments
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── File Viewer Modal ─────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="fileViewerModal" hidden>
+    <div class="modal-card file-viewer-card">
+      <div class="modal-header">
+        <h2 class="modal-title file-viewer-title" id="fileViewerTitle">Drawing</h2>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="ghost-btn btn-sm" id="fileViewerDownload" style="gap:5px">
+            <span class="material-symbols-outlined" style="font-size:14px">download</span>
+            Download
+          </button>
+          <button class="ghost-sm" id="fileViewerClose">✕</button>
+        </div>
+      </div>
+      <div class="file-viewer-body" id="fileViewerBody">
+        <div class="file-viewer-loading" id="fileViewerLoading" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Create Project Modal (designer start screen) ──────────────────────── -->
+  <div class="modal-overlay" id="createProjectModal2" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 class="modal-title">New Project</h2>
+        <button class="ghost-sm" id="createModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="field-label">Project name
+          <input class="ctx-input" id="createProjectName" type="text" placeholder="e.g. Sharma Residence" />
+        </label>
+        <label class="field-label">Client name (optional)
+          <input class="ctx-input" id="createProjectClient" type="text" placeholder="e.g. Rajesh Sharma" />
+        </label>
+        <div class="auth-error" id="createProjectError2" hidden></div>
+        <div class="modal-footer">
+          <button class="ghost-btn" id="createModalCancel">Cancel</button>
+          <button class="primary-btn" id="createModalSubmit">Create & Open</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="client/auth.js"></script>
+  <script src="client/designer.js"></script>
+</body>
+</html>

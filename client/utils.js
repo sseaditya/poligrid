@@ -9,14 +9,11 @@ function generateUUID() {
 
 // Fire-and-forget save. Errors are logged but never block the UI.
 function saveToDb(url, body) {
-  (async () => {
-    const authHeaders = window.AuthClient ? await AuthClient.authHeader() : {};
-    return fetch(url, {
-      method: "POST",
-      headers: { ...authHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-  })().then(r => {
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  }).then(r => {
     if (!r.ok) r.text().then(t => console.warn(`[DB] ${url} failed:`, t));
   }).catch(e => console.warn(`[DB] ${url} error:`, e.message));
 }
@@ -94,10 +91,9 @@ async function postJson(url, body) {
 
   let json;
   try {
-    const authHeaders = window.AuthClient ? await AuthClient.authHeader() : {};
     const res  = await fetch(url, {
       method: "POST",
-      headers: { ...authHeaders, "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     });
     const text = await res.text();
@@ -202,3 +198,4 @@ function escapeHtml(text) {
 function safeJson(text) {
   try { return JSON.parse(text); } catch { return null; }
 }
+

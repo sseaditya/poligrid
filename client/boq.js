@@ -113,10 +113,9 @@ async function generatePdfFromEditor() {
     const projectItems = finalBoq.filter(it => it._origin === "project").map(({ _origin, ...rest }) => rest);
     const versionItems = finalBoq.filter(it => it._origin !== "project").map(({ _origin, ...rest }) => rest);
     try {
-      const authHeaders = await AuthClient.authHeader();
       await fetch("/api/project/update-boq", {
         method: "POST",
-        headers: { ...authHeaders, "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectId: appState.projectId,
           versionId: latestVer.id || null,
@@ -299,16 +298,16 @@ function _persistBoqDisabledState() {
   const enabledVersionItems = (latestVer.boqItems || []).filter(
     it => !_disabledBoqCategories.has(it.category || "Uncategorized")
   );
-  AuthClient.authHeader().then((authHeaders) => fetch("/api/project/update-boq", {
+  fetch("/api/project/update-boq", {
     method: "POST",
-    headers: { ...authHeaders, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       projectId: appState.projectId,
       versionId: latestVer.id || null,
       projectItems: enabledProjectItems,
       versionItems: enabledVersionItems
     })
-  })).catch(e => console.warn("[BOQ toggle] DB save failed:", e.message));
+  }).catch(e => console.warn("[BOQ toggle] DB save failed:", e.message));
 }
 
 function buildArtifacts(sceneState, globalBoq) {
@@ -338,3 +337,4 @@ function buildArtifacts(sceneState, globalBoq) {
   const csv = csvHeader + csvLines.join("\n");
   return { scene: sceneState, boq: { lines: globalBoq || [], grandTotal, csv } };
 }
+
