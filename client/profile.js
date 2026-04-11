@@ -5,12 +5,13 @@
 let _profile;
 
 (async () => {
+  AppNav.mountSidebar("GOD'S EYE", { profileActive: true });
+
   try {
     ({ profile: _profile } = await AuthClient.requireAuth());
   } catch { return; }
 
   // Use the shared nav utility (same as projects, audit, etc.)
-  AppNav.mountSidebar("GOD'S EYE", { profileActive: true });
   AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(_profile);

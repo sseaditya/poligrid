@@ -21,12 +21,13 @@ const DRAWING_TYPES = [
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 (async () => {
+  AppNav.mountSidebar('DRAWINGS');
+
   try {
     ({ session: _session, profile: _profile } =
       await AuthClient.requireAuth(["admin", "designer", "lead_designer", "ceo"]));
   } catch { window.location.href = "/login"; return; }
 
-  AppNav.mountSidebar('DRAWINGS');
   AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(_profile);

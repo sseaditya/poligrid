@@ -23,11 +23,12 @@ const STATUS_CLS = {
 };
 
 (async () => {
+  AppNav.mountSidebar("GOD'S EYE");
+
   try {
     ({ session: _session, profile: _profile } = await AuthClient.requireAuth());
   } catch { window.location.href = "/login"; return; }
 
-  AppNav.mountSidebar("GOD'S EYE");
   AppNav.renderSidebar(_profile, document.getElementById("sidebarNav"));
   AppNav.renderMobileNav(_profile, document.getElementById("mobileNav"));
   AppNav.setupUserSection(_profile);

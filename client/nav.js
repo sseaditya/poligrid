@@ -92,7 +92,9 @@ const AppNav = (() => {
     document.head.appendChild(s);
   }
 
-  // ── Transition CSS (injected after first paint to avoid load-time stutter) ───
+  // ── Transition CSS — injected immediately in mountSidebar ───────────────────
+  // We no longer defer this; the sidebar shell is injected synchronously before
+  // auth resolves, so there is no load-time animation to prevent.
   function _injectTransitions() {
     if (document.getElementById('nav-transition-styles')) return;
     const s = document.createElement('style');
@@ -101,8 +103,26 @@ const AppNav = (() => {
       #appSidebar { transition: width 0.25s cubic-bezier(0.4,0,0.2,1); }
       #sidebarMain { transition: margin-left 0.25s cubic-bezier(0.4,0,0.2,1); }
       .sidebar-toggle-icon { transition: transform 0.25s ease; }
+      /* Smooth nav content swap — prevents jarring flash when re-rendering sub-nav */
+      #sidebarNav { transition: opacity 0.15s ease; }
+      #sidebarNav.nav-updating { opacity: 0; pointer-events: none; }
     `;
     document.head.appendChild(s);
+  }
+
+  // ── Smooth nav content swap ──────────────────────────────────────────────────
+  // Fades nav out, updates innerHTML, fades back in.
+  // Falls back to direct assignment if the nav el is not yet in the DOM.
+  function _setNavContent(navEl, html) {
+    if (!navEl) return;
+    navEl.classList.add('nav-updating');
+    // Use a single rAF so the opacity:0 has time to paint before we set innerHTML
+    requestAnimationFrame(() => {
+      navEl.innerHTML = html;
+      // Force reflow so the transition fires on the way back
+      void navEl.offsetWidth;
+      navEl.classList.remove('nav-updating');
+    });
   }
 
   // ── Nav link definitions per role ───────────────────────────────────────────
@@ -171,7 +191,8 @@ const AppNav = (() => {
 
   function renderSidebar(profile, navEl, currentPath) {
     if (!navEl) return;
-    navEl.innerHTML = buildNavLinks(profile, currentPath).map(_sidebarLinkHtml).join('');
+    const html = buildNavLinks(profile, currentPath).map(_sidebarLinkHtml).join('');
+    _setNavContent(navEl, html);
   }
 
   // Renders the sidebar with an indented project-context block injected
@@ -242,7 +263,7 @@ const AppNav = (() => {
     }
     // Fallback: append if Projects link wasn't in nav (e.g. CEO)
     if (!injected) html += subHtml;
-    navEl.innerHTML = html;
+    _setNavContent(navEl, html);
   }
 
 
@@ -296,9 +317,7 @@ const AppNav = (() => {
 
     const KEY = 'pg_sidebar_collapsed';
 
-    // Enable smooth transitions only after the initial paint so restoring saved
-    // state never causes a visible width/margin animation.
-    requestAnimationFrame(() => requestAnimationFrame(() => _injectTransitions()));
+    // Transitions are already injected by mountSidebar — nothing to do here.
 
     function apply(collapsed) {
       sidebar.classList.toggle('nav-collapsed', collapsed);
@@ -326,9 +345,10 @@ const AppNav = (() => {
   function mountSidebar(title, opts = {}) {
     if (document.getElementById('appSidebar')) return; // already in DOM (static HTML)
 
-    // Inject collapse behaviour CSS immediately (no transitions yet — those come
-    // in setupCollapse after the first paint).
+    // Inject collapse CSS + transitions immediately so the sidebar is correct
+    // from first paint — no deferred injection, no animation flash.
     _injectCollapseStyles();
+    _injectTransitions();
 
     const KEY          = 'pg_sidebar_collapsed';
     const startCollapsed = localStorage.getItem(KEY) === '1';
@@ -339,7 +359,6 @@ const AppNav = (() => {
     // ── Brand header — always visible, never collapses ──────────────────────
     const brand = document.createElement('div');
     brand.id = 'sidebarBrandHeader';
-    // nav-collapsed applied immediately so chevron is correct on load
     brand.className = [
       'hidden md:flex fixed left-0 top-0 z-40',
       'w-64 h-16',
@@ -370,7 +389,7 @@ const AppNav = (() => {
       'border-r border-outline-variant/10',
       startCollapsed ? 'nav-collapsed' : '',
     ].join(' ');
-    aside.style.height = 'calc(100vh - 4rem)'; // reliable fallback for arbitrary Tailwind value
+    aside.style.height = 'calc(100vh - 4rem)';
 
     const profileLinkCls = profileActive
       ? 'sidebar-footer-item flex items-center gap-3 px-4 py-2 text-primary bg-primary/5 font-bold rounded-lg border-r-2 border-primary'
@@ -390,11 +409,16 @@ const AppNav = (() => {
     </button>
   </div>`;
 
-    // ── Apply initial margin to main content ─────────────────────────────────
-    // Add nav-collapsed to sidebarMain so the injected CSS sets margin-left:64px
-    // immediately (before transitions are enabled).
+    // ── Apply initial margin + collapsed state to main content ───────────────
     const main = document.getElementById('sidebarMain');
-    if (startCollapsed && main) main.classList.add('nav-collapsed');
+    if (main) {
+      // Suppress margin transition on the very first mount so the initial
+      // collapsed state snaps into place without animation.
+      main.style.transition = 'none';
+      if (startCollapsed) main.classList.add('nav-collapsed');
+      // Re-enable transition after one paint
+      requestAnimationFrame(() => { main.style.transition = ''; });
+    }
 
     // ── Insert into DOM ──────────────────────────────────────────────────────
     if (main) {

@@ -3,13 +3,14 @@
 
 (async () => {
   let profile;
+  AppNav.mountSidebar("GOD'S EYE");
+
   try {
     const auth = await AuthClient.requireAuth(['lead_designer', 'admin']);
     profile = auth.profile;
   } catch { return; }
 
   // ── Shared nav + user section ────────────────────────────────────────────────
-  AppNav.mountSidebar("GOD'S EYE");
   AppNav.renderSidebar(profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(profile);

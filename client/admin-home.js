@@ -35,12 +35,13 @@ const dotColor = s => ({ approved: '#526258', pending_review: '#d97706', revisio
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 (async () => {
+  AppNav.mountSidebar("GOD'S EYE");
+
   try {
     ({ profile: _profile } = await AuthClient.requireAuth(['admin', 'ceo']));
   } catch { window.location.href = '/login'; return; }
 
   // Shared nav + user section
-  AppNav.mountSidebar("GOD'S EYE");
   AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(_profile);

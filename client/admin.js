@@ -13,12 +13,13 @@ const DEPT_LABELS = {
 };
 
 (async () => {
+  AppNav.mountSidebar('TEAM ADMIN');
+
   try {
     ({ session: _session, profile: _profile } =
       await AuthClient.requireAuth(["admin"]));
   } catch { window.location.href = '/login'; return; }
 
-  AppNav.mountSidebar('TEAM ADMIN');
   AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(_profile);
