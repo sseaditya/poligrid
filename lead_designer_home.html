@@ -111,60 +111,44 @@
 </head>
 <body class="bg-background text-on-background font-body antialiased min-h-screen">
 
-<!-- TopNavBar -->
-<header class="fixed top-0 w-full z-50 bg-[#f9f9f9]/80 backdrop-blur-md flex justify-between items-center px-8 h-16 border-b border-outline-variant/10">
-  <div class="flex items-center gap-4">
-    <span class="font-headline font-black tracking-tighter text-[#2d3435] text-xl">GOD'S EYE</span>
-    <div class="h-4 w-px bg-outline-variant/30 hidden md:block"></div>
-    <span class="font-body text-xs font-semibold tracking-widest text-on-surface-variant uppercase opacity-60">Design Lead Console</span>
+<!-- Sidebar -->
+<aside class="hidden md:flex h-screen w-64 fixed left-0 top-0 bg-surface-container-lowest flex-col z-30 border-r border-outline-variant/10">
+  <div class="px-6 py-6 mb-2">
+    <span class="text-xs font-bold tracking-[0.2em] text-on-surface-variant/50">POLIGRID STUDIO</span>
+    <h1 class="text-xl font-extrabold tracking-tighter text-on-surface mt-1 font-headline">GOD'S EYE</h1>
   </div>
-  <div class="flex items-center gap-6">
-    <div class="flex items-center gap-4">
-      <span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors" id="notifBtn">notifications</span>
-      <a id="settingsLink" href="/profile">
-        <span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors">settings</span>
-      </a>
-    </div>
-    <a id="userAvatarLink" href="/profile">
-      <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border border-outline-variant/10">
-        <img alt="User profile" class="w-full h-full object-cover" id="userAvatarImg"
-          src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVv3JzqHKG6H9JJHwdw273lGyfi_XOnR4p-gIYlpF6kWBNU_NvGtY1FaSzXUFJoIY6HjLl4QC345Nb_pm6Lzfu9-zMbfyyLNiJqtqYICV9-jaC_dS7bb-yvsJ_Ntv5o0M-VYJNkw41yQ2fP-IOA79HnBhs4Qw_AXue64EGtzSATQWxUbbXdgoUfrBcbztY7EQalp5BD_XYZU8bObIFVEao1rgBbfq_02O45mFCKTzlTqhBTdBg6eF_yOSPYXXQYFT8kFNuCQtDb3Q"/>
-      </div>
+  <nav class="flex-1 px-4 space-y-1" id="sidebarNav"></nav>
+  <div class="mt-auto border-t border-outline-variant/20 pt-4 px-4 pb-6 space-y-1">
+    <a id="settingsLink" href="/profile" class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-low transition-colors">
+      <span class="material-symbols-outlined text-[20px]">settings</span>
+      <span class="text-xs font-medium">Settings</span>
     </a>
-    <button id="logoutBtn" class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-surface-container text-on-surface-variant text-xs font-bold uppercase tracking-widest hover:bg-surface-container-high transition-all">
-      <span class="material-symbols-outlined text-[15px]">logout</span>Sign out
+    <button id="logoutBtn" class="w-full flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-low text-left transition-colors">
+      <span class="material-symbols-outlined text-[20px]">logout</span>
+      <span class="text-xs font-medium">Sign Out</span>
     </button>
-  </div>
-</header>
-
-<!-- Sidebar Navigation -->
-<aside class="fixed left-0 top-16 bottom-0 w-64 bg-surface-container-lowest border-r border-outline-variant/10 hidden md:flex flex-col z-40">
-  <nav class="flex-1 py-6 px-4 space-y-2">
-    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary bg-primary/5 font-bold transition-all border-r-2 border-primary" href="/lead_designer_home">
-      <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">dashboard</span>
-      <span class="text-sm">Command Center</span>
-    </a>
-    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all" href="/projects">
-      <span class="material-symbols-outlined">architecture</span>
-      <span class="text-sm">Projects</span>
-    </a>
-    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all" href="/designer">
-      <span class="material-symbols-outlined">edit_square</span>
-      <span class="text-sm">Detailed Design</span>
-    </a>
-  </nav>
-  <div class="p-6 border-t border-outline-variant/10">
-    <div class="bg-surface-container-low p-4 rounded-lg flex items-center gap-3">
-      <div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
-      <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">System Active</span>
-    </div>
   </div>
 </aside>
 
-<!-- ═══════════════════════════════════════════════════════
-     MAIN CONTENT
-     ═══════════════════════════════════════════════════════ -->
-<main class="pt-24 pb-12 px-8 lg:px-12 min-h-screen blueprint-grid md:ml-64">
+<!-- Main content -->
+<main class="md:ml-64 min-h-screen blueprint-grid">
+
+  <!-- Sticky top bar -->
+  <header class="flex justify-between items-center px-8 h-16 bg-surface/80 backdrop-blur-md sticky top-0 z-20 border-b border-outline-variant/10">
+    <span class="font-body text-xs font-semibold tracking-widest text-on-surface-variant uppercase opacity-60">Design Lead Console</span>
+    <div class="flex items-center gap-3">
+      <a id="userAvatarLink" href="/profile">
+        <div class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant/20">
+          <img alt="User profile" class="w-full h-full object-cover" id="userAvatarImg" src=""/>
+        </div>
+      </a>
+      <button id="logoutBtnTop" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant text-xs font-bold uppercase tracking-widest hover:bg-surface-container-high transition-all">
+        <span class="material-symbols-outlined text-[14px]">logout</span>Sign out
+      </button>
+    </div>
+  </header>
+
+  <div class="py-10 px-8 lg:px-12">
   <div class="max-w-6xl mx-auto">
 
     <!-- ─── EMPTY STATE (no projects assigned) ─────────────────── -->
@@ -375,23 +359,11 @@
     </footer>
 
   </div><!-- /.max-w-6xl -->
+  </div>
 </main>
 
 <!-- Mobile Navigation -->
-<nav class="md:hidden fixed bottom-0 left-0 w-full bg-[#f9f9f9]/90 backdrop-blur-md px-6 py-4 flex justify-around items-center z-50 border-t border-outline-variant/10">
-  <a href="/lead_designer_home" class="flex flex-col items-center gap-1 text-primary no-underline">
-    <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">dashboard</span>
-    <span class="text-[10px] font-bold uppercase tracking-tighter">Home</span>
-  </a>
-  <a href="/projects" class="flex flex-col items-center gap-1 text-on-surface-variant/60 no-underline">
-    <span class="material-symbols-outlined">architecture</span>
-    <span class="text-[10px] font-bold uppercase tracking-tighter">Projects</span>
-  </a>
-  <a href="/designer" class="flex flex-col items-center gap-1 text-on-surface-variant/60 no-underline">
-    <span class="material-symbols-outlined">edit_square</span>
-    <span class="text-[10px] font-bold uppercase tracking-tighter">Drawings</span>
-  </a>
-</nav>
+<nav class="md:hidden fixed bottom-0 left-0 w-full bg-[#f9f9f9]/90 backdrop-blur-md px-6 py-4 flex justify-around items-center z-50 border-t border-outline-variant/10" id="mobileNav"></nav>
 
 <!-- Inline Drawing Review Modal -->
 <div id="inlineReviewModal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px">
@@ -468,6 +440,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="/client/auth.js"></script>
+<script src="/client/nav.js"></script>
 <script src="/client/studio-utils.js"></script>
 <script src="/client/lead-designer-home.js"></script>
 </body>

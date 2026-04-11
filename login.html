@@ -301,6 +301,7 @@
         if (!profile) return;
         if (profile.role === "designer") { window.location.href = "/designer_home"; return; }
         if (profile.role === "lead_designer") { window.location.href = "/lead_designer_home"; return; }
+        if (profile.role === "admin" || profile.role === "ceo") { window.location.href = "/admin_home"; return; }
         if (profile.role === "sales") {
           const slug = profile.full_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
           window.location.href = `/sales/${slug}`; return;

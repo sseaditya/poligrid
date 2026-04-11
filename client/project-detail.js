@@ -119,11 +119,18 @@ async function loadAll() {
 // ─── Top nav ──────────────────────────────────────────────────────────────────
 function renderTopNav() {
   const nav = document.getElementById("dashNav");
+  const homeHref = {
+    admin:         "/admin_home",
+    ceo:           "/ceo",
+    designer:      "/designer_home",
+    lead_designer: "/lead_designer_home",
+    sales:         "/projects",
+  }[_profile.role] || "/homepage";
   const links = [
-    { href: "/homepage",  label: "Home" },
-    { href: "/projects",  label: "Projects" },
-    { href: "/audit", label: "Audit Logs" },
+    { href: homeHref,    label: "Home" },
+    { href: "/projects", label: "Projects" },
   ];
+  if (["admin", "lead_designer"].includes(_profile.role)) links.push({ href: "/audit", label: "Audit Logs" });
   if (is("admin")) links.push({ href: "/admin", label: "Admin" });
   if (is("ceo", "admin")) links.push({ href: "/ceo", label: "Dashboard" });
 
@@ -147,9 +154,16 @@ function renderSidebar(project) {
     navLinks.push({ icon: "architecture", label: "Drawings", href: `/designer?projectId=${project.id}` });
   navLinks.push({ icon: "history", label: "Audit Log", href: `/audit?projectId=${project.id}` });
 
+  const homeHref2 = {
+    admin:         "/admin_home",
+    ceo:           "/ceo",
+    designer:      "/designer_home",
+    lead_designer: "/lead_designer_home",
+    sales:         "/projects",
+  }[_profile.role] || "/homepage";
   const bottomLinks = [
     { icon: "folder_open", label: "All Projects", href: "/projects" },
-    { icon: "cottage",     label: "Home",         href: "/homepage" },
+    { icon: "cottage",     label: "Home",         href: homeHref2 },
   ];
 
   const isCollapsed = localStorage.getItem("leftSidebarCollapsed") === "1";

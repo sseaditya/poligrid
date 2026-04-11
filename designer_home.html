@@ -88,31 +88,18 @@
 <body class="bg-surface text-on-surface antialiased">
 
 <!-- Sidebar -->
-<aside class="hidden md:flex h-screen w-64 fixed left-0 top-0 bg-surface-container-low flex-col py-6 px-4 gap-y-2 z-20">
-  <div class="px-4 mb-8">
+<aside class="hidden md:flex h-screen w-64 fixed left-0 top-0 bg-surface-container-lowest flex-col z-30 border-r border-outline-variant/10">
+  <div class="px-6 py-6 mb-2">
     <span class="text-xs font-bold tracking-[0.2em] text-on-surface-variant/50">POLIGRID STUDIO</span>
-    <h1 class="text-xl font-extrabold tracking-tighter text-on-surface mt-1">GOD'S EYE</h1>
+    <h1 class="text-xl font-extrabold tracking-tighter text-on-surface mt-1 font-headline">GOD'S EYE</h1>
   </div>
-  <nav class="flex-1 space-y-1">
-    <a class="flex items-center gap-3 px-4 py-3 bg-surface-container-lowest text-primary font-semibold shadow-sm rounded-lg transition-all duration-200" href="/designer_home">
-      <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">dashboard</span>
-      <span class="text-sm">My Dashboard</span>
-    </a>
-    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container rounded-lg transition-all duration-200" href="/projects">
-      <span class="material-symbols-outlined">architecture</span>
-      <span class="text-sm">Projects</span>
-    </a>
-    <a class="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container rounded-lg transition-all duration-200" href="/designer">
-      <span class="material-symbols-outlined">edit_square</span>
-      <span class="text-sm">Detailed Design</span>
-    </a>
-  </nav>
-  <div class="mt-auto border-t border-outline-variant/20 pt-4 space-y-2">
-    <a id="settingsLink" href="/profile" class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface transition-colors">
+  <nav class="flex-1 px-4 space-y-1" id="sidebarNav"></nav>
+  <div class="mt-auto border-t border-outline-variant/20 pt-4 px-4 pb-6 space-y-1">
+    <a id="settingsLink" href="/profile" class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-low transition-colors">
       <span class="material-symbols-outlined text-[20px]">settings</span>
       <span class="text-xs font-medium">Settings</span>
     </a>
-    <button id="logoutBtn" class="w-full flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface transition-colors text-left">
+    <button id="logoutBtn" class="w-full flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-low text-left transition-colors">
       <span class="material-symbols-outlined text-[20px]">logout</span>
       <span class="text-xs font-medium">Sign Out</span>
     </button>
@@ -135,7 +122,7 @@
       <span class="material-symbols-outlined cursor-pointer hover:text-on-surface text-on-surface-variant" id="notifBtn">notifications</span>
       <a id="userAvatarLink" href="/profile">
         <div class="h-8 w-8 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant/20">
-          <img alt="Profile" class="w-full h-full object-cover" id="userAvatarImg" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVv3JzqHKG6H9JJHwdw273lGyfi_XOnR4p-gIYlpF6kWBNU_NvGtY1FaSzXUFJoIY6HjLl4QC345Nb_pm6Lzfu9-zMbfyyLNiJqtqYICV9-jaC_dS7bb-yvsJ_Ntv5o0M-VYJNkw41yQ2fP-IOA79HnBhs4Qw_AXue64EGtzSATQWxUbbXdgoUfrBcbztY7EQalp5BD_XYZU8bObIFVEao1rgBbfq_02O45mFCKTzlTqhBTdBg6eF_yOSPYXXQYFT8kFNuCQtDb3Q"/>
+          <img alt="Profile" class="w-full h-full object-cover" id="userAvatarImg" src=""/>
         </div>
       </a>
       <button id="logoutBtnTop" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant text-xs font-bold uppercase tracking-widest hover:bg-surface-container-high transition-all">
@@ -267,20 +254,7 @@
 </main>
 
 <!-- Mobile Bottom Nav -->
-<nav class="md:hidden fixed bottom-0 w-full bg-surface/80 backdrop-blur-xl flex justify-around items-center py-3 border-t border-surface-container z-20">
-  <a class="flex flex-col items-center gap-1 text-primary no-underline" href="/designer_home">
-    <span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">dashboard</span>
-    <span class="text-[10px] font-bold">Home</span>
-  </a>
-  <a class="flex flex-col items-center gap-1 text-on-surface-variant/60 no-underline" href="/projects">
-    <span class="material-symbols-outlined">architecture</span>
-    <span class="text-[10px] font-bold">Projects</span>
-  </a>
-  <a class="flex flex-col items-center gap-1 text-on-surface-variant/60 no-underline" href="/designer">
-    <span class="material-symbols-outlined">edit_square</span>
-    <span class="text-[10px] font-bold">Design</span>
-  </a>
-</nav>
+<nav class="md:hidden fixed bottom-0 w-full bg-surface/80 backdrop-blur-xl flex justify-around items-center py-3 border-t border-surface-container z-20" id="mobileNav"></nav>
 
 <!-- Quick Upload Modal -->
 <div id="quickUploadModal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px">
@@ -316,6 +290,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="/client/auth.js"></script>
+<script src="/client/nav.js"></script>
 <script src="/client/studio-utils.js"></script>
 <script src="/client/designer-home.js"></script>
 </body>

@@ -27,13 +27,19 @@ const STATUS_CLS = {
     ({ session: _session, profile: _profile } = await AuthClient.requireAuth());
   } catch { window.location.href = "/login"; return; }
 
-  renderSidebar(_profile);
-  renderMobileNav(_profile);
-  renderUserAvatar(_profile);
+  AppNav.renderSidebar(_profile, document.getElementById("sidebarNav"));
+  AppNav.renderMobileNav(_profile, document.getElementById("mobileNav"));
+  AppNav.setupUserSection(_profile);
 
-  // Logout buttons
-  document.getElementById("logoutBtn").addEventListener("click", handleLogout);
-  document.getElementById("logoutBtnTop").addEventListener("click", handleLogout);
+  // Also wire topbar profile links (projects.html has both sidebarProfileLink + topbarProfileLink)
+  const slug = (_profile.email || "").split("@")[0].toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  const profileUrl = `/profile/${slug}`;
+  const sidebarProfileEl = document.getElementById("sidebarProfileLink");
+  const topbarProfileEl  = document.getElementById("topbarProfileLink");
+  if (sidebarProfileEl) sidebarProfileEl.href = profileUrl;
+  if (topbarProfileEl)  topbarProfileEl.href  = profileUrl;
+  const img = document.getElementById("userAvatarImg");
+  if (img && _profile.avatar_url) img.src = _profile.avatar_url;
 
   // New project button — visible to roles that can create
   if (["admin", "sales", "designer", "lead_designer"].includes(_profile.role)) {
@@ -55,78 +61,6 @@ const STATUS_CLS = {
   renderTable();                       // repaint with drawing progress
 })();
 
-// ─── Sidebar ─────────────────────────────────────────────────────────────────
-function renderSidebar(profile) {
-  const nav    = document.getElementById("sidebarNav");
-  const role   = profile.role;
-  const links  = buildNavLinks(role);
-  nav.innerHTML = links.map(l => `
-    <a class="flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-200 ${
-      l.active
-        ? "text-primary bg-primary/5 font-bold border-r-2 border-primary"
-        : "text-on-surface-variant hover:bg-surface-container-low"
-    }" href="${l.href}">
-      <span class="material-symbols-outlined" ${l.active ? "style=\"font-variation-settings:'FILL' 1\"" : ""}>${l.icon}</span>
-      <span>${l.label}</span>
-    </a>`).join("");
-}
-
-function renderMobileNav(profile) {
-  const nav   = document.getElementById("mobileNav");
-  const links = buildNavLinks(profile.role);
-  nav.innerHTML = links.slice(0, 4).map(l => `
-    <a href="${l.href}" class="flex flex-col items-center gap-1 no-underline ${l.active ? "text-primary" : "text-on-surface-variant/60"}">
-      <span class="material-symbols-outlined" ${l.active ? "style=\"font-variation-settings:'FILL' 1\"" : ""}>${l.icon}</span>
-      <span class="text-[10px] font-bold uppercase tracking-tighter">${l.label}</span>
-    </a>`).join("");
-}
-
-function buildNavLinks(role) {
-  const home = {
-    admin:          { href: "/admin_home",          icon: "dashboard",       label: "Dashboard" },
-    sales:          { href: "/homepage",             icon: "dashboard",       label: "Dashboard" },
-    designer:       { href: "/designer_home",        icon: "dashboard",       label: "My Dashboard" },
-    lead_designer:  { href: "/lead_designer_home",   icon: "dashboard",       label: "Command Center" },
-    ceo:            { href: "/ceo",                  icon: "bar_chart",       label: "CEO Dashboard" },
-  }[role] || { href: "/homepage", icon: "dashboard", label: "Home" };
-
-  const links = [
-    { ...home },
-    { href: "/projects", icon: "architecture", label: "Projects", active: true },
-  ];
-
-  if (["sales", "lead_designer", "admin"].includes(role)) {
-    links.push({ href: "/index", icon: "space_dashboard", label: "Fitout Planner" });
-  }
-  if (["designer", "lead_designer", "admin"].includes(role)) {
-    links.push({ href: "/designer", icon: "edit_square", label: "Detailed Design" });
-  }
-  if (role === "admin") {
-    links.push({ href: "/admin", icon: "manage_accounts", label: "Admin Console" });
-    links.push({ href: "/ceo",   icon: "bar_chart",       label: "CEO Dashboard" });
-  }
-  if (role === "ceo") {
-    links.push({ href: "/ceo", icon: "bar_chart", label: "CEO Dashboard" });
-  }
-  return links;
-}
-
-// ─── Avatar + Logout ─────────────────────────────────────────────────────────
-function renderUserAvatar(profile) {
-  const img = document.getElementById("userAvatarImg");
-  if (profile.avatar_url) img.src = profile.avatar_url;
-  const slug = (profile.email || "").split("@")[0].toLowerCase().replace(/[^a-z0-9-]/g, "-");
-  const profileUrl = `/profile/${slug}`;
-  const sidebar = document.getElementById("sidebarProfileLink");
-  const topbar  = document.getElementById("topbarProfileLink");
-  if (sidebar) sidebar.href = profileUrl;
-  if (topbar)  topbar.href  = profileUrl;
-}
-
-async function handleLogout() {
-  await AuthClient.signOut();
-  window.location.href = "/login";
-}
 
 // ─── Data Loading ─────────────────────────────────────────────────────────────
 async function loadProjects() {

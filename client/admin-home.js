@@ -39,18 +39,10 @@ const dotColor = s => ({ approved: '#526258', pending_review: '#d97706', revisio
     ({ profile: _profile } = await AuthClient.requireAuth(['admin', 'ceo']));
   } catch { window.location.href = '/login'; return; }
 
-  // Profile UI
-  const slug = (_profile.full_name || '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().trim()
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  if (slug) {
-    document.getElementById('settingsLink').href   = `/profile/${slug}`;
-    document.getElementById('userAvatarLink').href = `/profile/${slug}`;
-  }
-  if (_profile.avatar_url) document.getElementById('userAvatarImg').src = _profile.avatar_url;
-  document.getElementById('userAvatarImg').alt = _profile.full_name || 'User';
-  document.getElementById('logoutBtn').addEventListener('click', () => AuthClient.signOut());
+  // Shared nav + user section
+  AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
+  AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
+  AppNav.setupUserSection(_profile);
 
   // Role label in header
   document.getElementById('roleLabel').textContent =
@@ -64,32 +56,6 @@ const dotColor = s => ({ approved: '#526258', pending_review: '#d97706', revisio
   document.getElementById('greetName').textContent = firstName + '.';
   document.getElementById('greetLine').textContent =
     `${greeting} — ${now.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}`;
-
-  // Sidebar: inject role-specific extra links
-  const nav = document.getElementById('sideNav');
-  const extraLinks = _profile.role === 'admin'
-    ? [
-        { href: '/index',    icon: 'chair',         label: 'Fitout Planner'  },
-        { href: '/designer', icon: 'edit_square',   label: 'Drawings'        },
-        { href: '/admin',    icon: 'group',         label: 'Team Management' },
-        { href: '/audit',    icon: 'history',       label: 'Audit Logs'      },
-      ]
-    : [
-        { href: '/projects', icon: 'architecture',  label: 'All Projects'    },
-      ];
-  extraLinks.forEach(l => {
-    const a = document.createElement('a');
-    a.className = 'flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all';
-    a.href = l.href;
-    a.innerHTML = `<span class="material-symbols-outlined">${l.icon}</span><span class="text-sm">${l.label}</span>`;
-    nav.appendChild(a);
-  });
-
-  // CEO: hide team mgmt link in mobile nav
-  if (_profile.role === 'ceo') {
-    const mobileTeam = document.getElementById('mobileTeamLink');
-    if (mobileTeam) mobileTeam.style.display = 'none';
-  }
 
   // New Project button (admin only)
   const newBtn = document.getElementById('newProjectBtn');

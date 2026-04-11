@@ -8,21 +8,10 @@
     profile = auth.profile;
   } catch { return; }
 
-  // ── Profile UI ──────────────────────────────────────────────────────────────
-  const slug = (profile.full_name || '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase().trim()
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  if (slug) {
-    document.getElementById('settingsLink').href   = `/profile/${slug}`;
-    document.getElementById('userAvatarLink').href = `/profile/${slug}`;
-  }
-  if (profile.avatar_url) document.getElementById('userAvatarImg').src = profile.avatar_url;
-  document.getElementById('userAvatarImg').alt = profile.full_name || 'User';
-
-  const signOut = () => AuthClient.signOut();
-  document.getElementById('logoutBtn').addEventListener('click', signOut);
-  document.getElementById('logoutBtnTop').addEventListener('click', signOut);
+  // ── Shared nav + user section ────────────────────────────────────────────────
+  AppNav.renderSidebar(profile, document.getElementById('sidebarNav'));
+  AppNav.renderMobileNav(profile, document.getElementById('mobileNav'));
+  AppNav.setupUserSection(profile);
 
   // ── Greeting ────────────────────────────────────────────────────────────────
   const firstName = (profile.full_name || 'Designer').split(' ')[0];

@@ -48,6 +48,21 @@ const AuthClient = (() => {
 
   async function getProfile(forceRefresh) {
     if (_profile && !forceRefresh) return _profile;
+
+    // Use sessionStorage cache (15-min TTL) to avoid /api/auth/me on every page load
+    if (!forceRefresh) {
+      try {
+        const raw = sessionStorage.getItem("pg_profile");
+        if (raw) {
+          const { profile, ts } = JSON.parse(raw);
+          if (profile && Date.now() - ts < 15 * 60 * 1000) {
+            _profile = profile;
+            return _profile;
+          }
+        }
+      } catch { /* ignore storage errors */ }
+    }
+
     const session = await getSession();
     if (!session) return null;
     const res = await fetch("/api/auth/me", {
@@ -58,11 +73,13 @@ const AuthClient = (() => {
       const reason = errData.error || "error";
       const sb = await _getSb();
       await sb.auth.signOut();
+      try { sessionStorage.removeItem("pg_profile"); } catch {}
       window.location.href = `/login?reason=${encodeURIComponent(reason)}`;
       return null;
     }
     const data = await res.json();
     _profile = data.profile;
+    try { sessionStorage.setItem("pg_profile", JSON.stringify({ profile: _profile, ts: Date.now() })); } catch {}
     return _profile;
   }
 
@@ -95,6 +112,7 @@ const AuthClient = (() => {
     const sb = await _getSb();
     await sb.auth.signOut();
     _profile = null;
+    try { sessionStorage.removeItem("pg_profile"); } catch {}
     window.location.href = "/login";
   }
 

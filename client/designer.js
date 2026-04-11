@@ -85,12 +85,21 @@ const DRAWING_TYPES = [
 // ─── Top nav ──────────────────────────────────────────────────────────────────
 function renderTopNav() {
   const nav = document.getElementById("dashNav");
+  const homeHref = {
+    admin:         "/admin_home",
+    ceo:           "/ceo",
+    designer:      "/designer_home",
+    lead_designer: "/lead_designer_home",
+    sales:         "/projects",
+  }[_profile.role] || "/homepage";
   const links = [
-    { href: "/homepage", label: "Home" },
-    { href: "/projects",  label: "Projects" },
-    { href: "/audit", label: "Audit Logs" },
-    { href: "/designer",  label: "Drawings", active: true },
+    { href: homeHref,    label: "Home" },
+    { href: "/projects", label: "Projects" },
+    { href: "/designer", label: "Drawings", active: true },
   ];
+  if (["admin", "lead_designer"].includes(_profile.role)) {
+    links.splice(2, 0, { href: "/audit", label: "Audit Logs" });
+  }
   if (_profile.role === "admin") {
     links.push({ href: "/admin", label: "Admin" });
     links.push({ href: "/ceo",   label: "Dashboard" });
