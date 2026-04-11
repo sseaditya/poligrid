@@ -1,221 +1,323 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html class="light" lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Poligrid — Admin</title>
-  <link rel="stylesheet" href="/theme.css" />
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Poligrid — Admin</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;400;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "on-error": "#fff7f6",
+          "on-secondary": "#f3fbf3",
+          "primary-fixed-dim": "#c7d9cc",
+          "outline-variant": "#adb3b4",
+          "surface-container-low": "#f2f4f4",
+          "primary-dim": "#46564c",
+          "primary": "#526258",
+          "primary-container": "#d5e7da",
+          "on-primary": "#eafcef",
+          "tertiary-container": "#edf8d9",
+          "background": "#f9f9f9",
+          "on-surface-variant": "#5a6061",
+          "on-primary-fixed": "#33433a",
+          "surface-variant": "#dde4e5",
+          "on-primary-fixed-variant": "#4f5f55",
+          "on-tertiary-fixed": "#434d36",
+          "on-background": "#2d3435",
+          "error-container": "#fe8983",
+          "surface": "#f9f9f9",
+          "inverse-primary": "#ecfef0",
+          "surface-bright": "#f9f9f9",
+          "on-error-container": "#752121",
+          "tertiary-fixed": "#edf8d9",
+          "on-tertiary-fixed-variant": "#5f6a51",
+          "inverse-on-surface": "#9c9d9d",
+          "surface-dim": "#d4dbdd",
+          "inverse-surface": "#0c0f0f",
+          "surface-container-high": "#e4e9ea",
+          "surface-container": "#ebeeef",
+          "secondary-container": "#dde5dd",
+          "surface-container-lowest": "#ffffff",
+          "primary-fixed": "#d5e7da",
+          "surface-tint": "#526258",
+          "on-tertiary-container": "#555f47",
+          "on-secondary-fixed-variant": "#555d58",
+          "error": "#9f403d",
+          "secondary-dim": "#4d554f",
+          "secondary": "#59615b",
+          "error-dim": "#4e0309",
+          "on-secondary-fixed": "#39413c",
+          "tertiary": "#58634b",
+          "tertiary-dim": "#4c563f",
+          "tertiary-fixed-dim": "#deeacb",
+          "surface-container-highest": "#dde4e5",
+          "on-surface": "#2d3435",
+          "secondary-fixed": "#dde5dd",
+          "on-secondary-container": "#4c544e",
+          "outline": "#757c7d",
+          "on-tertiary": "#f2fdde",
+          "secondary-fixed-dim": "#ced6cf",
+          "on-primary-container": "#46554c"
+        },
+        fontFamily: { "headline": ["Manrope"], "body": ["Inter"], "label": ["Inter"] },
+        borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+      },
+    },
+  }
+</script>
+<!-- Keep theme.css for inner content component styles -->
+<link rel="stylesheet" href="/theme.css" />
+<style>
+  body { font-family: 'Inter', sans-serif; }
+  h1, h2, h3, .font-headline { font-family: 'Manrope', sans-serif; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+</style>
 </head>
-<body class="dash-body page-project">
+<body class="bg-background text-on-background font-body antialiased min-h-screen">
 
-  <!-- Top bar -->
-  <header class="top-bar" id="topBar">
-    <div class="top-bar-left">
-      <a href="/homepage" class="logo-link"><span class="logo-text">Poligrid</span></a>
+<!-- Sidebar -->
+<aside class="hidden md:flex h-screen w-64 fixed left-0 top-0 bg-surface-container-lowest flex-col z-30 border-r border-outline-variant/10">
+  <div class="px-6 py-6 mb-2">
+    <span class="text-xs font-bold tracking-[0.2em] text-on-surface-variant/50">POLIGRID STUDIO</span>
+    <h1 class="text-xl font-extrabold tracking-tighter text-on-surface mt-1 font-headline">TEAM ADMIN</h1>
+  </div>
+  <nav class="flex-1 px-4 space-y-1" id="sidebarNav"></nav>
+  <div class="mt-auto border-t border-outline-variant/20 pt-4 px-4 pb-6 space-y-1">
+    <a id="settingsLink" href="/profile" class="flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-low transition-colors">
+      <span class="material-symbols-outlined text-[20px]">settings</span>
+      <span class="text-xs font-medium">Settings</span>
+    </a>
+    <button id="logoutBtn" class="w-full flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-low text-left transition-colors">
+      <span class="material-symbols-outlined text-[20px]">logout</span>
+      <span class="text-xs font-medium">Sign Out</span>
+    </button>
+  </div>
+</aside>
+
+<!-- Main Content -->
+<main class="md:ml-64 min-h-screen">
+
+  <!-- Sticky top bar -->
+  <header class="flex justify-between items-center px-8 h-16 bg-surface/80 backdrop-blur-md sticky top-0 z-20 border-b border-outline-variant/10">
+    <div class="flex items-center gap-3">
+      <span class="font-headline font-extrabold tracking-tighter text-on-background text-base">Team Directory</span>
     </div>
-    <nav class="dash-nav" id="dashNav"></nav>
-    <div class="top-bar-right" id="userChipWrap"></div>
+    <div class="flex items-center gap-4">
+      <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all primary-btn btn-sm" id="toggleInviteBtn" style="width:auto;gap:5px">
+        <span class="material-symbols-outlined text-[15px]">person_add</span>Add Member
+      </button>
+      <a id="userAvatarLink" href="/profile">
+        <div class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant/20">
+          <img alt="Profile" class="w-full h-full object-cover" id="userAvatarImg"
+            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23e4e9ea'/%3E%3C/svg%3E"/>
+        </div>
+      </a>
+      <button id="logoutBtnTop" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant text-xs font-bold uppercase tracking-widest hover:bg-surface-container-high transition-all">
+        <span class="material-symbols-outlined text-[14px]">logout</span>Sign out
+      </button>
+    </div>
   </header>
 
-  <!-- Sidebar + canvas layout -->
-  <div class="proj-page-layout">
-    <aside class="proj-sidebar" id="projSidebar"><!-- rendered by JS --></aside>
+  <!-- Page Content -->
+  <div class="p-8 max-w-7xl mx-auto" id="adminCanvas">
 
-    <div class="proj-canvas" id="adminCanvas">
-
-      <!-- ── Hero ──────────────────────────────────────────────────────────── -->
-      <div class="proj-detail-hero" style="margin-bottom:28px">
-        <nav style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-on-surface-variant);margin-bottom:10px">
-          <a href="/homepage" style="color:inherit;text-decoration:none;transition:color 0.15s" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color=''">Home</a>
-          <span class="material-symbols-outlined" style="font-size:13px">chevron_right</span>
-          <span style="color:var(--color-primary)">Team Directory</span>
-        </nav>
-        <div class="proj-detail-title-row">
-          <div>
-            <h1 class="proj-detail-name">Team Directory</h1>
-            <p class="proj-detail-client" style="margin-top:4px;display:flex;align-items:center;gap:4px">
-              <span class="material-symbols-outlined" style="font-size:14px">business</span>
-              Organization &rsaquo; All Employees
-            </p>
-          </div>
-          <div class="proj-detail-hero-actions">
-            <button class="primary-btn btn-sm" id="toggleInviteBtn" style="gap:5px;width:auto">
-              <span class="material-symbols-outlined" style="font-size:14px">person_add</span>
-              Add Team Member
-            </button>
-          </div>
+    <!-- ── Hero ──────────────────────────────────────────────────────────── -->
+    <div class="proj-detail-hero" style="margin-bottom:28px">
+      <nav style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-on-surface-variant);margin-bottom:10px">
+        <a href="/admin_home" style="color:inherit;text-decoration:none;transition:color 0.15s" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color=''">Home</a>
+        <span class="material-symbols-outlined" style="font-size:13px">chevron_right</span>
+        <span style="color:var(--color-primary)">Team Directory</span>
+      </nav>
+      <div class="proj-detail-title-row">
+        <div>
+          <h2 class="proj-detail-name" style="font-family:Manrope,sans-serif">Team Directory</h2>
+          <p class="proj-detail-client" style="margin-top:4px;display:flex;align-items:center;gap:4px">
+            <span class="material-symbols-outlined" style="font-size:14px">business</span>
+            Organization &rsaquo; All Employees
+          </p>
         </div>
       </div>
+    </div>
 
-      <!-- ── Invite panel ──────────────────────────────────────────────────── -->
-      <div class="dash-section" id="invitePanel" hidden style="margin-bottom:20px;gap:14px">
-        <div style="display:flex;align-items:center;justify-content:space-between">
+    <!-- ── Invite panel ──────────────────────────────────────────────────── -->
+    <div class="dash-section" id="invitePanel" hidden style="margin-bottom:20px;gap:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="dash-section-icon">
+          <span class="material-symbols-outlined">person_add</span>
+          <h2 class="dash-section-title">Invite New Member</h2>
+        </div>
+        <button class="ghost-sm" id="closeInviteBtn">✕</button>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+        <label class="field-label" style="flex:2;min-width:200px;max-width:300px">Email Address
+          <input type="email" class="ctx-input" id="inviteEmail" placeholder="name@example.com" />
+        </label>
+        <label class="field-label" style="flex:1.5;min-width:160px;max-width:220px">Full Name <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span>
+          <input type="text" class="ctx-input" id="inviteFullName" placeholder="Jane Smith" />
+        </label>
+        <label class="field-label" style="flex:1;min-width:140px;max-width:170px">Role
+          <select class="ctx-input" id="inviteRole">
+            <option value="sales">Sales</option>
+            <option value="designer">Designer</option>
+            <option value="lead_designer">Lead Designer</option>
+            <option value="admin">Admin</option>
+            <option value="ceo">CEO</option>
+          </select>
+        </label>
+        <button class="primary-btn btn-sm" id="inviteBtn" style="align-self:flex-end;width:auto">Send Invite</button>
+      </div>
+      <div class="adm-invite-msg" id="inviteMsg"></div>
+      <div id="invitationsWrap"></div>
+    </div>
+
+    <!-- ── Insight banner ────────────────────────────────────────────────── -->
+    <div class="dash-section" style="margin-bottom:20px;flex-direction:row;align-items:center;gap:14px;padding:14px 18px;background:linear-gradient(135deg,rgba(82,98,88,0.06) 0%,rgba(82,98,88,0.03) 100%);border-color:rgba(82,98,88,0.2)">
+      <div style="width:36px;height:36px;border-radius:10px;background:var(--color-primary-container);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <span class="material-symbols-outlined" style="font-size:20px;color:var(--color-primary)">insights</span>
+      </div>
+      <div style="flex:1;font-size:13px;color:var(--color-on-surface-variant);line-height:1.5">
+        <strong style="color:var(--color-on-surface)">Studio Capacity Insight:</strong> Manage team roles and project assignments below.
+        Use "Add Team Member" to invite collaborators or change their access level inline.
+      </div>
+      <a class="ghost-sm" href="/ceo">View Dashboard →</a>
+    </div>
+
+    <!-- ── Filter toolbar ────────────────────────────────────────────────── -->
+    <div class="dash-toolbar" style="margin-bottom:12px">
+      <input class="ctx-input" id="memberSearchInput" type="search" placeholder="Search team members…" style="max-width:280px" />
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button class="ghost-sm" title="Filter">
+          <span class="material-symbols-outlined" style="font-size:15px">filter_list</span>
+        </button>
+        <button class="ghost-sm" title="Export">
+          <span class="material-symbols-outlined" style="font-size:15px">download</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Team table ─────────────────────────────────────────────────────── -->
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table class="admin-table" id="usersTable">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Department</th>
+            <th>Access Level</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="usersBody">
+          <tr><td colspan="5" class="loading-hint" style="text-align:center;padding:32px 16px">Loading team…</td></tr>
+        </tbody>
+      </table>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:var(--color-surface-container-low);border-top:1px solid var(--color-outline-variant);font-size:12px;color:var(--color-on-surface-variant)">
+        <span id="memberCountLabel">Loading…</span>
+        <div style="display:flex;gap:8px">
+          <button class="ghost-sm">Previous</button>
+          <button class="ghost-sm">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Bottom: Team Composition + Project Assignments ────────────────── -->
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;margin-bottom:40px">
+
+      <!-- Team Composition -->
+      <div class="dash-section" style="gap:14px">
+        <div class="dash-section-head">
           <div class="dash-section-icon">
-            <span class="material-symbols-outlined">person_add</span>
-            <h2 class="dash-section-title">Invite New Member</h2>
+            <span class="material-symbols-outlined">groups</span>
+            <h2 class="dash-section-title">Team Composition</h2>
           </div>
-          <button class="ghost-sm" id="closeInviteBtn">✕</button>
+          <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(46,125,67,0.12);color:var(--success);border:1px solid rgba(46,125,67,0.3)">Live</span>
         </div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-          <label class="field-label" style="flex:2;min-width:200px;max-width:300px">Email Address
-            <input type="email" class="ctx-input" id="inviteEmail" placeholder="name@example.com" />
-          </label>
-          <label class="field-label" style="flex:1.5;min-width:160px;max-width:220px">Full Name <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span>
-            <input type="text" class="ctx-input" id="inviteFullName" placeholder="Jane Smith" />
-          </label>
-          <label class="field-label" style="flex:1;min-width:140px;max-width:170px">Role
-            <select class="ctx-input" id="inviteRole">
-              <option value="sales">Sales</option>
-              <option value="designer">Designer</option>
-              <option value="lead_designer">Lead Designer</option>
-              <option value="admin">Admin</option>
-              <option value="ceo">CEO</option>
-            </select>
-          </label>
-          <button class="primary-btn btn-sm" id="inviteBtn" style="align-self:flex-end;width:auto">Send Invite</button>
-        </div>
-        <div class="adm-invite-msg" id="inviteMsg"></div>
-        <div id="invitationsWrap"></div>
-      </div>
-
-      <!-- ── Insight banner ────────────────────────────────────────────────── -->
-      <div class="dash-section" style="margin-bottom:20px;flex-direction:row;align-items:center;gap:14px;padding:14px 18px;background:linear-gradient(135deg,rgba(82,98,88,0.06) 0%,rgba(82,98,88,0.03) 100%);border-color:rgba(82,98,88,0.2)">
-        <div style="width:36px;height:36px;border-radius:10px;background:var(--color-primary-container);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <span class="material-symbols-outlined" style="font-size:20px;color:var(--color-primary)">insights</span>
-        </div>
-        <div style="flex:1;font-size:13px;color:var(--color-on-surface-variant);line-height:1.5">
-          <strong style="color:var(--color-on-surface)">Studio Capacity Insight:</strong> Manage team roles and project assignments below.
-          Use "Add Team Member" to invite collaborators or change their access level inline.
-        </div>
-        <a class="ghost-sm" href="/ceo">View Dashboard →</a>
-      </div>
-
-      <!-- ── Filter toolbar ────────────────────────────────────────────────── -->
-      <div class="dash-toolbar" style="margin-bottom:12px">
-        <input class="ctx-input" id="memberSearchInput" type="search" placeholder="Search team members…" style="max-width:280px" />
-        <div style="margin-left:auto;display:flex;gap:6px">
-          <button class="ghost-sm" title="Filter">
-            <span class="material-symbols-outlined" style="font-size:15px">filter_list</span>
-          </button>
-          <button class="ghost-sm" title="Export">
-            <span class="material-symbols-outlined" style="font-size:15px">download</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- ── Team table ─────────────────────────────────────────────────────── -->
-      <div class="table-wrap" style="margin-bottom:24px">
-        <table class="admin-table" id="usersTable">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Department</th>
-              <th>Access Level</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="usersBody">
-            <tr><td colspan="5" class="loading-hint" style="text-align:center;padding:32px 16px">Loading team…</td></tr>
-          </tbody>
-        </table>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:var(--color-surface-container-low);border-top:1px solid var(--color-outline-variant);font-size:12px;color:var(--color-on-surface-variant)">
-          <span id="memberCountLabel">Loading…</span>
-          <div style="display:flex;gap:8px">
-            <button class="ghost-sm">Previous</button>
-            <button class="ghost-sm">Next</button>
+        <div id="compBars" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:11px;color:var(--color-on-surface-variant);font-weight:600;width:60px;flex-shrink:0">Studio</span>
+            <div style="flex:1;height:7px;background:var(--color-surface-container);border-radius:10px;overflow:hidden"><div id="comp-designer" style="width:0%;height:100%;border-radius:10px;background:linear-gradient(90deg,var(--color-primary),#6a7e73)"></div></div>
+            <span id="compPct-designer" style="font-size:11px;font-weight:700;width:32px;text-align:right;flex-shrink:0">0%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:11px;color:var(--color-on-surface-variant);font-weight:600;width:60px;flex-shrink:0">Sales</span>
+            <div style="flex:1;height:7px;background:var(--color-surface-container);border-radius:10px;overflow:hidden"><div id="comp-sales" style="width:0%;height:100%;border-radius:10px;background:linear-gradient(90deg,#3b82f6,#60a5fa)"></div></div>
+            <span id="compPct-sales" style="font-size:11px;font-weight:700;width:32px;text-align:right;flex-shrink:0">0%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:11px;color:var(--color-on-surface-variant);font-weight:600;width:60px;flex-shrink:0">Admin</span>
+            <div style="flex:1;height:7px;background:var(--color-surface-container);border-radius:10px;overflow:hidden"><div id="comp-admin" style="width:0%;height:100%;border-radius:10px;background:linear-gradient(90deg,#374151,#6b7280)"></div></div>
+            <span id="compPct-admin" style="font-size:11px;font-weight:700;width:32px;text-align:right;flex-shrink:0">0%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:11px;color:var(--color-on-surface-variant);font-weight:600;width:60px;flex-shrink:0">Lead</span>
+            <div style="flex:1;height:7px;background:var(--color-surface-container);border-radius:10px;overflow:hidden"><div id="comp-lead_designer" style="width:0%;height:100%;border-radius:10px;background:linear-gradient(90deg,#d97706,#fbbf24)"></div></div>
+            <span id="compPct-lead_designer" style="font-size:11px;font-weight:700;width:32px;text-align:right;flex-shrink:0">0%</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:11px;color:var(--color-on-surface-variant);font-weight:600;width:60px;flex-shrink:0">CEO</span>
+            <div style="flex:1;height:7px;background:var(--color-surface-container);border-radius:10px;overflow:hidden"><div id="comp-ceo" style="width:0%;height:100%;border-radius:10px;background:linear-gradient(90deg,#1e293b,#475569)"></div></div>
+            <span id="compPct-ceo" style="font-size:11px;font-weight:700;width:32px;text-align:right;flex-shrink:0">0%</span>
           </div>
         </div>
       </div>
 
-      <!-- ── Bottom: Team Composition + Project Assignments ────────────────── -->
-      <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;margin-bottom:40px">
-
-        <!-- Team Composition -->
-        <div class="dash-section" style="gap:14px">
-          <div class="dash-section-head">
-            <div class="dash-section-icon">
-              <span class="material-symbols-outlined">groups</span>
-              <h2 class="dash-section-title">Team Composition</h2>
-            </div>
-            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(46,125,67,0.12);color:var(--success);border:1px solid rgba(46,125,67,0.3)">Live</span>
+      <!-- Project Assignments -->
+      <div class="dash-section" style="gap:12px;background:var(--color-on-surface);border-color:transparent">
+        <div>
+          <div class="dash-section-icon" style="margin-bottom:2px">
+            <span class="material-symbols-outlined" style="color:var(--color-primary-container)">folder_shared</span>
+            <h2 class="dash-section-title" style="color:var(--color-surface-container-lowest)">Project Assignments</h2>
           </div>
-          <div id="compBars" style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-size:11px;color:var(--color-on-surface-variant);font-weight:600;width:60px;flex-shrink:0">Studio</span>
-              <div style="flex:1;height:7px;background:var(--color-surface-container);border-radius:10px;overflow:hidden"><div id="comp-designer" style="width:0%;height:100%;border-radius:10px;background:linear-gradient(90deg,var(--color-primary),#6a7e73)"></div></div>
-              <span id="compPct-designer" style="font-size:11px;font-weight:700;width:32px;text-align:right;flex-shrink:0">0%</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-size:11px;color:var(--color-on-surface-variant);font-weight:600;width:60px;flex-shrink:0">Sales</span>
-              <div style="flex:1;height:7px;background:var(--color-surface-container);border-radius:10px;overflow:hidden"><div id="comp-sales" style="width:0%;height:100%;border-radius:10px;background:linear-gradient(90deg,#3b82f6,#60a5fa)"></div></div>
-              <span id="compPct-sales" style="font-size:11px;font-weight:700;width:32px;text-align:right;flex-shrink:0">0%</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-size:11px;color:var(--color-on-surface-variant);font-weight:600;width:60px;flex-shrink:0">Admin</span>
-              <div style="flex:1;height:7px;background:var(--color-surface-container);border-radius:10px;overflow:hidden"><div id="comp-admin" style="width:0%;height:100%;border-radius:10px;background:linear-gradient(90deg,#374151,#6b7280)"></div></div>
-              <span id="compPct-admin" style="font-size:11px;font-weight:700;width:32px;text-align:right;flex-shrink:0">0%</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-size:11px;color:var(--color-on-surface-variant);font-weight:600;width:60px;flex-shrink:0">Lead</span>
-              <div style="flex:1;height:7px;background:var(--color-surface-container);border-radius:10px;overflow:hidden"><div id="comp-lead_designer" style="width:0%;height:100%;border-radius:10px;background:linear-gradient(90deg,#d97706,#fbbf24)"></div></div>
-              <span id="compPct-lead_designer" style="font-size:11px;font-weight:700;width:32px;text-align:right;flex-shrink:0">0%</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px">
-              <span style="font-size:11px;color:var(--color-on-surface-variant);font-weight:600;width:60px;flex-shrink:0">CEO</span>
-              <div style="flex:1;height:7px;background:var(--color-surface-container);border-radius:10px;overflow:hidden"><div id="comp-ceo" style="width:0%;height:100%;border-radius:10px;background:linear-gradient(90deg,#1e293b,#475569)"></div></div>
-              <span id="compPct-ceo" style="font-size:11px;font-weight:700;width:32px;text-align:right;flex-shrink:0">0%</span>
-            </div>
-          </div>
+          <p class="dash-section-hint" style="color:rgba(255,255,255,0.45)">Assign team members to specific projects</p>
         </div>
-
-        <!-- Project Assignments -->
-        <div class="dash-section" style="gap:12px;background:var(--color-on-surface);border-color:transparent">
-          <div>
-            <div class="dash-section-icon" style="margin-bottom:2px">
-              <span class="material-symbols-outlined" style="color:var(--color-primary-container)">folder_shared</span>
-              <h2 class="dash-section-title" style="color:var(--color-surface-container-lowest)">Project Assignments</h2>
-            </div>
-            <p class="dash-section-hint" style="color:rgba(255,255,255,0.45)">Assign team members to specific projects</p>
-          </div>
-          <label style="display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.45)">Project
-            <select class="ctx-input" id="assignProjectSelect" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.15);color:var(--color-surface-container-lowest)">
-              <option value="">Loading…</option>
-            </select>
-          </label>
-          <label style="display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.45)">Team Member
-            <select class="ctx-input" id="assignUserSelect" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.15);color:var(--color-surface-container-lowest)">
-              <option value="">Select member…</option>
-            </select>
-          </label>
-          <button class="primary-btn" id="assignBtn" disabled style="gap:6px">
-            <span class="material-symbols-outlined" style="font-size:15px">person_add_alt</span>
-            Assign to Project
-          </button>
-          <div id="teamWrap" style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
-            <div style="font-size:12px;color:rgba(255,255,255,0.35);text-align:center;padding:8px 0">Select a project to see its team</div>
-          </div>
+        <label style="display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.45)">Project
+          <select class="ctx-input" id="assignProjectSelect" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.15);color:var(--color-surface-container-lowest)">
+            <option value="">Loading…</option>
+          </select>
+        </label>
+        <label style="display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.45)">Team Member
+          <select class="ctx-input" id="assignUserSelect" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.15);color:var(--color-surface-container-lowest)">
+            <option value="">Select member…</option>
+          </select>
+        </label>
+        <button class="primary-btn" id="assignBtn" disabled style="gap:6px">
+          <span class="material-symbols-outlined" style="font-size:15px">person_add_alt</span>
+          Assign to Project
+        </button>
+        <div id="teamWrap" style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+          <div style="font-size:12px;color:rgba(255,255,255,0.35);text-align:center;padding:8px 0">Select a project to see its team</div>
         </div>
+      </div>
 
-      </div><!-- /bottom grid -->
+    </div><!-- /bottom grid -->
 
-    </div><!-- /proj-canvas -->
-  </div><!-- /proj-page-layout -->
+  </div><!-- /page content -->
+</main>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-  <script src="client/auth.js"></script>
-  <script src="client/admin.js"></script>
-  <script>
-    // Invite panel toggle
-    const invitePanel = document.getElementById("invitePanel");
-    const toggleBtn   = document.getElementById("toggleInviteBtn");
-    const closeBtn    = document.getElementById("closeInviteBtn");
+<!-- Mobile Bottom Nav -->
+<nav class="md:hidden fixed bottom-0 w-full bg-surface/80 backdrop-blur-xl flex justify-around items-center py-3 border-t border-surface-container z-20" id="mobileNav"></nav>
 
-    toggleBtn.addEventListener("click", () => {
-      invitePanel.hidden = !invitePanel.hidden;
-      if (!invitePanel.hidden) invitePanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    });
-    closeBtn.addEventListener("click", () => { invitePanel.hidden = true; });
-  </script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/client/auth.js"></script>
+<script src="/client/nav.js"></script>
+<script src="/client/admin.js"></script>
+<script>
+  // Invite panel toggle (wired from topbar button + inline close button)
+  const invitePanel = document.getElementById("invitePanel");
+  const toggleBtn   = document.getElementById("toggleInviteBtn");
+  const closeBtn    = document.getElementById("closeInviteBtn");
+
+  toggleBtn.addEventListener("click", () => {
+    invitePanel.hidden = !invitePanel.hidden;
+    if (!invitePanel.hidden) invitePanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+  closeBtn.addEventListener("click", () => { invitePanel.hidden = true; });
+</script>
 </body>
 </html>

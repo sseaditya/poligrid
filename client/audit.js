@@ -28,9 +28,9 @@ const SUBCATEGORY_LABELS = {
     return;
   }
 
-  AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
-  renderNav(_profile);
-  renderSidebar();
+  AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
+  AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
+  AppNav.setupUserSection(_profile);
 
   document.getElementById("searchInput").addEventListener("input", renderTable);
   document.getElementById("categoryFilter").addEventListener("change", renderTable);
@@ -40,122 +40,15 @@ const SUBCATEGORY_LABELS = {
     const backBtn = document.getElementById("projectAuditBack");
     backBtn.href = `/project?id=${encodeURIComponent(_projectId)}`;
     backBtn.hidden = false;
-    // Update breadcrumb
+    // Update breadcrumb and topbar title
     const bc = document.getElementById("auditBreadcrumb");
     if (bc) bc.textContent = "Project Audit Log";
+    const topTitle = document.getElementById("auditTopbarTitle");
+    if (topTitle) topTitle.textContent = "Project Audit Log";
   }
 
   await loadLogs();
 })();
-
-function renderNav(profile) {
-  const nav = document.getElementById("dashNav");
-  const homeHref = {
-    admin:         "/admin_home",
-    ceo:           "/ceo",
-    designer:      "/designer_home",
-    lead_designer: "/lead_designer_home",
-    sales:         "/projects",
-  }[profile.role] || "/homepage";
-  const links = [
-    { href: homeHref,  label: "Home" },
-    { href: "/projects", label: "Projects" },
-    { href: _projectId ? `/audit?projectId=${encodeURIComponent(_projectId)}` : "/audit", label: "Audit Logs", active: true },
-  ];
-  if (["designer", "lead_designer", "admin"].includes(profile.role)) {
-    links.push({ href: "/designer", label: "Drawings" });
-  }
-  if (profile.role === "admin") {
-    links.push({ href: "/admin", label: "Admin" });
-    links.push({ href: "/ceo", label: "Dashboard" });
-  }
-  if (profile.role === "ceo") {
-    links.push({ href: "/ceo", label: "Dashboard" });
-  }
-
-  nav.innerHTML = links.map(l =>
-    `<a class="dash-nav-link${l.active ? " active" : ""}" href="${l.href}">${l.label}</a>`
-  ).join("");
-}
-
-// ── Left sidebar ──────────────────────────────────────────────────────────────
-function renderSidebar() {
-  const sidebar = document.getElementById("projSidebar");
-  if (!sidebar) return;
-
-  const isCollapsed = localStorage.getItem("leftSidebarCollapsed") === "1";
-  if (isCollapsed) sidebar.classList.add("collapsed");
-  const roleLabel = { admin: "Admin", ceo: "CEO", designer: "Designer",
-    lead_designer: "Lead Designer", sales: "Sales" }[_profile.role] || _profile.role;
-
-  const homeHref = {
-    admin:         "/admin_home",
-    ceo:           "/ceo",
-    designer:      "/designer_home",
-    lead_designer: "/lead_designer_home",
-    sales:         "/projects",
-  }[_profile.role] || "/homepage";
-
-  const navLinks = [
-    { icon: "policy",      label: "Audit Logs",    href: "/audit", active: true },
-    { icon: "folder_open", label: "All Projects",  href: "/projects" },
-  ];
-  if (["designer", "lead_designer", "admin"].includes(_profile.role)) {
-    navLinks.push({ icon: "architecture", label: "Drawings", href: "/designer" });
-  }
-  if (_projectId) {
-    navLinks.unshift({ icon: "home_work", label: "Back to Project", href: `/project?id=${_projectId}` });
-  }
-  if (["admin", "lead_designer", "ceo"].includes(_profile.role)) {
-    navLinks.push({ icon: "manage_accounts", label: "Admin Panel", href: "/admin" });
-  }
-
-  const bottomLinks = [
-    { icon: "cottage", label: "Home", href: homeHref },
-  ];
-
-  sidebar.innerHTML = `
-    <div class="proj-sidebar-topbar">
-      <button id="leftSidebarToggleBtn" class="proj-sidebar-collapse-btn"
-        title="${isCollapsed ? "Expand sidebar" : "Collapse sidebar"}">
-        <span class="material-symbols-outlined">${isCollapsed ? "left_panel_open" : "left_panel_close"}</span>
-      </button>
-    </div>
-
-    <div class="proj-sidebar-ctx">
-      <div class="proj-sidebar-ctx-icon">
-        <span class="material-symbols-outlined">policy</span>
-      </div>
-      <div class="proj-sidebar-ctx-name">Audit Logs</div>
-      <div class="proj-sidebar-ctx-sub">${escHtml(roleLabel)}</div>
-    </div>
-
-    <p class="proj-sidebar-label">Navigation</p>
-    ${navLinks.map(l => `
-      <a class="proj-sidebar-link${l.active ? " active" : ""}" href="${l.href}">
-        <span class="material-symbols-outlined">${l.icon}</span>
-        <span>${l.label}</span>
-      </a>`).join("")}
-
-    <hr class="proj-sidebar-divider" />
-
-    <div class="proj-sidebar-bottom">
-      ${bottomLinks.map(l => `
-        <a class="proj-sidebar-link" href="${l.href}">
-          <span class="material-symbols-outlined">${l.icon}</span>
-          <span>${l.label}</span>
-        </a>`).join("")}
-    </div>`;
-
-  document.getElementById("leftSidebarToggleBtn")?.addEventListener("click", () => {
-    const collapsed = sidebar.classList.toggle("collapsed");
-    localStorage.setItem("leftSidebarCollapsed", collapsed ? "1" : "0");
-    const btn = document.getElementById("leftSidebarToggleBtn");
-    btn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
-    btn.querySelector(".material-symbols-outlined").textContent =
-      collapsed ? "left_panel_open" : "left_panel_close";
-  });
-}
 
 async function loadLogs() {
   const body = document.getElementById("auditBody");

@@ -18,9 +18,9 @@ const DEPT_LABELS = {
       await AuthClient.requireAuth(["admin"]));
   } catch { window.location.href = '/login'; return; }
 
-  AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
-  renderTopNav();
-  renderSidebar();
+  AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
+  AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
+  AppNav.setupUserSection(_profile);
 
   await Promise.all([loadUsers(), loadProjects(), loadInvitations()]);
 
@@ -36,93 +36,6 @@ const DEPT_LABELS = {
 
   document.getElementById("assignBtn").addEventListener("click", handleAssign);
 })();
-
-// ── Top nav ───────────────────────────────────────────────────────────────────
-function renderTopNav() {
-  const nav = document.getElementById("dashNav");
-  const links = [
-    { href: "/admin_home", label: "Home" },
-    { href: "/projects",   label: "Projects" },
-    { href: "/audit",      label: "Audit Logs" },
-    { href: "/admin",      label: "Admin", active: true },
-    { href: "/ceo",        label: "Dashboard" },
-  ];
-  nav.innerHTML = links.map(l =>
-    `<a class="dash-nav-link${l.active ? " active" : ""}" href="${l.href}">${l.label}</a>`
-  ).join("");
-}
-
-// ── Left sidebar ──────────────────────────────────────────────────────────────
-function renderSidebar() {
-  const sidebar = document.getElementById("projSidebar");
-  if (!sidebar) return;
-
-  const isCollapsed = localStorage.getItem("leftSidebarCollapsed") === "1";
-  if (isCollapsed) sidebar.classList.add("collapsed");
-
-  const navLinks = [
-    { icon: "dashboard",      label: "Command Center", href: "/admin_home" },
-    { icon: "manage_accounts",label: "User Management", href: "/admin", active: true },
-    { icon: "policy",         label: "Audit Logs",      href: "/audit" },
-    { icon: "folder_open",    label: "Projects",        href: "/projects" },
-    { icon: "bar_chart",      label: "CEO Dashboard",   href: "/ceo" },
-    { icon: "architecture",   label: "Drawings",        href: "/designer" },
-  ];
-
-  const bottomLinks = [
-    { icon: "cottage",        label: "Home",            href: "/homepage" },
-    { icon: "design_services",label: "Fitout Planner",  href: "/index" },
-    { icon: "logout",         label: "Logout",          href: "#", id: "sidebarLogoutBtn" },
-  ];
-
-  sidebar.innerHTML = `
-    <div class="proj-sidebar-topbar">
-      <button id="leftSidebarToggleBtn" class="proj-sidebar-collapse-btn"
-        title="${isCollapsed ? "Expand sidebar" : "Collapse sidebar"}">
-        <span class="material-symbols-outlined">${isCollapsed ? "left_panel_open" : "left_panel_close"}</span>
-      </button>
-    </div>
-
-    <div class="proj-sidebar-ctx">
-      <div class="proj-sidebar-ctx-icon">
-        <span class="material-symbols-outlined">manage_accounts</span>
-      </div>
-      <div class="proj-sidebar-ctx-name">System Manager</div>
-      <div class="proj-sidebar-ctx-sub">Admin</div>
-    </div>
-
-    <p class="proj-sidebar-label">Navigation</p>
-    ${navLinks.map(l => `
-      <a class="proj-sidebar-link${l.active ? " active" : ""}" href="${l.href}">
-        <span class="material-symbols-outlined">${l.icon}</span>
-        <span>${l.label}</span>
-      </a>`).join("")}
-
-    <hr class="proj-sidebar-divider" />
-
-    <div class="proj-sidebar-bottom">
-      ${bottomLinks.map(l => `
-        <a class="proj-sidebar-link" href="${l.href}"${l.id ? ` id="${l.id}"` : ""}>
-          <span class="material-symbols-outlined">${l.icon}</span>
-          <span>${l.label}</span>
-        </a>`).join("")}
-    </div>`;
-
-  document.getElementById("leftSidebarToggleBtn")?.addEventListener("click", () => {
-    const collapsed = sidebar.classList.toggle("collapsed");
-    localStorage.setItem("leftSidebarCollapsed", collapsed ? "1" : "0");
-    const btn = document.getElementById("leftSidebarToggleBtn");
-    btn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
-    btn.querySelector(".material-symbols-outlined").textContent =
-      collapsed ? "left_panel_open" : "left_panel_close";
-  });
-
-  document.getElementById("sidebarLogoutBtn")?.addEventListener("click", async (e) => {
-    e.preventDefault();
-    if (window.AuthClient) await AuthClient.signOut();
-    window.location.href = "/login";
-  });
-}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 

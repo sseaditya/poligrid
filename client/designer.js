@@ -26,9 +26,9 @@ const DRAWING_TYPES = [
       await AuthClient.requireAuth(["admin", "designer", "lead_designer", "ceo"]));
   } catch { window.location.href = "/login"; return; }
 
-  AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
-  renderTopNav();
-  renderSidebar();
+  AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
+  AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
+  AppNav.setupUserSection(_profile);
 
   const isLead = ["lead_designer", "admin"].includes(_profile.role);
   const isDesigner = _profile.role === "designer";
@@ -82,115 +82,10 @@ const DRAWING_TYPES = [
   wireDropZone();
 })();
 
-// ─── Top nav ──────────────────────────────────────────────────────────────────
-function renderTopNav() {
-  const nav = document.getElementById("dashNav");
-  const homeHref = {
-    admin:         "/admin_home",
-    ceo:           "/ceo",
-    designer:      "/designer_home",
-    lead_designer: "/lead_designer_home",
-    sales:         "/projects",
-  }[_profile.role] || "/homepage";
-  const links = [
-    { href: homeHref,    label: "Home" },
-    { href: "/projects", label: "Projects" },
-    { href: "/designer", label: "Drawings", active: true },
-  ];
-  if (["admin", "lead_designer"].includes(_profile.role)) {
-    links.splice(2, 0, { href: "/audit", label: "Audit Logs" });
-  }
-  if (_profile.role === "admin") {
-    links.push({ href: "/admin", label: "Admin" });
-    links.push({ href: "/ceo",   label: "Dashboard" });
-  }
-  nav.innerHTML = links.map(l =>
-    `<a class="dash-nav-link${l.active ? " active" : ""}" href="${l.href}">${l.label}</a>`
-  ).join("");
-}
-
-// ─── Left sidebar ─────────────────────────────────────────────────────────────
-function renderSidebar() {
-  const sidebar = document.getElementById("projSidebar");
-  if (!sidebar) return;
-
-  const urlProjectId = new URLSearchParams(location.search).get("projectId");
-  const roleLabel = ROLE_LABELS[_profile.role] || _profile.role;
-  const isCollapsed = localStorage.getItem("leftSidebarCollapsed") === "1";
-  if (isCollapsed) sidebar.classList.add("collapsed");
-
-  const navLinks = [];
-  if (urlProjectId) {
-    navLinks.push({ icon: "home_work", label: "Back to Project", href: `/project?id=${urlProjectId}` });
-  }
-  navLinks.push({ icon: "architecture", label: "Drawings", href: "#", active: true });
-  if (["lead_designer", "admin"].includes(_profile.role)) {
-    navLinks.push({ icon: "design_services", label: "Fitout Planner", href: urlProjectId ? `/index?id=${urlProjectId}` : "/index" });
-  }
-  navLinks.push({
-    icon: "history",
-    label: "Audit Log",
-    href: urlProjectId ? `/audit?projectId=${urlProjectId}` : "/audit",
-    id: "sidebarAuditLink",
-  });
-
-  const bottomLinks = [
-    { icon: "folder_open", label: "All Projects", href: "/projects" },
-    { icon: "cottage",     label: "Home",          href: "/homepage" },
-  ];
-
-  sidebar.innerHTML = `
-    <div class="proj-sidebar-topbar">
-      <button id="leftSidebarToggleBtn" class="proj-sidebar-collapse-btn"
-        title="${isCollapsed ? "Expand sidebar" : "Collapse sidebar"}">
-        <span class="material-symbols-outlined">${isCollapsed ? "left_panel_open" : "left_panel_close"}</span>
-      </button>
-    </div>
-
-    <div class="proj-sidebar-ctx">
-      <div class="proj-sidebar-ctx-icon">
-        <span class="material-symbols-outlined">architecture</span>
-      </div>
-      <div class="proj-sidebar-ctx-name" id="sidebarProjectName">Drawings</div>
-      <div class="proj-sidebar-ctx-sub">${escHtml(roleLabel)}</div>
-    </div>
-
-    <p class="proj-sidebar-label">Workspace</p>
-    ${navLinks.map(l => `
-      <a class="proj-sidebar-link${l.active ? " active" : ""}" href="${l.href}"${l.id ? ` id="${l.id}"` : ""}>
-        <span class="material-symbols-outlined">${l.icon}</span>
-        <span>${l.label}</span>
-      </a>`).join("")}
-
-    ${_profile.role === "admin" ? `
-      <p class="proj-sidebar-label">Admin</p>
-      <a class="proj-sidebar-link" href="/admin">
-        <span class="material-symbols-outlined">manage_accounts</span>
-        <span>Admin Panel</span>
-      </a>
-      <a class="proj-sidebar-link" href="/ceo">
-        <span class="material-symbols-outlined">analytics</span>
-        <span>CEO Dashboard</span>
-      </a>` : ""}
-
-    <hr class="proj-sidebar-divider" />
-
-    <div class="proj-sidebar-bottom">
-      ${bottomLinks.map(l => `
-        <a class="proj-sidebar-link" href="${l.href}">
-          <span class="material-symbols-outlined">${l.icon}</span>
-          <span>${l.label}</span>
-        </a>`).join("")}
-    </div>`;
-
-  document.getElementById("leftSidebarToggleBtn")?.addEventListener("click", () => {
-    const collapsed = sidebar.classList.toggle("collapsed");
-    localStorage.setItem("leftSidebarCollapsed", collapsed ? "1" : "0");
-    const btn = document.getElementById("leftSidebarToggleBtn");
-    btn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
-    btn.querySelector(".material-symbols-outlined").textContent =
-      collapsed ? "left_panel_open" : "left_panel_close";
-  });
+// ─── Sidebar audit link helper (update href when project changes) ─────────────
+function updateSidebarAuditLink(projectId) {
+  const el = document.getElementById("sidebarAuditLink");
+  if (el) el.href = projectId ? `/audit?projectId=${projectId}` : "/audit";
 }
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
@@ -242,16 +137,11 @@ function selectProject(projectId) {
   document.getElementById("downloadZipBtn").disabled = !projectId;
   document.getElementById("progressWrap").hidden = !projectId;
 
-  // Update sidebar context name
+  // Update topbar audit link context
   const sel = document.getElementById("projectSelect");
   const selectedText = sel.options[sel.selectedIndex]?.text || "Drawings";
   const projectName = selectedText.split(" · ")[0]; // strip client name
-  const sidebarNameEl = document.getElementById("sidebarProjectName");
-  if (sidebarNameEl) sidebarNameEl.textContent = projectId ? projectName : "Drawings";
-  const sidebarAuditLink = document.getElementById("sidebarAuditLink");
-  if (sidebarAuditLink) {
-    sidebarAuditLink.href = projectId ? `/audit?projectId=${projectId}` : "/audit";
-  }
+  updateSidebarAuditLink(projectId);
 
   // Update subtitle
   const subtitle = document.getElementById("designerSubtitle");
