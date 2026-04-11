@@ -32,20 +32,35 @@ const SUBCATEGORY_LABELS = {
   AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(_profile);
 
-  document.getElementById("searchInput").addEventListener("input", renderTable);
-  document.getElementById("categoryFilter").addEventListener("change", renderTable);
-  document.getElementById("subcategoryFilter").addEventListener("change", renderTable);
-
+  // If arriving from a project's Audit Log sub-link, show the project context in the sidebar
   if (_projectId) {
     const backBtn = document.getElementById("projectAuditBack");
     backBtn.href = `/project?id=${encodeURIComponent(_projectId)}`;
     backBtn.hidden = false;
-    // Update breadcrumb and topbar title
     const bc = document.getElementById("auditBreadcrumb");
     if (bc) bc.textContent = "Project Audit Log";
     const topTitle = document.getElementById("auditTopbarTitle");
     if (topTitle) topTitle.textContent = "Project Audit Log";
+
+    // Re-render sidebar with project sub-nav (shows back-to-project indentation)
+    try {
+      const res = await apiFetch(`/api/project/detail?id=${encodeURIComponent(_projectId)}`);
+      if (res.ok) {
+        const { project } = await res.json();
+        if (project) {
+          AppNav.renderSidebarWithProject(
+            _profile,
+            document.getElementById('sidebarNav'),
+            project
+          );
+        }
+      }
+    } catch { /* sidebar stays flat if fetch fails */ }
   }
+
+  document.getElementById("searchInput").addEventListener("input", renderTable);
+  document.getElementById("categoryFilter").addEventListener("change", renderTable);
+  document.getElementById("subcategoryFilter").addEventListener("change", renderTable);
 
   await loadLogs();
 })();

@@ -59,6 +59,21 @@ const DRAWING_TYPES = [
   if (urlProjectId) {
     document.getElementById("projectSelect").value = urlProjectId;
     selectProject(urlProjectId);
+
+    // Re-render sidebar with project sub-nav so user can navigate back to the project
+    try {
+      const res = await apiFetch(`/api/project/detail?id=${encodeURIComponent(urlProjectId)}`);
+      if (res.ok) {
+        const { project } = await res.json();
+        if (project) {
+          AppNav.renderSidebarWithProject(
+            _profile,
+            document.getElementById('sidebarNav'),
+            project
+          );
+        }
+      }
+    } catch { /* sidebar stays flat if fetch fails */ }
   }
 
   // Start screen create-project buttons (designer only)
