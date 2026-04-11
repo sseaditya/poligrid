@@ -1,340 +1,312 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html class="light" lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Poligrid — Profile</title>
-  <link rel="stylesheet" href="/theme.css" />
-  <style>
-    /* ── Profile page layout ─────────────────────────────────────────── */
-    .profile-page { max-width: 1120px; }
-
-    /* Hero card */
-    .profile-hero-card {
-      background: var(--color-surface-container-lowest);
-      border: 1px solid var(--color-outline-variant);
-      border-radius: var(--radius-xl); overflow: hidden;
-      box-shadow: var(--shadow-ambient); margin-bottom: 24px;
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Poligrid — My Profile</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;400;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "on-error": "#fff7f6", "on-secondary": "#f3fbf3",
+          "primary-fixed-dim": "#c7d9cc", "outline-variant": "#adb3b4",
+          "surface-container-low": "#f2f4f4", "primary-dim": "#46564c",
+          "primary": "#526258", "primary-container": "#d5e7da",
+          "on-primary": "#eafcef", "tertiary-container": "#edf8d9",
+          "background": "#f9f9f9", "on-surface-variant": "#5a6061",
+          "on-primary-fixed": "#33433a", "surface-variant": "#dde4e5",
+          "on-primary-fixed-variant": "#4f5f55", "on-tertiary-fixed": "#434d36",
+          "on-background": "#2d3435", "error-container": "#fe8983",
+          "surface": "#f9f9f9", "inverse-primary": "#ecfef0",
+          "surface-bright": "#f9f9f9", "on-error-container": "#752121",
+          "tertiary-fixed": "#edf8d9", "on-tertiary-fixed-variant": "#5f6a51",
+          "inverse-on-surface": "#9c9d9d", "surface-dim": "#d4dbdd",
+          "inverse-surface": "#0c0f0f", "surface-container-high": "#e4e9ea",
+          "surface-container": "#ebeeef", "secondary-container": "#dde5dd",
+          "surface-container-lowest": "#ffffff", "primary-fixed": "#d5e7da",
+          "surface-tint": "#526258", "on-tertiary-container": "#555f47",
+          "on-secondary-fixed-variant": "#555d58", "error": "#9f403d",
+          "secondary-dim": "#4d554f", "secondary": "#59615b",
+          "error-dim": "#4e0309", "on-secondary-fixed": "#39413c",
+          "tertiary": "#58634b", "tertiary-dim": "#4c563f",
+          "tertiary-fixed-dim": "#deeacb", "surface-container-highest": "#dde4e5",
+          "on-surface": "#2d3435", "secondary-fixed": "#dde5dd",
+          "on-secondary-container": "#4c544e", "outline": "#757c7d",
+          "on-tertiary": "#f2fdde", "secondary-fixed-dim": "#ced6cf",
+          "on-primary-container": "#46554c"
+        },
+        "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+        "fontFamily": { "headline": ["Manrope"], "body": ["Inter"], "label": ["Inter"] }
+      }
     }
-    .profile-hero-cover {
-      height: 96px;
-      background: linear-gradient(135deg, #526258 0%, #3a4d41 60%, #2d3e34 100%);
-      position: relative;
-    }
-    .profile-hero-cover::after {
-      content: ""; position: absolute; inset: 0;
-      background: repeating-linear-gradient(
-        45deg,
-        rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px,
-        transparent 1px, transparent 20px
-      );
-    }
-    .profile-hero-body {
-      display: flex; align-items: flex-end; gap: 20px;
-      padding: 0 28px 24px; flex-wrap: wrap;
-    }
-    .profile-avatar-lg {
-      width: 80px; height: 80px; border-radius: 50%;
-      background: var(--gradient-primary);
-      border: 4px solid var(--color-surface-container-lowest);
-      color: var(--color-on-primary);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 28px; font-weight: 800; font-family: var(--font-headline);
-      flex-shrink: 0; margin-top: -40px; box-shadow: var(--shadow-float);
-    }
-    .profile-hero-info { flex: 1; min-width: 200px; padding-top: 10px; }
-    .profile-hero-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
-    .profile-hero-name {
-      font-family: var(--font-headline); font-size: 22px; font-weight: 800;
-      color: var(--color-on-surface); line-height: 1.1;
-    }
-    .profile-hero-sub { font-size: 13px; color: var(--color-on-surface-variant); }
-    .profile-hero-actions { display: flex; gap: 8px; padding-top: 10px; align-self: flex-end; margin-left: auto; }
-
-    /* Two-column layout below hero */
-    .profile-layout {
-      display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start;
-    }
-    @media (max-width: 900px) { .profile-layout { grid-template-columns: 1fr; } }
-
-    .profile-main-col { display: flex; flex-direction: column; gap: 20px; }
-    .profile-sidebar-col { display: flex; flex-direction: column; gap: 20px; }
-
-    /* Stat pills */
-    .profile-stat-row { display: flex; gap: 12px; flex-wrap: wrap; }
-    .profile-stat-pill {
-      flex: 1; min-width: 90px; text-align: center;
-      background: var(--color-surface-container-low);
-      border-radius: var(--radius-lg); padding: 14px 10px;
-    }
-    .profile-stat-pill .stat-num { font-size: 26px; }
-    .profile-stat-pill .stat-label { font-size: 11px; margin-top: 2px; }
-
-    /* Progress bar (Sales milestone) */
-    .profile-milestone { margin-top: 4px; }
-    .profile-milestone-label {
-      display: flex; justify-content: space-between; align-items: baseline;
-      font-size: 12px; color: var(--color-on-surface-variant); margin-bottom: 6px;
-    }
-    .profile-milestone-bar {
-      height: 6px; background: var(--color-surface-container-high);
-      border-radius: var(--radius-full); overflow: hidden;
-    }
-    .profile-milestone-fill {
-      height: 100%; border-radius: var(--radius-full);
-      background: var(--gradient-primary); transition: width 0.4s ease;
-    }
-    .profile-milestone-caption { font-size: 11px; color: var(--color-on-surface-variant); margin-top: 6px; }
-
-    /* Quick links */
-    .profile-quicklinks-list { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
-    .profile-quicklink {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 12px; border-radius: var(--radius-lg);
-      color: var(--color-on-surface-variant); font-size: 13px; font-weight: 500;
-      text-decoration: none; transition: all 0.15s;
-    }
-    .profile-quicklink:hover {
-      background: var(--color-surface-container-low);
-      color: var(--color-on-surface);
-    }
-    .profile-quicklink .material-symbols-outlined {
-      font-size: 18px; color: var(--color-primary); flex-shrink: 0;
-    }
-
-    /* Password reset row */
-    .security-row {
-      display: flex; align-items: center; justify-content: space-between; gap: 16px;
-      flex-wrap: wrap;
-    }
-    .security-row-info { display: flex; flex-direction: column; gap: 2px; }
-    .security-row-title { font-size: 14px; font-weight: 600; color: var(--color-on-surface); }
-    .security-row-sub   { font-size: 12px; color: var(--color-on-surface-variant); }
-
-    /* Account DL */
-    .account-dl { display: flex; flex-direction: column; gap: 10px; }
-    .account-dl-row { display: flex; justify-content: space-between; font-size: 13px; gap: 8px; }
-    .account-dl-row dt { color: var(--color-on-surface-variant); font-weight: 500; flex-shrink: 0; }
-    .account-dl-row dd { color: var(--color-on-surface); text-align: right; word-break: break-all; }
-
-    /* Read-only other profile */
-    .other-profile-dl { display: grid; grid-template-columns: 130px 1fr; gap: 10px 16px; font-size: 14px; }
-    .other-profile-dl dt { color: var(--color-on-surface-variant); font-weight: 500; }
-    .other-profile-dl dd { color: var(--color-on-surface); }
-
-    /* inline save status */
-    .save-status { font-size: 12px; font-weight: 500; }
-    .save-status.ok    { color: var(--success); }
-    .save-status.error { color: var(--color-error); }
-
-    /* reset-pw feedback */
-    #resetPwStatus { font-size: 12px; font-weight: 500; }
-    #resetPwStatus.ok    { color: var(--success); }
-    #resetPwStatus.error { color: var(--color-error); }
-
-    /* btn-inline: auto-width primary */
-    .btn-inline {
-      display: inline-flex; align-items: center; gap: 6px;
-      padding: 8px 16px; font-size: 13px; font-weight: 700;
-      background: var(--gradient-primary); color: var(--color-on-primary);
-      border: none; border-radius: var(--radius-lg); cursor: pointer;
-      font-family: var(--font-body); transition: opacity 0.15s, transform 0.1s;
-      letter-spacing: 0.04em; white-space: nowrap;
-    }
-    .btn-inline:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
-    .btn-inline:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-
-    /* Form two-col on wider screens */
-    .profile-form-grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
-    }
-    .profile-form-grid .field-full { grid-column: 1 / -1; }
-    @media (max-width: 600px) { .profile-form-grid { grid-template-columns: 1fr; } }
-  </style>
+  }
+</script>
+<style>
+  .blueprint-grid {
+    background-image:
+      linear-gradient(rgba(82,98,88,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(82,98,88,0.05) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .signature-cta { background: linear-gradient(135deg, #526258 0%, #46564c 100%); }
+  .cover-gradient { background: linear-gradient(135deg, #526258 0%, #3a4d41 60%, #2d3e34 100%); }
+  .cover-pattern::after {
+    content: "";
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(255,255,255,0.04) 0px, rgba(255,255,255,0.04) 1px,
+      transparent 1px, transparent 22px
+    );
+    pointer-events: none;
+  }
+  .input-field {
+    width: 100%; padding: 9px 12px; font-size: 13px; font-family: Inter, sans-serif;
+    background: #f2f4f4; border: none; border-radius: 6px; color: #2d3435;
+    outline: none; transition: box-shadow 0.15s, background 0.15s;
+  }
+  .input-field:focus { background: #fff; box-shadow: 0 0 0 2px #526258; }
+  .input-field:disabled { opacity: 0.5; cursor: not-allowed; }
+  .field-label-text {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: #5a6061; margin-bottom: 5px; display: block;
+  }
+</style>
 </head>
-<body class="dash-body">
+<body class="bg-background text-on-background font-body antialiased min-h-screen">
 
-  <header class="top-bar">
-    <div class="top-bar-left">
-      <a href="/homepage" class="logo-link"><span class="logo-text">Poligrid</span></a>
-      <span class="page-title">Profile</span>
+<!-- ── Top Header ───────────────────────────────────────────────────────────── -->
+<header class="fixed top-0 w-full z-50 bg-[#f9f9f9]/80 backdrop-blur-md flex justify-between items-center px-8 h-16 border-b border-outline-variant/10">
+  <div class="flex items-center gap-4">
+    <span class="font-headline font-black tracking-tighter text-[#2d3435] text-xl">GOD'S EYE</span>
+    <div class="h-4 w-px bg-outline-variant/30 hidden md:block"></div>
+    <span class="font-body text-xs font-semibold tracking-widest text-on-surface-variant uppercase opacity-60" id="headerRoleLabel">My Profile</span>
+  </div>
+  <div class="flex items-center gap-6">
+    <a id="settingsLink" href="/profile">
+      <span class="material-symbols-outlined text-primary cursor-pointer transition-colors text-[20px]">account_circle</span>
+    </a>
+    <a id="userAvatarLink" href="/profile">
+      <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border border-outline-variant/10">
+        <span id="headerInitials" class="text-xs font-bold text-on-surface-variant">—</span>
+      </div>
+    </a>
+    <button id="logoutBtn" class="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-surface-container text-on-surface-variant text-xs font-bold uppercase tracking-widest hover:bg-surface-container-high transition-all">
+      <span class="material-symbols-outlined text-[15px]">logout</span>Sign out
+    </button>
+  </div>
+</header>
+
+<!-- ── Left Sidebar ──────────────────────────────────────────────────────────── -->
+<aside class="fixed left-0 top-16 bottom-0 w-64 bg-surface-container-lowest border-r border-outline-variant/10 hidden md:flex flex-col z-40">
+  <nav class="flex-1 py-6 px-4 space-y-1" id="sideNav">
+    <!-- Injected by JS -->
+  </nav>
+  <div class="p-6 border-t border-outline-variant/10">
+    <div class="bg-surface-container-low p-4 rounded-lg flex items-center gap-3">
+      <div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+      <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Profile Settings</span>
     </div>
-    <nav class="dash-nav" id="dashNav"></nav>
-    <div class="top-bar-right" id="userChipWrap"></div>
-  </header>
+  </div>
+</aside>
 
-  <main class="dash-main profile-page">
+<!-- ── Main Content ──────────────────────────────────────────────────────────── -->
+<main class="pt-24 pb-16 px-8 min-h-screen blueprint-grid md:ml-64">
+  <div class="max-w-5xl mx-auto">
 
-    <!-- ── Hero card ─────────────────────────────────────────────── -->
-    <div class="profile-hero-card" id="profileHeroCard">
-      <div class="profile-hero-cover"></div>
-      <div class="profile-hero-body">
-        <div class="profile-avatar-lg" id="profileAvatar"></div>
-        <div class="profile-hero-info">
-          <div class="profile-hero-name-row">
-            <h1 class="profile-hero-name" id="profileName">—</h1>
-            <span class="profile-role-badge" id="profileRoleBadge"></span>
+    <!-- ── Own profile ──────────────────────────────────────────────── -->
+    <div id="ownProfileSection" class="hidden">
+
+      <!-- Hero card -->
+      <div class="rounded-xl overflow-hidden mb-8 bg-surface-container-lowest shadow-sm">
+        <div class="cover-gradient cover-pattern relative h-28"></div>
+        <div class="flex items-end gap-5 px-8 pb-6 flex-wrap">
+          <!-- Avatar -->
+          <div id="profileAvatar"
+            class="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-primary-dim border-4 border-surface-container-lowest
+                   flex items-center justify-center font-headline font-extrabold text-2xl text-on-primary
+                   -mt-10 shadow-md flex-shrink-0">
           </div>
-          <p class="profile-hero-sub" id="profileEmail"></p>
-          <p class="profile-hero-sub" id="profileMemberSince" style="margin-top:2px;font-size:11px;"></p>
-        </div>
-        <div class="profile-hero-actions" id="heroActions" hidden>
-          <!-- shown for other profiles (admin view) -->
-          <span class="ghost-btn" style="font-size:12px;padding:6px 12px;" id="heroAdminBadge"></span>
+          <!-- Name / role -->
+          <div class="flex-1 min-w-0 pt-3">
+            <div class="flex items-center gap-3 flex-wrap mb-1">
+              <h1 class="font-headline font-extrabold text-2xl text-on-background leading-tight" id="profileName">—</h1>
+              <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-primary-container text-on-primary-container" id="profileRoleBadge"></span>
+            </div>
+            <p class="text-sm text-on-surface-variant" id="profileEmail"></p>
+            <p class="text-xs text-on-surface-variant/60 mt-0.5" id="profileMemberSince"></p>
+          </div>
+          <!-- Employee ID chip -->
+          <div class="self-end pb-1">
+            <span class="text-[10px] font-mono font-semibold tracking-widest text-on-surface-variant/50 bg-surface-container px-3 py-1.5 rounded-lg" id="profileIdChip"></span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- ── Own profile ─────────────────────────────────────────────── -->
-    <div id="ownProfileSection" hidden>
-      <div class="profile-layout">
+      <!-- Two-column grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
-        <!-- LEFT col -->
-        <div class="profile-main-col">
+        <!-- ── LEFT: form (2/3) ─────────────────────────────────────── -->
+        <div class="lg:col-span-2 space-y-6">
 
           <!-- Personal info -->
-          <section class="dash-section">
-            <div class="dash-section-head">
+          <div class="bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+            <h2 class="font-headline font-bold text-sm tracking-widest text-on-surface-variant uppercase mb-5">Personal Information</h2>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <h2 class="dash-section-title">Personal Information</h2>
-                <p class="dash-section-hint">Update your display name and contact details.</p>
+                <span class="field-label-text">Full Name</span>
+                <input class="input-field" type="text" id="fieldName" placeholder="Your full name" />
               </div>
-            </div>
-
-            <div class="profile-form-grid">
-              <label class="field-label">
-                Full Name
-                <input type="text" class="ctx-input" id="fieldName" placeholder="Your full name" />
-              </label>
-
-              <label class="field-label">
-                Phone Number
-                <input type="tel" class="ctx-input" id="fieldPhone" placeholder="10-digit mobile" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" />
-              </label>
-
-              <label class="field-label field-full">
-                Email
-                <input type="email" class="ctx-input" id="fieldEmail" disabled style="opacity:0.6;" />
-              </label>
-
-              <label class="field-label">
-                Role
-                <input type="text" class="ctx-input" id="fieldRole" disabled style="opacity:0.6;" />
-              </label>
-
-              <div class="field-full" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:4px;">
-                <button class="btn-inline" id="saveProfileBtn">Save Changes</button>
-                <span class="save-status" id="saveStatus"></span>
-              </div>
-            </div>
-          </section>
-
-          <!-- Security -->
-          <section class="dash-section">
-            <div class="dash-section-head">
               <div>
-                <h2 class="dash-section-title">Security</h2>
-                <p class="dash-section-hint">Manage your login credentials.</p>
+                <span class="field-label-text">Phone Number</span>
+                <input class="input-field" type="tel" id="fieldPhone" placeholder="10-digit mobile" maxlength="10" inputmode="numeric" />
+              </div>
+              <div class="sm:col-span-2">
+                <span class="field-label-text">Email Address</span>
+                <input class="input-field" type="email" id="fieldEmail" disabled />
+              </div>
+              <div>
+                <span class="field-label-text">Role</span>
+                <input class="input-field" type="text" id="fieldRole" disabled />
+              </div>
+              <div>
+                <span class="field-label-text">Department</span>
+                <input class="input-field" type="text" id="fieldDept" disabled />
               </div>
             </div>
-            <div class="security-row">
-              <div class="security-row-info">
-                <span class="security-row-title">Password</span>
-                <span class="security-row-sub">Send a reset link to your email address.</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                <button class="ghost-btn btn-sm" id="resetPasswordBtn">Send Reset Email</button>
-                <span id="resetPwStatus"></span>
-              </div>
+
+            <div class="flex items-center gap-4 mt-5">
+              <button id="saveProfileBtn"
+                class="signature-cta text-on-primary text-sm font-bold px-5 py-2.5 rounded-lg hover:opacity-90 transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-[16px]">save</span>
+                Save Changes
+              </button>
+              <span id="saveStatus" class="text-sm font-medium"></span>
             </div>
-          </section>
+          </div>
+
+          <!-- Contact & address (visual only — future expansion) -->
+          <div class="bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+            <h2 class="font-headline font-bold text-sm tracking-widest text-on-surface-variant uppercase mb-5">Account Details</h2>
+            <dl class="space-y-3" id="accountDl"></dl>
+          </div>
 
         </div>
 
-        <!-- RIGHT sidebar -->
-        <div class="profile-sidebar-col">
+        <!-- ── RIGHT: stats + quick links (1/3) ────────────────────── -->
+        <div class="space-y-6">
 
           <!-- Stats -->
-          <section class="dash-section" id="statsSection" hidden>
-            <h2 class="dash-section-title" id="statsTitle">Activity</h2>
-            <div class="profile-stat-row" id="statPills"></div>
-            <!-- Sales: milestone bar -->
-            <div class="profile-milestone" id="milestoneBlock" hidden>
-              <div class="profile-milestone-label">
-                <span id="milestoneLabel">Progress</span>
-                <span id="milestonePct"></span>
-              </div>
-              <div class="profile-milestone-bar">
-                <div class="profile-milestone-fill" id="milestoneFill" style="width:0%"></div>
-              </div>
-              <p class="profile-milestone-caption" id="milestoneCaption"></p>
+          <div class="bg-surface-container-lowest rounded-xl p-6 shadow-sm" id="statsCard">
+            <h2 class="font-headline font-bold text-sm tracking-widest text-on-surface-variant uppercase mb-4" id="statsTitle">Activity</h2>
+            <div class="space-y-3" id="statsList">
+              <!-- Injected by JS -->
+              <div class="h-12 bg-surface-container-low rounded-lg animate-pulse"></div>
+              <div class="h-12 bg-surface-container-low rounded-lg animate-pulse"></div>
+              <div class="h-12 bg-surface-container-low rounded-lg animate-pulse"></div>
             </div>
-          </section>
+            <!-- Sales milestone bar -->
+            <div id="milestoneBlock" class="hidden mt-4 pt-4 border-t border-outline-variant/10">
+              <div class="flex justify-between text-xs text-on-surface-variant mb-2">
+                <span>Projects Milestone</span>
+                <span id="milestonePct" class="font-semibold text-primary"></span>
+              </div>
+              <div class="h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+                <div id="milestoneFill" class="h-full rounded-full signature-cta transition-all duration-500" style="width:0%"></div>
+              </div>
+              <p class="text-xs text-on-surface-variant/60 mt-2" id="milestoneCaption"></p>
+            </div>
+          </div>
 
           <!-- Quick links -->
-          <section class="dash-section" id="quickLinksSection">
-            <h2 class="dash-section-title">Quick Links</h2>
-            <div class="profile-quicklinks-list" id="quickLinksList"></div>
-          </section>
-
-          <!-- Account details -->
-          <section class="dash-section">
-            <h2 class="dash-section-title">Account Details</h2>
-            <dl class="account-dl" id="accountDl"></dl>
-          </section>
+          <div class="bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+            <h2 class="font-headline font-bold text-sm tracking-widest text-on-surface-variant uppercase mb-4">Quick Links</h2>
+            <div class="space-y-1" id="quickLinksList"></div>
+          </div>
 
         </div>
       </div>
     </div>
 
-    <!-- ── Other user's profile (admin read-only view) ───────────────── -->
-    <div id="otherProfileSection" hidden>
-      <div class="profile-layout">
-        <div class="profile-main-col">
-          <section class="dash-section">
-            <div class="dash-section-head">
-              <h2 class="dash-section-title">Contact Information</h2>
+    <!-- ── Other user (admin read-only view) ───────────────────────── -->
+    <div id="otherProfileSection" class="hidden">
+
+      <!-- Hero card -->
+      <div class="rounded-xl overflow-hidden mb-8 bg-surface-container-lowest shadow-sm">
+        <div class="cover-gradient cover-pattern relative h-28"></div>
+        <div class="flex items-end gap-5 px-8 pb-6 flex-wrap">
+          <div id="otherProfileAvatar"
+            class="w-20 h-20 rounded-full bg-gradient-to-br from-primary to-primary-dim border-4 border-surface-container-lowest
+                   flex items-center justify-center font-headline font-extrabold text-2xl text-on-primary
+                   -mt-10 shadow-md flex-shrink-0">
+          </div>
+          <div class="flex-1 min-w-0 pt-3">
+            <div class="flex items-center gap-3 flex-wrap mb-1">
+              <h1 class="font-headline font-extrabold text-2xl text-on-background leading-tight" id="otherProfileName">—</h1>
+              <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-primary-container text-on-primary-container" id="otherProfileRoleBadge"></span>
+              <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-surface-container text-on-surface-variant">Admin View</span>
             </div>
-            <dl class="other-profile-dl">
-              <dt>Email</dt>   <dd id="viewEmail">—</dd>
-              <dt>Phone</dt>   <dd id="viewPhone">—</dd>
-              <dt>Role</dt>    <dd id="viewRole">—</dd>
-              <dt>Member since</dt><dd id="viewMemberSince">—</dd>
-            </dl>
-          </section>
+            <p class="text-sm text-on-surface-variant" id="otherProfileEmail"></p>
+            <p class="text-xs text-on-surface-variant/60 mt-0.5" id="otherProfileSince"></p>
+          </div>
         </div>
-        <div class="profile-sidebar-col">
-          <section class="dash-section">
-            <h2 class="dash-section-title">Admin Actions</h2>
-            <div class="profile-quicklinks-list">
-              <a class="profile-quicklink" href="/admin">
-                <span class="material-symbols-outlined">manage_accounts</span>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <div class="lg:col-span-2">
+          <div class="bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+            <h2 class="font-headline font-bold text-sm tracking-widest text-on-surface-variant uppercase mb-5">Contact Information</h2>
+            <dl class="space-y-3" id="otherDl"></dl>
+          </div>
+        </div>
+        <div>
+          <div class="bg-surface-container-lowest rounded-xl p-6 shadow-sm">
+            <h2 class="font-headline font-bold text-sm tracking-widest text-on-surface-variant uppercase mb-4">Admin Actions</h2>
+            <div class="space-y-1">
+              <a href="/admin" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-background transition-all text-sm">
+                <span class="material-symbols-outlined text-primary text-[18px]">manage_accounts</span>
                 Manage Team
               </a>
-              <a class="profile-quicklink" href="/projects">
-                <span class="material-symbols-outlined">folder_open</span>
+              <a href="/projects" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-background transition-all text-sm">
+                <span class="material-symbols-outlined text-primary text-[18px]">folder_open</span>
                 All Projects
               </a>
             </div>
-          </section>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- ── Error state ────────────────────────────────────────────────── -->
-    <div id="profileError" hidden>
-      <div class="empty-state-card">
-        <div class="empty-state-icon">🔍</div>
-        <h2 class="empty-state-title">User not found</h2>
-        <p class="empty-state-body">No profile matches this URL.</p>
-        <a class="primary-btn btn-inline" href="/homepage">Go Home</a>
-      </div>
+    <!-- ── Error ──────────────────────────────────────────────────────── -->
+    <div id="profileError" class="hidden flex flex-col items-center justify-center min-h-[400px] text-center">
+      <span class="material-symbols-outlined text-5xl text-on-surface-variant/40 mb-4">search_off</span>
+      <h2 class="font-headline font-bold text-xl text-on-background mb-2">User Not Found</h2>
+      <p class="text-sm text-on-surface-variant mb-6">No profile matches this URL.</p>
+      <a href="/homepage" class="signature-cta text-on-primary text-sm font-bold px-5 py-2.5 rounded-lg hover:opacity-90 transition-all">Go Home</a>
     </div>
 
-  </main>
+    <!-- Footer -->
+    <footer class="mt-16 pt-8 border-t border-outline-variant/10 flex justify-between items-center opacity-40">
+      <p class="text-xs font-body font-medium">POLIGRID INTERIOR DESIGN SYSTEMS © 2024</p>
+    </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="/client/auth.js"></script>
-  <script src="/client/profile.js"></script>
+  </div>
+</main>
+
+<!-- Mobile bottom nav -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full bg-[#f9f9f9]/90 backdrop-blur-md px-6 py-4 flex justify-around items-center z-50 border-t border-outline-variant/10" id="mobileNav">
+  <!-- Injected by JS -->
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/client/auth.js"></script>
+<script src="/client/studio-utils.js"></script>
+<script src="/client/profile.js"></script>
 </body>
 </html>

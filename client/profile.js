@@ -1,24 +1,25 @@
 // ─── Profile page ─────────────────────────────────────────────────────────────
-// URL: /profile  → own profile
-// URL: /profile/<email-slug>  → another user (admin only)
+// URL: /profile         → own profile
+// URL: /profile/<slug>  → another user (admin only)
 
-let _session, _profile;
+let _profile;
 
 (async () => {
   try {
-    ({ session: _session, profile: _profile } = await AuthClient.requireAuth());
+    ({ profile: _profile } = await AuthClient.requireAuth());
   } catch { return; }
 
-  AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
-  renderNav(_profile);
+  setupHeader(_profile);
+  buildSidebar(_profile);
+  buildMobileNav(_profile);
 
-  const mySlug  = emailToSlug(_profile.email);
+  const mySlug   = nameToSlug(_profile.full_name || _profile.email);
   const pageSlug = getPageSlug();
 
-  if (!pageSlug || pageSlug === mySlug) {
+  if (!pageSlug || pageSlug === nameToSlug(_profile.email.split('@')[0])) {
     await loadOwnProfile();
   } else {
-    if (_profile.role !== "admin") {
+    if (_profile.role !== 'admin') {
       window.location.href = `/profile/${mySlug}`;
       return;
     }
@@ -26,315 +27,335 @@ let _session, _profile;
   }
 })();
 
-// ─── Slug helpers ─────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function nameToSlug(name) {
+  if (!name) return '';
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().trim()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
 
 function emailToSlug(email) {
-  return email.split("@")[0].toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  return (email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '-');
 }
 
 function getPageSlug() {
-  const parts = window.location.pathname.split("/").filter(Boolean);
-  return parts[1] || null; // parts[0] = "profile"
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  return parts[1] || null; // parts[0] = 'profile'
+}
+
+function initials(profile) {
+  return (profile.full_name || profile.email || '?')
+    .split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+}
+
+function roleLabel(role) {
+  return {
+    admin: 'Admin', sales: 'Sales Associate',
+    designer: 'Junior Designer', lead_designer: 'Design Lead', ceo: 'CEO',
+  }[role] || role;
+}
+
+function deptLabel(role) {
+  return {
+    admin:         'Digital Infrastructure & Core Operations',
+    sales:         'Sales & Client Relations',
+    designer:      'Creative & Design Studio',
+    lead_designer: 'Creative & Design Studio',
+    ceo:           'Executive',
+  }[role] || 'Poligrid';
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function setStatus(el, msg, cls) {
+  el.textContent = msg;
+  el.className = [
+    'text-sm font-medium',
+    cls === 'ok'    ? 'text-green-700'  : '',
+    cls === 'error' ? 'text-error'      : 'text-on-surface-variant',
+  ].join(' ').trim();
+}
+
+// ─── Header ───────────────────────────────────────────────────────────────────
+
+function setupHeader(profile) {
+  const slug = emailToSlug(profile.email);
+  document.getElementById('settingsLink').href   = `/profile/${slug}`;
+  document.getElementById('userAvatarLink').href = `/profile/${slug}`;
+  document.getElementById('headerInitials').textContent = initials(profile);
+  document.getElementById('headerRoleLabel').textContent = roleLabel(profile.role);
+  document.getElementById('logoutBtn').addEventListener('click', () => AuthClient.signOut());
+}
+
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+
+const NAV = {
+  admin:         [
+    { href: '/admin_home',  icon: 'dashboard',        label: 'Command Center' },
+    { href: '/projects',    icon: 'architecture',     label: 'All Projects'   },
+    { href: '/index',       icon: 'chair',            label: 'Fitout Planner' },
+    { href: '/designer',    icon: 'edit_square',      label: 'Drawings'       },
+    { href: '/admin',       icon: 'group',            label: 'Team Management'},
+    { href: '/audit',       icon: 'history',          label: 'Audit Logs'     },
+  ],
+  ceo:           [
+    { href: '/admin_home',  icon: 'monitoring',       label: 'Overview'       },
+    { href: '/projects',    icon: 'architecture',     label: 'All Projects'   },
+  ],
+  lead_designer: [
+    { href: '/lead_designer_home', icon: 'dashboard', label: 'Command Center' },
+    { href: '/projects',    icon: 'architecture',     label: 'Projects'       },
+    { href: '/designer',    icon: 'edit_square',      label: 'Detailed Design'},
+  ],
+  designer:      [
+    { href: '/designer_home', icon: 'dashboard',      label: 'My Studio'      },
+    { href: '/projects',    icon: 'architecture',     label: 'Projects'       },
+    { href: '/designer',    icon: 'draw',             label: 'Drawings'       },
+  ],
+  sales:         [
+    { href: '/homepage',    icon: 'dashboard',        label: 'Dashboard'      },
+    { href: '/projects',    icon: 'folder_open',      label: 'Projects'       },
+    { href: '/index',       icon: 'chair',            label: 'Fitout Planner' },
+  ],
+};
+
+function sideLink(l, active) {
+  const cls = active
+    ? 'flex items-center gap-3 px-4 py-3 rounded-lg text-primary bg-primary/5 font-bold transition-all border-r-2 border-primary'
+    : 'flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all';
+  const fill = active ? `style="font-variation-settings:'FILL' 1"` : '';
+  return `<a class="${cls}" href="${l.href}">
+    <span class="material-symbols-outlined text-[20px]" ${fill}>${l.icon}</span>
+    <span class="text-sm">${l.label}</span>
+  </a>`;
+}
+
+function buildSidebar(profile) {
+  const links = NAV[profile.role] || NAV.sales;
+  const nav = document.getElementById('sideNav');
+  nav.innerHTML = links.map(l => sideLink(l, false)).join('');
+  // Add Profile link (active)
+  nav.innerHTML += sideLink({ href: '/profile', icon: 'account_circle', label: 'Profile' }, true);
+}
+
+function buildMobileNav(profile) {
+  const links = (NAV[profile.role] || NAV.sales).slice(0, 3);
+  const nav = document.getElementById('mobileNav');
+  nav.innerHTML = links.map(l =>
+    `<a href="${l.href}" class="flex flex-col items-center gap-1 text-on-surface-variant/60 no-underline">
+      <span class="material-symbols-outlined">${l.icon}</span>
+      <span class="text-[10px] font-bold uppercase tracking-tighter">${l.label.split(' ')[0]}</span>
+    </a>`
+  ).join('');
 }
 
 // ─── Own profile ───────────────────────────────────────────────────────────────
 
 async function loadOwnProfile() {
-  document.getElementById("ownProfileSection").hidden = false;
-  document.getElementById("otherProfileSection").hidden = true;
+  show('ownProfileSection');
 
-  renderProfileHero(_profile);
-  populateForm(_profile);
-  renderAccountDl(_profile);
-  renderQuickLinks(_profile);
+  // Hero
+  const av = document.getElementById('profileAvatar');
+  av.textContent = initials(_profile);
+  document.getElementById('profileName').textContent        = _profile.full_name || _profile.email;
+  document.getElementById('profileEmail').textContent       = _profile.email;
+  document.getElementById('profileMemberSince').textContent = `Member since ${fmtDate(_profile.created_at)}`;
+  document.getElementById('profileRoleBadge').textContent   = roleLabel(_profile.role);
+  document.getElementById('profileIdChip').textContent      = `PG-${(_profile.id || '').slice(0,8).toUpperCase()}`;
 
-  document.getElementById("saveProfileBtn").addEventListener("click", saveProfile);
-  document.getElementById("resetPasswordBtn").addEventListener("click", sendPasswordReset);
+  // Form
+  document.getElementById('fieldName').value  = _profile.full_name || '';
+  document.getElementById('fieldPhone').value = _profile.phone || '';
+  document.getElementById('fieldEmail').value = _profile.email || '';
+  document.getElementById('fieldRole').value  = roleLabel(_profile.role);
+  document.getElementById('fieldDept').value  = deptLabel(_profile.role);
 
-  // Strip non-digits on phone field
-  document.getElementById("fieldPhone").addEventListener("input", e => {
-    e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
+  document.getElementById('fieldPhone').addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 10);
   });
+  document.getElementById('saveProfileBtn').addEventListener('click', saveProfile);
 
-  // Fetch stats for sidebar
+  // Account DL
+  renderAccountDl(_profile);
+
+  // Stats + quick links
   await loadStats(_profile);
-}
-
-function populateForm(profile) {
-  document.getElementById("fieldName").value  = profile.full_name || "";
-  document.getElementById("fieldPhone").value = profile.phone || "";
-  document.getElementById("fieldEmail").value = profile.email || "";
-  document.getElementById("fieldRole").value  = roleLabel(profile.role);
+  renderQuickLinks(_profile);
 }
 
 async function saveProfile() {
-  const btn    = document.getElementById("saveProfileBtn");
-  const status = document.getElementById("saveStatus");
-  const name   = document.getElementById("fieldName").value.trim();
-  const phone  = document.getElementById("fieldPhone").value.trim();
+  const btn    = document.getElementById('saveProfileBtn');
+  const status = document.getElementById('saveStatus');
+  const name   = document.getElementById('fieldName').value.trim();
+  const phone  = document.getElementById('fieldPhone').value.trim();
 
-  if (!name) return setStatus(status, "Name cannot be empty.", "error");
-  if (phone && !/^\d{10}$/.test(phone)) return setStatus(status, "Phone must be 10 digits.", "error");
+  if (!name) return setStatus(status, 'Name cannot be empty.', 'error');
+  if (phone && !/^\d{10}$/.test(phone)) return setStatus(status, 'Phone must be 10 digits.', 'error');
 
   btn.disabled = true;
-  setStatus(status, "Saving…", "");
+  setStatus(status, 'Saving…', '');
 
   try {
-    const headers = await AuthClient.authHeader();
-    const res = await fetch("/api/profile/update", {
-      method: "POST",
-      headers: { ...headers, "Content-Type": "application/json" },
+    const res = await studioFetch('/api/profile/update', {
+      method: 'POST',
       body: JSON.stringify({ full_name: name, phone }),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Failed to save.");
+    if (!res.ok) throw new Error(data.error || 'Failed to save.');
 
     _profile = await AuthClient.getProfile(true);
-    renderProfileHero(_profile);
+
+    // Re-render hero + account
+    document.getElementById('profileName').textContent      = _profile.full_name || _profile.email;
+    document.getElementById('profileAvatar').textContent    = initials(_profile);
+    document.getElementById('headerInitials').textContent   = initials(_profile);
     renderAccountDl(_profile);
-    setStatus(status, "Saved!", "ok");
-    setTimeout(() => setStatus(status, "", ""), 3000);
+
+    setStatus(status, 'Saved!', 'ok');
+    setTimeout(() => setStatus(status, '', ''), 3000);
   } catch (err) {
-    setStatus(status, err.message, "error");
+    setStatus(status, err.message, 'error');
   } finally {
     btn.disabled = false;
   }
 }
 
-async function sendPasswordReset() {
-  const btn    = document.getElementById("resetPasswordBtn");
-  const status = document.getElementById("resetPwStatus");
-  btn.disabled = true;
-  setStatus(status, "Sending…", "");
-
-  try {
-    // Use Supabase client-side to trigger password reset
-    const cfg = await fetch("/api/config").then(r => r.json());
-    const sb  = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
-    const { error } = await sb.auth.resetPasswordForEmail(_profile.email, {
-      redirectTo: `${window.location.origin}/login`,
-    });
-    if (error) throw error;
-    setStatus(status, "Reset link sent to your email.", "ok");
-    setTimeout(() => setStatus(status, "", ""), 5000);
-  } catch (err) {
-    setStatus(status, err.message || "Failed to send.", "error");
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-// ─── Load stats for sidebar ────────────────────────────────────────────────────
+// ─── Stats ────────────────────────────────────────────────────────────────────
 
 async function loadStats(profile) {
-  const statsSection = document.getElementById("statsSection");
-  const statPills    = document.getElementById("statPills");
+  const [projData, taskData] = await Promise.all([
+    studioFetch('/api/project/list').then(r => r.json()).catch(() => ({ projects: [] })),
+    studioFetch('/api/tasks/list?status=pending').then(r => r.json()).catch(() => ({ tasks: [] })),
+  ]);
 
-  try {
-    const headers = await AuthClient.authHeader();
+  const projectCount = (projData.projects || []).length;
+  const taskCount    = (taskData.tasks    || []).length;
 
-    // Fetch projects
-    const projRes = await fetch("/api/project/list", { headers });
-    const projData = projRes.ok ? await projRes.json() : { projects: [] };
-    const projectCount = (projData.projects || []).length;
+  const stats = [
+    { icon: 'architecture', label: 'Assigned Projects', value: projectCount },
+    { icon: 'check_circle', label: 'Open Tasks',        value: taskCount    },
+  ];
 
-    // Fetch open tasks
-    const taskRes = await fetch("/api/tasks/list?status=pending", { headers });
-    const taskData = taskRes.ok ? await taskRes.json() : { tasks: [] };
-    const taskCount = (taskData.tasks || []).length;
+  if (profile.role === 'lead_designer' || profile.role === 'admin') {
+    const drawData = await studioFetch('/api/drawings/pending').then(r => r.json()).catch(() => ({ drawings: [] }));
+    stats.push({ icon: 'rate_review', label: 'Drawings to Review', value: (drawData.drawings || []).length });
+  }
 
-    const pills = [
-      { num: projectCount, label: "Projects" },
-      { num: taskCount,    label: "Open Tasks" },
-    ];
+  const days = profile.created_at
+    ? Math.floor((Date.now() - new Date(profile.created_at)) / 86400000)
+    : null;
+  if (days !== null) stats.push({ icon: 'calendar_today', label: 'Days with Poligrid', value: days });
 
-    // Lead designer: drawings to review
-    if (profile.role === "lead_designer" || profile.role === "admin") {
-      const drawRes  = await fetch("/api/drawings/pending", { headers });
-      const drawData = drawRes.ok ? await drawRes.json() : { drawings: [] };
-      const toReview = (drawData.drawings || []).length;
-      pills.push({ num: toReview, label: "To Review" });
-    }
+  const titles = {
+    sales: 'My Performance', designer: 'My Activity',
+    lead_designer: 'Team Overview', admin: 'Platform Activity', ceo: 'Overview',
+  };
+  document.getElementById('statsTitle').textContent = titles[profile.role] || 'Activity';
 
-    // Days as member
-    if (profile.created_at) {
-      const days = Math.floor((Date.now() - new Date(profile.created_at)) / 86400000);
-      pills.push({ num: days, label: "Days with us" });
-    }
+  document.getElementById('statsList').innerHTML = stats.map(s =>
+    `<div class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-container-low">
+      <span class="material-symbols-outlined text-primary text-[18px]">${s.icon}</span>
+      <div class="flex-1 min-w-0">
+        <p class="text-xs text-on-surface-variant font-medium">${s.label}</p>
+      </div>
+      <span class="font-headline font-extrabold text-lg text-on-background">${s.value}</span>
+    </div>`
+  ).join('');
 
-    statPills.innerHTML = pills.map(p =>
-      `<div class="profile-stat-pill">
-        <div class="stat-num">${p.num}</div>
-        <div class="stat-label">${p.label}</div>
-      </div>`
-    ).join("");
-
-    // Sales: show milestone progress bar towards 5 projects
-    if (profile.role === "sales" && projectCount >= 0) {
-      const target = 10;
-      const pct    = Math.min(100, Math.round((projectCount / target) * 100));
-      document.getElementById("milestoneBlock").hidden = false;
-      document.getElementById("milestoneLabel").textContent   = "Projects Milestone";
-      document.getElementById("milestonePct").textContent     = `${pct}%`;
-      document.getElementById("milestoneFill").style.width    = `${pct}%`;
-      const remaining = Math.max(0, target - projectCount);
-      document.getElementById("milestoneCaption").textContent =
-        remaining > 0
-          ? `${remaining} more project${remaining !== 1 ? "s" : ""} to reach your next milestone.`
-          : "Milestone reached!";
-    }
-
-    document.getElementById("statsTitle").textContent = roleStatsTitle(profile.role);
-    statsSection.hidden = false;
-  } catch {
-    // Stats are non-critical — silently skip
+  // Sales: milestone bar toward 10 projects
+  if (profile.role === 'sales') {
+    const target = 10;
+    const pct    = Math.min(100, Math.round((projectCount / target) * 100));
+    const remaining = Math.max(0, target - projectCount);
+    document.getElementById('milestoneBlock').classList.remove('hidden');
+    document.getElementById('milestonePct').textContent     = `${pct}%`;
+    document.getElementById('milestoneFill').style.width    = `${pct}%`;
+    document.getElementById('milestoneCaption').textContent = remaining > 0
+      ? `${remaining} more project${remaining !== 1 ? 's' : ''} to reach your next milestone`
+      : 'Milestone reached!';
   }
 }
 
-function roleStatsTitle(role) {
-  return {
-    sales:         "My Performance",
-    designer:      "My Activity",
-    lead_designer: "Team Overview",
-    admin:         "Platform Activity",
-    ceo:           "Overview",
-  }[role] || "Activity";
-}
-
-// ─── Quick links ───────────────────────────────────────────────────────────────
+// ─── Quick links ──────────────────────────────────────────────────────────────
 
 function renderQuickLinks(profile) {
-  const container = document.getElementById("quickLinksList");
-  const links = buildQuickLinks(profile.role);
-  container.innerHTML = links.map(l =>
-    `<a class="profile-quicklink" href="${l.href}">
-      <span class="material-symbols-outlined">${l.icon}</span>
+  const allLinks = [
+    { roles: ['sales','lead_designer','admin'],     href: '/index',    icon: 'chair',           label: 'Fitout Planner'   },
+    { roles: ['designer','lead_designer','admin'],  href: '/designer', icon: 'edit_square',     label: 'Drawings Manager' },
+    { roles: ['lead_designer','admin'],             href: '/designer', icon: 'rate_review',     label: 'Review Drawings'  },
+    { roles: ['admin'],                             href: '/admin',    icon: 'manage_accounts', label: 'Team Management'  },
+    { roles: ['admin','ceo'],                       href: '/audit',    icon: 'history',         label: 'Audit Logs'       },
+    { roles: ['sales','admin','lead_designer'],     href: '/projects', icon: 'folder_open',     label: 'All Projects'     },
+    { roles: ['designer'],                          href: '/projects', icon: 'folder_open',     label: 'My Projects'      },
+  ];
+  const links = allLinks.filter(l => l.roles.includes(profile.role));
+  document.getElementById('quickLinksList').innerHTML = links.map(l =>
+    `<a href="${l.href}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-background transition-all text-sm">
+      <span class="material-symbols-outlined text-primary text-[18px]">${l.icon}</span>
       ${l.label}
     </a>`
-  ).join("");
+  ).join('');
 }
 
-function buildQuickLinks(role) {
-  const all = [
-    { roles: ["sales","lead_designer","admin"],           href: "/homepage",  icon: "home",             label: "Dashboard" },
-    { roles: ["sales","lead_designer","admin"],           href: "/projects",  icon: "folder_open",      label: "Projects" },
-    { roles: ["sales","lead_designer","admin"],           href: "/index",     icon: "architecture",     label: "Fitout Planner" },
-    { roles: ["designer","lead_designer","admin"],        href: "/designer",  icon: "draw",             label: "Drawings Manager" },
-    { roles: ["lead_designer","admin"],                   href: "/designer",  icon: "rate_review",      label: "Review Drawings" },
-    { roles: ["admin"],                                   href: "/admin",     icon: "manage_accounts",  label: "Team Admin" },
-    { roles: ["admin","ceo"],                             href: "/ceo",       icon: "monitoring",       label: "CEO Dashboard" },
-    { roles: ["ceo"],                                     href: "/ceo",       icon: "monitoring",       label: "Dashboard" },
-  ];
-  return all.filter(l => l.roles.includes(role));
-}
-
-// ─── Account details DL ────────────────────────────────────────────────────────
+// ─── Account DL ───────────────────────────────────────────────────────────────
 
 function renderAccountDl(profile) {
-  const dl = document.getElementById("accountDl");
   const rows = [
-    { label: "Member since", value: fmtDate(profile.created_at) },
-    { label: "Email",        value: profile.email },
-    { label: "Role",         value: roleLabel(profile.role) },
+    { label: 'Member since', value: fmtDate(profile.created_at) },
+    { label: 'Email',        value: profile.email },
+    { label: 'Role',         value: roleLabel(profile.role) },
+    { label: 'Department',   value: deptLabel(profile.role) },
   ];
-  if (profile.phone) rows.push({ label: "Phone", value: profile.phone });
-  dl.innerHTML = rows.map(r =>
-    `<div class="account-dl-row"><dt>${r.label}</dt><dd>${r.value}</dd></div>`
-  ).join("");
+  if (profile.phone) rows.push({ label: 'Phone', value: profile.phone });
+  document.getElementById('accountDl').innerHTML = rows.map(r =>
+    `<div class="flex justify-between items-baseline gap-4 py-2 border-b border-outline-variant/10 last:border-0">
+      <dt class="text-xs font-semibold text-on-surface-variant uppercase tracking-wide shrink-0">${r.label}</dt>
+      <dd class="text-sm text-on-background text-right">${r.value}</dd>
+    </div>`
+  ).join('');
 }
 
-// ─── Other user's profile (admin view) ───────────────────────────────────────
+// ─── Other user (admin read-only) ─────────────────────────────────────────────
 
 async function loadOtherProfile(slug) {
-  document.getElementById("ownProfileSection").hidden = true;
-  document.getElementById("otherProfileSection").hidden = false;
+  show('otherProfileSection');
 
   try {
-    const headers = await AuthClient.authHeader();
-    const res = await fetch(`/api/profile/by-slug?slug=${encodeURIComponent(slug)}`, { headers });
-    if (res.status === 404) {
-      document.getElementById("otherProfileSection").hidden = true;
-      document.getElementById("profileError").hidden = false;
-      return;
-    }
+    const res = await studioFetch(`/api/profile/by-slug?slug=${encodeURIComponent(slug)}`);
+    if (res.status === 404) { show('profileError'); hide('otherProfileSection'); return; }
     const { profile } = await res.json();
 
-    renderProfileHero(profile);
+    const av = document.getElementById('otherProfileAvatar');
+    av.textContent = initials(profile);
+    document.getElementById('otherProfileName').textContent       = profile.full_name || profile.email;
+    document.getElementById('otherProfileEmail').textContent      = profile.email;
+    document.getElementById('otherProfileSince').textContent      = `Member since ${fmtDate(profile.created_at)}`;
+    document.getElementById('otherProfileRoleBadge').textContent  = roleLabel(profile.role);
 
-    // Show admin badge in hero
-    const heroActions = document.getElementById("heroActions");
-    const badge       = document.getElementById("heroAdminBadge");
-    badge.textContent = "Admin view";
-    heroActions.hidden = false;
-
-    document.getElementById("viewEmail").textContent       = profile.email || "—";
-    document.getElementById("viewPhone").textContent       = profile.phone || "Not set";
-    document.getElementById("viewRole").textContent        = roleLabel(profile.role);
-    document.getElementById("viewMemberSince").textContent = fmtDate(profile.created_at);
+    const rows = [
+      { label: 'Email',        value: profile.email },
+      { label: 'Phone',        value: profile.phone || 'Not set' },
+      { label: 'Role',         value: roleLabel(profile.role) },
+      { label: 'Department',   value: deptLabel(profile.role) },
+      { label: 'Member since', value: fmtDate(profile.created_at) },
+    ];
+    document.getElementById('otherDl').innerHTML = rows.map(r =>
+      `<div class="flex justify-between items-baseline gap-4 py-2 border-b border-outline-variant/10 last:border-0">
+        <dt class="text-xs font-semibold text-on-surface-variant uppercase tracking-wide shrink-0">${r.label}</dt>
+        <dd class="text-sm text-on-background text-right">${r.value}</dd>
+      </div>`
+    ).join('');
   } catch {
-    document.getElementById("otherProfileSection").hidden = true;
-    document.getElementById("profileError").hidden = false;
+    show('profileError'); hide('otherProfileSection');
   }
 }
 
-// ─── Hero ─────────────────────────────────────────────────────────────────────
+// ─── Visibility helpers ───────────────────────────────────────────────────────
 
-function renderProfileHero(profile) {
-  const initials = (profile.full_name || profile.email || "?")
-    .split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join("");
-
-  document.getElementById("profileAvatar").textContent  = initials;
-  document.getElementById("profileName").textContent    = profile.full_name || profile.email;
-  document.getElementById("profileEmail").textContent   = profile.email;
-  document.getElementById("profileMemberSince").textContent = `Member since ${fmtDate(profile.created_at)}`;
-
-  const badge = document.getElementById("profileRoleBadge");
-  badge.textContent = roleLabel(profile.role);
-  badge.className   = `profile-role-badge role-${profile.role}`;
-}
-
-// ─── Nav ──────────────────────────────────────────────────────────────────────
-
-function renderNav(profile) {
-  const nav = document.getElementById("dashNav");
-  const links = [
-    { href: "/homepage", label: "Home" },
-    { href: "/projects", label: "Projects" },
-  ];
-  if (["sales", "admin", "lead_designer"].includes(profile.role))
-    links.push({ href: "/projects", label: "Fitout Planner" });
-  if (["designer", "lead_designer", "admin"].includes(profile.role))
-    links.push({ href: "/designer", label: "Drawings" });
-  if (profile.role === "admin") {
-    links.push({ href: "/admin", label: "Admin" });
-    links.push({ href: "/ceo",   label: "Dashboard" });
-  }
-  if (profile.role === "ceo")
-    links.push({ href: "/ceo", label: "Dashboard" });
-
-  nav.innerHTML = links.map(l =>
-    `<a class="dash-nav-link" href="${l.href}">${l.label}</a>`
-  ).join("");
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function setStatus(el, msg, cls) {
-  el.textContent = msg;
-  el.className   = ["save-status", cls].filter(Boolean).join(" ");
-}
-
-function roleLabel(role) {
-  return {
-    admin:         "Admin",
-    sales:         "Sales Associate",
-    designer:      "Junior Designer",
-    lead_designer: "Design Lead",
-    ceo:           "CEO",
-  }[role] || role;
-}
-
-function fmtDate(iso) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" });
-}
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }

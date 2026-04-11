@@ -269,8 +269,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname.startsWith("/sales/")) {
       return serveStatic("/sales.html", false, res);
     }
-    // Serve profile page for /profile/:slug paths
-    if (req.method === "GET" && url.pathname.startsWith("/profile/")) {
+    // Serve profile page for /profile and /profile/:slug paths
+    if (req.method === "GET" && (url.pathname === "/profile" || url.pathname.startsWith("/profile/"))) {
       return serveStatic("/profile.html", false, res);
     }
     // Serve lead designer home
