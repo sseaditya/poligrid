@@ -9,9 +9,10 @@ let _profile;
     ({ profile: _profile } = await AuthClient.requireAuth());
   } catch { return; }
 
-  setupHeader(_profile);
-  buildSidebar(_profile);
-  buildMobileNav(_profile);
+  // Use the shared nav utility (same as projects, audit, etc.)
+  AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
+  AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
+  AppNav.setupUserSection(_profile);
 
   const emailSlug = emailToSlug(_profile.email);
   const pageSlug  = getPageSlug();
@@ -79,79 +80,6 @@ function setStatus(el, msg, cls) {
     cls === 'ok'    ? 'text-green-700'  : '',
     cls === 'error' ? 'text-error'      : 'text-on-surface-variant',
   ].join(' ').trim();
-}
-
-// ─── Header ───────────────────────────────────────────────────────────────────
-
-function setupHeader(profile) {
-  const slug = emailToSlug(profile.email);
-  document.getElementById('settingsLink').href   = `/profile/${slug}`;
-  document.getElementById('userAvatarLink').href = `/profile/${slug}`;
-  document.getElementById('headerInitials').textContent = initials(profile);
-  document.getElementById('headerRoleLabel').textContent = roleLabel(profile.role);
-  document.getElementById('logoutBtn').addEventListener('click', () => AuthClient.signOut());
-}
-
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
-
-const NAV = {
-  admin:         [
-    { href: '/admin_home',  icon: 'dashboard',        label: 'Command Center' },
-    { href: '/projects',    icon: 'architecture',     label: 'All Projects'   },
-    { href: '/index',       icon: 'chair',            label: 'Fitout Planner' },
-    { href: '/designer',    icon: 'edit_square',      label: 'Drawings'       },
-    { href: '/admin',       icon: 'group',            label: 'Team Management'},
-    { href: '/audit',       icon: 'history',          label: 'Audit Logs'     },
-  ],
-  ceo:           [
-    { href: '/admin_home',  icon: 'monitoring',       label: 'Overview'       },
-    { href: '/projects',    icon: 'architecture',     label: 'All Projects'   },
-  ],
-  lead_designer: [
-    { href: '/lead_designer_home', icon: 'dashboard', label: 'Command Center' },
-    { href: '/projects',    icon: 'architecture',     label: 'Projects'       },
-    { href: '/designer',    icon: 'edit_square',      label: 'Detailed Design'},
-  ],
-  designer:      [
-    { href: '/designer_home', icon: 'dashboard',      label: 'My Studio'      },
-    { href: '/projects',    icon: 'architecture',     label: 'Projects'       },
-    { href: '/designer',    icon: 'draw',             label: 'Drawings'       },
-  ],
-  sales:         [
-    { href: '/homepage',    icon: 'dashboard',        label: 'Dashboard'      },
-    { href: '/projects',    icon: 'folder_open',      label: 'Projects'       },
-    { href: '/index',       icon: 'chair',            label: 'Fitout Planner' },
-  ],
-};
-
-function sideLink(l, active) {
-  const cls = active
-    ? 'flex items-center gap-3 px-4 py-3 rounded-lg text-primary bg-primary/5 font-bold transition-all border-r-2 border-primary'
-    : 'flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-low transition-all';
-  const fill = active ? `style="font-variation-settings:'FILL' 1"` : '';
-  return `<a class="${cls}" href="${l.href}">
-    <span class="material-symbols-outlined text-[20px]" ${fill}>${l.icon}</span>
-    <span class="text-sm">${l.label}</span>
-  </a>`;
-}
-
-function buildSidebar(profile) {
-  const links = NAV[profile.role] || NAV.sales;
-  const nav = document.getElementById('sideNav');
-  nav.innerHTML = links.map(l => sideLink(l, false)).join('');
-  // Add Profile link (active)
-  nav.innerHTML += sideLink({ href: '/profile', icon: 'account_circle', label: 'Profile' }, true);
-}
-
-function buildMobileNav(profile) {
-  const links = (NAV[profile.role] || NAV.sales).slice(0, 3);
-  const nav = document.getElementById('mobileNav');
-  nav.innerHTML = links.map(l =>
-    `<a href="${l.href}" class="flex flex-col items-center gap-1 text-on-surface-variant/60 no-underline">
-      <span class="material-symbols-outlined">${l.icon}</span>
-      <span class="text-[10px] font-bold uppercase tracking-tighter">${l.label.split(' ')[0]}</span>
-    </a>`
-  ).join('');
 }
 
 // ─── Own profile ───────────────────────────────────────────────────────────────

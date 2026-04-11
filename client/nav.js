@@ -97,7 +97,7 @@ const AppNav = (() => {
     const slug = (profile.email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '-');
     const profileUrl = `/profile/${slug}`;
 
-    for (const id of ['settingsLink', 'userAvatarLink']) {
+    for (const id of ['settingsLink', 'userAvatarLink', 'topbarProfileLink', 'sidebarProfileLink']) {
       const el = document.getElementById(id);
       if (el) el.href = profileUrl;
     }

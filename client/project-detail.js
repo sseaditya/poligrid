@@ -60,8 +60,10 @@ const can = {
   _projectId = new URLSearchParams(location.search).get("id");
   if (!_projectId) { window.location.href = "/projects"; return; }
 
-  AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
-  renderTopNav();
+  // Render the shared global sidebar (same as projects, audit, team pages)
+  AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
+  AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
+  AppNav.setupUserSection(_profile);
 
   await loadAll();
 
@@ -108,6 +110,15 @@ async function loadAll() {
     if (daRes?.ok)       { const dd = await daRes.json();       _drawingAssignments = dd.assignments || []; }
 
     document.title = `Poligrid — ${_project.name || "Project"}`;
+    // Update top bar title with project name
+    const topBarTitle = document.getElementById('topBarTitle');
+    if (topBarTitle) {
+      topBarTitle.innerHTML = `
+        <a href="/projects" class="text-on-surface-variant hover:text-on-surface transition-colors text-sm font-medium">Projects</a>
+        <span class="material-symbols-outlined text-on-surface-variant/40 text-[16px]">chevron_right</span>
+        <span class="font-headline font-extrabold tracking-tighter text-on-background text-base">${escHtml(_project.name || 'Project')}</span>
+      `;
+    }
     renderSidebar(_project);
     render(data);
   } catch (err) {
@@ -116,28 +127,6 @@ async function loadAll() {
   }
 }
 
-// ─── Top nav ──────────────────────────────────────────────────────────────────
-function renderTopNav() {
-  const nav = document.getElementById("dashNav");
-  const homeHref = {
-    admin:         "/admin_home",
-    ceo:           "/ceo",
-    designer:      "/designer_home",
-    lead_designer: "/lead_designer_home",
-    sales:         "/projects",
-  }[_profile.role] || "/homepage";
-  const links = [
-    { href: homeHref,    label: "Home" },
-    { href: "/projects", label: "Projects" },
-  ];
-  if (["admin", "lead_designer"].includes(_profile.role)) links.push({ href: "/audit", label: "Audit Logs" });
-  if (is("admin")) links.push({ href: "/admin", label: "Admin" });
-  if (is("ceo", "admin")) links.push({ href: "/ceo", label: "Dashboard" });
-
-  nav.innerHTML = links.map(l =>
-    `<a class="dash-nav-link" href="${l.href}">${l.label}</a>`
-  ).join("");
-}
 
 // ─── Left sidebar ─────────────────────────────────────────────────────────────
 function renderSidebar(project) {
