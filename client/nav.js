@@ -35,11 +35,6 @@ const AppNav = (() => {
       links.push({ href: '/projects', icon: 'architecture', label: 'Projects' });
     }
 
-    // Fitout planner
-    if (['sales', 'lead_designer', 'admin'].includes(role)) {
-      links.push({ href: '/index', icon: 'space_dashboard', label: 'Fitout Planner' });
-    }
-
     // Drawings
     if (['designer', 'lead_designer', 'admin'].includes(role)) {
       links.push({ href: '/designer', icon: 'edit_square', label: 'Drawings' });

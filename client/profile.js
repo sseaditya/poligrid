@@ -111,10 +111,10 @@ async function loadOwnProfile() {
   // Account DL
   renderAccountDl(_profile);
 
-  // Stats + quick links
+  // Stats panel (project/task counts etc.)
   await loadStats(_profile);
-  renderQuickLinks(_profile);
 }
+
 
 async function saveProfile() {
   const btn    = document.getElementById('saveProfileBtn');
@@ -141,7 +141,7 @@ async function saveProfile() {
     // Re-render hero + account
     document.getElementById('profileName').textContent      = _profile.full_name || _profile.email;
     document.getElementById('profileAvatar').textContent    = initials(_profile);
-    document.getElementById('headerInitials').textContent   = initials(_profile);
+
     renderAccountDl(_profile);
 
     setStatus(status, 'Saved!', 'ok');
@@ -209,26 +209,7 @@ async function loadStats(profile) {
   }
 }
 
-// ─── Quick links ──────────────────────────────────────────────────────────────
 
-function renderQuickLinks(profile) {
-  const allLinks = [
-    { roles: ['sales','lead_designer','admin'],     href: '/index',    icon: 'chair',           label: 'Fitout Planner'   },
-    { roles: ['designer','lead_designer','admin'],  href: '/designer', icon: 'edit_square',     label: 'Drawings Manager' },
-    { roles: ['lead_designer','admin'],             href: '/designer', icon: 'rate_review',     label: 'Review Drawings'  },
-    { roles: ['admin'],                             href: '/admin',    icon: 'manage_accounts', label: 'Team Management'  },
-    { roles: ['admin','ceo'],                       href: '/audit',    icon: 'history',         label: 'Audit Logs'       },
-    { roles: ['sales','admin','lead_designer'],     href: '/projects', icon: 'folder_open',     label: 'All Projects'     },
-    { roles: ['designer'],                          href: '/projects', icon: 'folder_open',     label: 'My Projects'      },
-  ];
-  const links = allLinks.filter(l => l.roles.includes(profile.role));
-  document.getElementById('quickLinksList').innerHTML = links.map(l =>
-    `<a href="${l.href}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-background transition-all text-sm">
-      <span class="material-symbols-outlined text-primary text-[18px]">${l.icon}</span>
-      ${l.label}
-    </a>`
-  ).join('');
-}
 
 // ─── Account DL ───────────────────────────────────────────────────────────────
 
