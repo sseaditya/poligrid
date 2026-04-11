@@ -5,6 +5,152 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Poligrid — Profile</title>
   <link rel="stylesheet" href="/theme.css" />
+  <style>
+    /* ── Profile page layout ─────────────────────────────────────────── */
+    .profile-page { max-width: 1120px; }
+
+    /* Hero card */
+    .profile-hero-card {
+      background: var(--color-surface-container-lowest);
+      border: 1px solid var(--color-outline-variant);
+      border-radius: var(--radius-xl); overflow: hidden;
+      box-shadow: var(--shadow-ambient); margin-bottom: 24px;
+    }
+    .profile-hero-cover {
+      height: 96px;
+      background: linear-gradient(135deg, #526258 0%, #3a4d41 60%, #2d3e34 100%);
+      position: relative;
+    }
+    .profile-hero-cover::after {
+      content: ""; position: absolute; inset: 0;
+      background: repeating-linear-gradient(
+        45deg,
+        rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px,
+        transparent 1px, transparent 20px
+      );
+    }
+    .profile-hero-body {
+      display: flex; align-items: flex-end; gap: 20px;
+      padding: 0 28px 24px; flex-wrap: wrap;
+    }
+    .profile-avatar-lg {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: var(--gradient-primary);
+      border: 4px solid var(--color-surface-container-lowest);
+      color: var(--color-on-primary);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; font-weight: 800; font-family: var(--font-headline);
+      flex-shrink: 0; margin-top: -40px; box-shadow: var(--shadow-float);
+    }
+    .profile-hero-info { flex: 1; min-width: 200px; padding-top: 10px; }
+    .profile-hero-name-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+    .profile-hero-name {
+      font-family: var(--font-headline); font-size: 22px; font-weight: 800;
+      color: var(--color-on-surface); line-height: 1.1;
+    }
+    .profile-hero-sub { font-size: 13px; color: var(--color-on-surface-variant); }
+    .profile-hero-actions { display: flex; gap: 8px; padding-top: 10px; align-self: flex-end; margin-left: auto; }
+
+    /* Two-column layout below hero */
+    .profile-layout {
+      display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start;
+    }
+    @media (max-width: 900px) { .profile-layout { grid-template-columns: 1fr; } }
+
+    .profile-main-col { display: flex; flex-direction: column; gap: 20px; }
+    .profile-sidebar-col { display: flex; flex-direction: column; gap: 20px; }
+
+    /* Stat pills */
+    .profile-stat-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .profile-stat-pill {
+      flex: 1; min-width: 90px; text-align: center;
+      background: var(--color-surface-container-low);
+      border-radius: var(--radius-lg); padding: 14px 10px;
+    }
+    .profile-stat-pill .stat-num { font-size: 26px; }
+    .profile-stat-pill .stat-label { font-size: 11px; margin-top: 2px; }
+
+    /* Progress bar (Sales milestone) */
+    .profile-milestone { margin-top: 4px; }
+    .profile-milestone-label {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 12px; color: var(--color-on-surface-variant); margin-bottom: 6px;
+    }
+    .profile-milestone-bar {
+      height: 6px; background: var(--color-surface-container-high);
+      border-radius: var(--radius-full); overflow: hidden;
+    }
+    .profile-milestone-fill {
+      height: 100%; border-radius: var(--radius-full);
+      background: var(--gradient-primary); transition: width 0.4s ease;
+    }
+    .profile-milestone-caption { font-size: 11px; color: var(--color-on-surface-variant); margin-top: 6px; }
+
+    /* Quick links */
+    .profile-quicklinks-list { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+    .profile-quicklink {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: var(--radius-lg);
+      color: var(--color-on-surface-variant); font-size: 13px; font-weight: 500;
+      text-decoration: none; transition: all 0.15s;
+    }
+    .profile-quicklink:hover {
+      background: var(--color-surface-container-low);
+      color: var(--color-on-surface);
+    }
+    .profile-quicklink .material-symbols-outlined {
+      font-size: 18px; color: var(--color-primary); flex-shrink: 0;
+    }
+
+    /* Password reset row */
+    .security-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      flex-wrap: wrap;
+    }
+    .security-row-info { display: flex; flex-direction: column; gap: 2px; }
+    .security-row-title { font-size: 14px; font-weight: 600; color: var(--color-on-surface); }
+    .security-row-sub   { font-size: 12px; color: var(--color-on-surface-variant); }
+
+    /* Account DL */
+    .account-dl { display: flex; flex-direction: column; gap: 10px; }
+    .account-dl-row { display: flex; justify-content: space-between; font-size: 13px; gap: 8px; }
+    .account-dl-row dt { color: var(--color-on-surface-variant); font-weight: 500; flex-shrink: 0; }
+    .account-dl-row dd { color: var(--color-on-surface); text-align: right; word-break: break-all; }
+
+    /* Read-only other profile */
+    .other-profile-dl { display: grid; grid-template-columns: 130px 1fr; gap: 10px 16px; font-size: 14px; }
+    .other-profile-dl dt { color: var(--color-on-surface-variant); font-weight: 500; }
+    .other-profile-dl dd { color: var(--color-on-surface); }
+
+    /* inline save status */
+    .save-status { font-size: 12px; font-weight: 500; }
+    .save-status.ok    { color: var(--success); }
+    .save-status.error { color: var(--color-error); }
+
+    /* reset-pw feedback */
+    #resetPwStatus { font-size: 12px; font-weight: 500; }
+    #resetPwStatus.ok    { color: var(--success); }
+    #resetPwStatus.error { color: var(--color-error); }
+
+    /* btn-inline: auto-width primary */
+    .btn-inline {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; font-size: 13px; font-weight: 700;
+      background: var(--gradient-primary); color: var(--color-on-primary);
+      border: none; border-radius: var(--radius-lg); cursor: pointer;
+      font-family: var(--font-body); transition: opacity 0.15s, transform 0.1s;
+      letter-spacing: 0.04em; white-space: nowrap;
+    }
+    .btn-inline:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+    .btn-inline:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    /* Form two-col on wider screens */
+    .profile-form-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+    .profile-form-grid .field-full { grid-column: 1 / -1; }
+    @media (max-width: 600px) { .profile-form-grid { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body class="dash-body">
 
@@ -17,82 +163,171 @@
     <div class="top-bar-right" id="userChipWrap"></div>
   </header>
 
-  <main class="dash-main">
+  <main class="dash-main profile-page">
 
-    <!-- Profile header -->
-    <div class="profile-header">
-      <div class="profile-avatar" id="profileAvatar"></div>
-      <div class="profile-header-info">
-        <h1 class="profile-name" id="profileName">—</h1>
-        <div class="profile-meta-row">
-          <span class="profile-role-badge" id="profileRoleBadge"></span>
-          <span class="profile-email" id="profileEmail"></span>
+    <!-- ── Hero card ─────────────────────────────────────────────── -->
+    <div class="profile-hero-card" id="profileHeroCard">
+      <div class="profile-hero-cover"></div>
+      <div class="profile-hero-body">
+        <div class="profile-avatar-lg" id="profileAvatar"></div>
+        <div class="profile-hero-info">
+          <div class="profile-hero-name-row">
+            <h1 class="profile-hero-name" id="profileName">—</h1>
+            <span class="profile-role-badge" id="profileRoleBadge"></span>
+          </div>
+          <p class="profile-hero-sub" id="profileEmail"></p>
+          <p class="profile-hero-sub" id="profileMemberSince" style="margin-top:2px;font-size:11px;"></p>
         </div>
-        <p class="profile-member-since" id="profileMemberSince"></p>
+        <div class="profile-hero-actions" id="heroActions" hidden>
+          <!-- shown for other profiles (admin view) -->
+          <span class="ghost-btn" style="font-size:12px;padding:6px 12px;" id="heroAdminBadge"></span>
+        </div>
       </div>
     </div>
 
-    <!-- Viewing own profile: editable form -->
-    <div id="ownProfileSection">
-      <section class="dash-section profile-card">
-        <div class="dash-section-head">
-          <div>
-            <h2 class="dash-section-title">Your Information</h2>
-            <p class="dash-section-hint">Update your display name and contact details.</p>
-          </div>
+    <!-- ── Own profile ─────────────────────────────────────────────── -->
+    <div id="ownProfileSection" hidden>
+      <div class="profile-layout">
+
+        <!-- LEFT col -->
+        <div class="profile-main-col">
+
+          <!-- Personal info -->
+          <section class="dash-section">
+            <div class="dash-section-head">
+              <div>
+                <h2 class="dash-section-title">Personal Information</h2>
+                <p class="dash-section-hint">Update your display name and contact details.</p>
+              </div>
+            </div>
+
+            <div class="profile-form-grid">
+              <label class="field-label">
+                Full Name
+                <input type="text" class="ctx-input" id="fieldName" placeholder="Your full name" />
+              </label>
+
+              <label class="field-label">
+                Phone Number
+                <input type="tel" class="ctx-input" id="fieldPhone" placeholder="10-digit mobile" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" />
+              </label>
+
+              <label class="field-label field-full">
+                Email
+                <input type="email" class="ctx-input" id="fieldEmail" disabled style="opacity:0.6;" />
+              </label>
+
+              <label class="field-label">
+                Role
+                <input type="text" class="ctx-input" id="fieldRole" disabled style="opacity:0.6;" />
+              </label>
+
+              <div class="field-full" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:4px;">
+                <button class="btn-inline" id="saveProfileBtn">Save Changes</button>
+                <span class="save-status" id="saveStatus"></span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Security -->
+          <section class="dash-section">
+            <div class="dash-section-head">
+              <div>
+                <h2 class="dash-section-title">Security</h2>
+                <p class="dash-section-hint">Manage your login credentials.</p>
+              </div>
+            </div>
+            <div class="security-row">
+              <div class="security-row-info">
+                <span class="security-row-title">Password</span>
+                <span class="security-row-sub">Send a reset link to your email address.</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <button class="ghost-btn btn-sm" id="resetPasswordBtn">Send Reset Email</button>
+                <span id="resetPwStatus"></span>
+              </div>
+            </div>
+          </section>
+
         </div>
 
-        <div class="profile-form">
-          <label class="field-label">
-            Full Name
-            <input type="text" class="ctx-input" id="fieldName" placeholder="Your full name" />
-          </label>
+        <!-- RIGHT sidebar -->
+        <div class="profile-sidebar-col">
 
-          <label class="field-label">
-            Phone Number
-            <input type="tel" class="ctx-input" id="fieldPhone" placeholder="9876543210" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" />
-          </label>
+          <!-- Stats -->
+          <section class="dash-section" id="statsSection" hidden>
+            <h2 class="dash-section-title" id="statsTitle">Activity</h2>
+            <div class="profile-stat-row" id="statPills"></div>
+            <!-- Sales: milestone bar -->
+            <div class="profile-milestone" id="milestoneBlock" hidden>
+              <div class="profile-milestone-label">
+                <span id="milestoneLabel">Progress</span>
+                <span id="milestonePct"></span>
+              </div>
+              <div class="profile-milestone-bar">
+                <div class="profile-milestone-fill" id="milestoneFill" style="width:0%"></div>
+              </div>
+              <p class="profile-milestone-caption" id="milestoneCaption"></p>
+            </div>
+          </section>
 
-          <label class="field-label">
-            Email
-            <input type="email" class="ctx-input" id="fieldEmail" disabled />
-          </label>
+          <!-- Quick links -->
+          <section class="dash-section" id="quickLinksSection">
+            <h2 class="dash-section-title">Quick Links</h2>
+            <div class="profile-quicklinks-list" id="quickLinksList"></div>
+          </section>
 
-          <label class="field-label">
-            Role
-            <input type="text" class="ctx-input" id="fieldRole" disabled />
-          </label>
+          <!-- Account details -->
+          <section class="dash-section">
+            <h2 class="dash-section-title">Account Details</h2>
+            <dl class="account-dl" id="accountDl"></dl>
+          </section>
 
-          <div class="profile-form-actions">
-            <button class="primary-btn" id="saveProfileBtn">Save Changes</button>
-            <span class="profile-save-status" id="saveStatus"></span>
-          </div>
         </div>
-      </section>
+      </div>
     </div>
 
-    <!-- Viewing another user's profile: read-only -->
+    <!-- ── Other user's profile (admin read-only view) ───────────────── -->
     <div id="otherProfileSection" hidden>
-      <section class="dash-section profile-card">
-        <div class="dash-section-head">
-          <h2 class="dash-section-title">Contact</h2>
+      <div class="profile-layout">
+        <div class="profile-main-col">
+          <section class="dash-section">
+            <div class="dash-section-head">
+              <h2 class="dash-section-title">Contact Information</h2>
+            </div>
+            <dl class="other-profile-dl">
+              <dt>Email</dt>   <dd id="viewEmail">—</dd>
+              <dt>Phone</dt>   <dd id="viewPhone">—</dd>
+              <dt>Role</dt>    <dd id="viewRole">—</dd>
+              <dt>Member since</dt><dd id="viewMemberSince">—</dd>
+            </dl>
+          </section>
         </div>
-        <dl class="profile-dl">
-          <dt>Email</dt><dd id="viewEmail">—</dd>
-          <dt>Phone</dt><dd id="viewPhone">—</dd>
-          <dt>Role</dt><dd id="viewRole">—</dd>
-          <dt>Member since</dt><dd id="viewMemberSince">—</dd>
-        </dl>
-      </section>
+        <div class="profile-sidebar-col">
+          <section class="dash-section">
+            <h2 class="dash-section-title">Admin Actions</h2>
+            <div class="profile-quicklinks-list">
+              <a class="profile-quicklink" href="/admin">
+                <span class="material-symbols-outlined">manage_accounts</span>
+                Manage Team
+              </a>
+              <a class="profile-quicklink" href="/projects">
+                <span class="material-symbols-outlined">folder_open</span>
+                All Projects
+              </a>
+            </div>
+          </section>
+        </div>
+      </div>
     </div>
 
-    <!-- Error state -->
+    <!-- ── Error state ────────────────────────────────────────────────── -->
     <div id="profileError" hidden>
       <div class="empty-state-card">
         <div class="empty-state-icon">🔍</div>
         <h2 class="empty-state-title">User not found</h2>
         <p class="empty-state-body">No profile matches this URL.</p>
-        <a class="primary-btn" href="/homepage">Go Home</a>
+        <a class="primary-btn btn-inline" href="/homepage">Go Home</a>
       </div>
     </div>
 
