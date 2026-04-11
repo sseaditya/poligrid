@@ -9,14 +9,22 @@ function hideProjectPicker() {
   el("projectPicker").classList.add("hidden");
 }
 
+async function fetchJsonWithAuth(url, options = {}) {
+  const authHeaders = await AuthClient.authHeader();
+  const headers = { ...(options.headers || {}), ...authHeaders };
+  const res = await fetch(url, { ...options, headers });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json.error) {
+    throw new Error(json.error || `Request failed (${res.status})`);
+  }
+  return json;
+}
+
 async function loadProjectList() {
   const list = el("projectPickerList");
   list.innerHTML = '<div class="proj-loading">Loading projects…</div>';
   try {
-    const headers = await AuthClient.authHeader();
-    const res = await fetch("/api/project/list", { headers });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    const data = await fetchJsonWithAuth("/api/project/list");
     renderProjectCards(data.projects || []);
   } catch (e) {
     list.innerHTML = `<div class="proj-loading">Could not load projects: ${e.message}</div>`;
@@ -39,8 +47,6 @@ function renderProjectCards(projects) {
     return;
   }
   list.innerHTML = "";
-  const profile = window._authProfile;
-  const isSalesOrAdmin = profile && ["sales", "admin"].includes(profile.role);
 
   for (const p of projects) {
     const card = document.createElement("div");
@@ -49,12 +55,6 @@ function renderProjectCards(projects) {
     const date = new Date(p.updated_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
     const meta = [p.property_type, p.bhk_type || p.bhk, p.total_area_m2 ? p.total_area_m2 + " m²" : null].filter(Boolean).join(" · ");
     const statusMeta = PROJ_STATUS_META[p.status] || null;
-
-    // "Mark Advanced Paid" shown to sales/admin if not already advanced_paid or completed
-    const showAdvPaidBtn = isSalesOrAdmin &&
-      p.status !== "advanced_paid" &&
-      p.status !== "completed" &&
-      p.status !== "cancelled";
 
     card.innerHTML = `
       <div class="proj-card-thumb">
@@ -69,49 +69,11 @@ function renderProjectCards(projects) {
         ${p.summary ? `<div class="proj-card-summary">${escapeHtml(p.summary)}</div>` : ""}
         <div class="proj-card-footer">
           <span class="proj-card-date">${date}</span>
-          ${showAdvPaidBtn ? `<button class="ghost-sm adv-paid-btn" data-id="${p.id}">Mark Advanced Paid</button>` : ""}
-          <a class="ghost-sm" href="/designer?projectId=${p.id}" onclick="event.stopPropagation()">Drawings</a>
         </div>
       </div>
     `;
 
     card.addEventListener("click", () => loadProject(p.id));
-
-    // "Mark Advanced Paid" should NOT open the project
-    card.querySelectorAll(".adv-paid-btn").forEach(btn => {
-      btn.addEventListener("click", async e => {
-        e.stopPropagation();
-        btn.disabled = true;
-        btn.textContent = "Saving…";
-        try {
-          const headers = await AuthClient.authHeader();
-          const res = await fetch("/api/project/update-status", {
-            method: "POST",
-            headers: { ...headers, "Content-Type": "application/json" },
-            body: JSON.stringify({ projectId: p.id, status: "advanced_paid" }),
-          });
-          if (!res.ok) throw new Error((await res.json()).error);
-          p.status = "advanced_paid";
-          // Re-render just this card's badge and button
-          const badgeEl = card.querySelector(".proj-status-badge");
-          const footerMeta = PROJ_STATUS_META["advanced_paid"];
-          if (badgeEl) {
-            badgeEl.className = `badge ${footerMeta.cls} proj-status-badge`;
-            badgeEl.textContent = footerMeta.label;
-          } else {
-            card.querySelector(".proj-card-name-row").insertAdjacentHTML(
-              "beforeend",
-              `<span class="badge ${footerMeta.cls} proj-status-badge">${footerMeta.label}</span>`
-            );
-          }
-          btn.remove();
-        } catch (err) {
-          btn.disabled = false;
-          btn.textContent = "Mark Advanced Paid";
-          alert("Failed: " + err.message);
-        }
-      });
-    });
 
     list.appendChild(card);
   }
@@ -121,9 +83,7 @@ async function loadProject(id) {
   const list = el("projectPickerList");
   list.innerHTML = '<div class="proj-loading">Opening project…</div>';
   try {
-    const res = await fetch(`/api/project/load?id=${id}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    const data = await fetchJsonWithAuth(`/api/project/load?id=${encodeURIComponent(id)}`);
 
     const proj = data.project;
 
@@ -266,26 +226,18 @@ async function loadProject(id) {
         brief: p.brief || "",
         photoFile: null,
         photoDataUrl: null,
+        photoUrl: p.photo_url || null,
         existingPhotoPath: p.photo_storage_path || null
       }));
-
-      // Load pin photos in background (for editing; render display uses photo_url from DB)
-      for (const dbPin of data.cameraPins) {
-        if (!dbPin.photo_url) continue;
-        loadUrlToDataUrl(dbPin.photo_url).then(dataUrl => {
-          if (!dataUrl || !planner) return;
-          const pin = planner.cameraPins.find(p => p.id === dbPin.client_id);
-          if (pin) { pin.photoDataUrl = dataUrl; planner.render(); refreshPinsList(); }
-        }).catch(() => {});
-      }
 
       planner.render();
       refreshPinsList();
       if (dom.chatPanel) dom.chatPanel.hidden = false;
       if (proj.global_brief) dom.globalBrief.value = proj.global_brief;
 
-      // If the project has saved versions with renders, go straight to results — no phase flashes
-      const versions = data.versions || [];
+      // Pull versions lazily (avoids heavy join during base project load).
+      const versionsData = await fetchJsonWithAuth(`/api/project/versions?id=${encodeURIComponent(id)}`);
+      const versions = versionsData.versions || [];
       const hasRenders = versions.some(v => v.renders && v.renders.length > 0);
       if (versions.length > 0 && hasRenders) {
         advancePhase(4);

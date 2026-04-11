@@ -75,7 +75,7 @@ const AuthClient = (() => {
     const profile = await getProfile();
     if (!profile) throw new Error("blocked"); // getProfile already triggered redirect
     if (allowedRoles && !allowedRoles.includes(profile.role)) {
-      window.location.href = "/homepage";
+      window.location.href = "/";
       throw new Error("unauthorised role");
     }
     return { session, profile };
@@ -83,8 +83,8 @@ const AuthClient = (() => {
 
   async function signInWithGoogle() {
     const sb = await _getSb();
-    // After Google auth, Supabase redirects here with ?code=...; homepage.js
-    // then routes the user to the right page based on their role.
+    // After Google auth, Supabase redirects back to /login with ?code=...
+    // and the login page forwards authenticated users to the planner.
     return sb.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: window.location.origin + "/login" },
@@ -114,12 +114,9 @@ const AuthClient = (() => {
       ceo: "CEO",
     }[profile.role] || profile.role;
 
-    const profileSlug = profile.email.split("@")[0].toLowerCase()
-      .replace(/[^a-z0-9-]/g, "-");
-
     container.innerHTML = `
       <div class="user-chip">
-        <a class="user-chip-name" href="/profile/${profileSlug}">${profile.full_name}</a>
+        <span class="user-chip-name">${profile.full_name}</span>
         <span class="user-chip-role role-${profile.role}">${roleLabel}</span>
         <button class="ghost-sm user-chip-logout" id="logoutBtn">Sign out</button>
       </div>`;
