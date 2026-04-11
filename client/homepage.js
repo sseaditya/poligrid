@@ -21,6 +21,10 @@ let _session, _profile;
     window.location.href = "/lead_designer_home";
     return;
   }
+  if (_profile.role === "admin" || _profile.role === "ceo") {
+    window.location.href = "/admin_home";
+    return;
+  }
 
   AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
   renderNav(_profile);

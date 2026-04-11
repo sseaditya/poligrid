@@ -281,6 +281,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/designer_home") {
       return serveStatic("/designer_home.html", false, res);
     }
+    // Serve admin/CEO command center (unified home for admin + ceo)
+    if (req.method === "GET" && (url.pathname === "/admin_home" || url.pathname === "/ceo")) {
+      return serveStatic("/admin_home.html", false, res);
+    }
     if (req.method === "GET" || req.method === "HEAD") {
       return serveStatic(url.pathname, req.method === "HEAD", res);
     }
