@@ -1,17 +1,17 @@
 // client/nav.js — Shared sidebar & mobile nav for all Tailwind studio pages
 // Load after auth.js. Exposes global: AppNav
 //
-// Usage (in each page's JS, after requireAuth):
-//   AppNav.renderSidebar(profile, document.getElementById('sidebarNav'));
-//   AppNav.renderMobileNav(profile, document.getElementById('mobileNav'));
+// Usage (in each page's JS):
+//   AppNav.mountSidebar(title);                   ← call BEFORE await requireAuth
+//   AppNav.renderSidebar(profile, navEl);          ← call after auth resolves
+//   AppNav.renderSidebarWithProject(profile, navEl, project); ← surgically adds sub-block
+//   AppNav.renderMobileNav(profile, navEl);
 //   AppNav.setupUserSection(profile);
-//   AppNav.setupCollapse();  ← call once after setupUserSection
+//   AppNav.setupCollapse();
 
 const AppNav = (() => {
 
-  // ── Collapse CSS (injected once into <head>, no transitions) ─────────────────
-  // Called early in mountSidebar so the initial collapsed state renders correctly
-  // without any animation flash.
+  // ── Collapse CSS ─────────────────────────────────────────────────────────────
   function _injectCollapseStyles() {
     if (document.getElementById('nav-collapse-styles')) return;
     const s = document.createElement('style');
@@ -30,8 +30,15 @@ const AppNav = (() => {
       /* Hide text labels */
       #appSidebar.nav-collapsed .nav-label { display: none !important; }
 
-      /* Top-level links: center icon, strip side padding */
+      /* Top-level links: center icon */
       #appSidebar.nav-collapsed .nav-link {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+      }
+
+      /* Toggle row: center when collapsed */
+      #appSidebar.nav-collapsed #sidebarToggleRow {
         justify-content: center;
         padding-left: 0;
         padding-right: 0;
@@ -65,11 +72,11 @@ const AppNav = (() => {
         padding-right: 0;
       }
 
-      /* Toggle chevron — lives in the brand header */
+      /* Toggle chevron — flips when collapsed */
       .sidebar-toggle-icon { display: block; }
-      #sidebarBrandHeader.nav-collapsed .sidebar-toggle-icon { transform: rotate(180deg); }
+      #appSidebar.nav-collapsed .sidebar-toggle-icon { transform: rotate(180deg); }
 
-      /* Tooltip on collapsed items — appear to the right of the sidebar */
+      /* Tooltips on collapsed items */
       #appSidebar.nav-collapsed [data-nav-tip] { position: relative; }
       #appSidebar.nav-collapsed [data-nav-tip]:hover::after {
         content: attr(data-nav-tip);
@@ -92,9 +99,7 @@ const AppNav = (() => {
     document.head.appendChild(s);
   }
 
-  // ── Transition CSS — injected immediately in mountSidebar ───────────────────
-  // We no longer defer this; the sidebar shell is injected synchronously before
-  // auth resolves, so there is no load-time animation to prevent.
+  // ── Transition CSS ───────────────────────────────────────────────────────────
   function _injectTransitions() {
     if (document.getElementById('nav-transition-styles')) return;
     const s = document.createElement('style');
@@ -103,29 +108,11 @@ const AppNav = (() => {
       #appSidebar { transition: width 0.25s cubic-bezier(0.4,0,0.2,1); }
       #sidebarMain { transition: margin-left 0.25s cubic-bezier(0.4,0,0.2,1); }
       .sidebar-toggle-icon { transition: transform 0.25s ease; }
-      /* Smooth nav content swap — prevents jarring flash when re-rendering sub-nav */
-      #sidebarNav { transition: opacity 0.15s ease; }
-      #sidebarNav.nav-updating { opacity: 0; pointer-events: none; }
     `;
     document.head.appendChild(s);
   }
 
-  // ── Smooth nav content swap ──────────────────────────────────────────────────
-  // Fades nav out, updates innerHTML, fades back in.
-  // Falls back to direct assignment if the nav el is not yet in the DOM.
-  function _setNavContent(navEl, html) {
-    if (!navEl) return;
-    navEl.classList.add('nav-updating');
-    // Use a single rAF so the opacity:0 has time to paint before we set innerHTML
-    requestAnimationFrame(() => {
-      navEl.innerHTML = html;
-      // Force reflow so the transition fires on the way back
-      void navEl.offsetWidth;
-      navEl.classList.remove('nav-updating');
-    });
-  }
-
-  // ── Nav link definitions per role ───────────────────────────────────────────
+  // ── Nav link definitions per role ────────────────────────────────────────────
 
   function _homeLink(role, profile) {
     if (role === 'sales') {
@@ -147,36 +134,31 @@ const AppNav = (() => {
 
     const links = [_homeLink(role, profile)];
 
-    // Projects (all except CEO, who gets it separately)
     if (role !== 'ceo') {
       links.push({ href: '/projects', icon: 'architecture', label: 'Projects' });
     }
 
-    // Drawings
     if (['designer', 'lead_designer', 'admin'].includes(role)) {
       links.push({ href: '/designer', icon: 'edit_square', label: 'Drawings' });
     }
 
-    // Admin extras
     if (role === 'admin') {
       links.push({ href: '/admin', icon: 'manage_accounts', label: 'Team'       });
       links.push({ href: '/ceo',   icon: 'bar_chart',       label: 'CEO View'   });
       links.push({ href: '/audit', icon: 'history',         label: 'Audit Logs' });
     }
 
-    // CEO
     if (role === 'ceo') {
       links.push({ href: '/projects', icon: 'architecture', label: 'All Projects' });
     }
 
-    // Mark active: exact match OR path starts with href (but skip '/')
     return links.map(l => ({
       ...l,
       active: path === l.href || (l.href.length > 1 && path.startsWith(l.href + '/')),
     }));
   }
 
-  // ── Render helpers ───────────────────────────────────────────────────────────
+  // ── Render helpers ────────────────────────────────────────────────────────────
 
   function _sidebarLinkHtml(l) {
     const cls = l.active
@@ -189,19 +171,18 @@ const AppNav = (() => {
 </a>`;
   }
 
+  // Renders top-level nav links. Called once after auth — never re-called.
   function renderSidebar(profile, navEl, currentPath) {
     if (!navEl) return;
-    const html = buildNavLinks(profile, currentPath).map(_sidebarLinkHtml).join('');
-    _setNavContent(navEl, html);
+    navEl.innerHTML = buildNavLinks(profile, currentPath).map(_sidebarLinkHtml).join('');
   }
 
-  // Renders the sidebar with an indented project-context block injected
-  // under the "Projects" link, showing project-specific sub-navigation.
+  // Surgically injects (or refreshes) the project sub-nav block under the
+  // "Projects" link WITHOUT touching the existing top-level nav links.
+  // This means zero stutter — only the sub-block DOM changes.
   function renderSidebarWithProject(profile, navEl, project, currentPath) {
     if (!navEl) return;
     const role = profile.role;
-
-    // Determine which project-specific sub-links to show, marking the active one
     const path = currentPath || window.location.pathname;
     const hasProjectParam = new URLSearchParams(window.location.search).get('projectId');
 
@@ -226,11 +207,12 @@ const AppNav = (() => {
       active: path === '/audit' && !!hasProjectParam,
     });
 
-    // Escape project name for HTML
-    const projName = (project.name || 'Project').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const projName = (project.name || 'Project')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-    const subHtml = `
-<div class="nav-sub-wrap pl-3 ml-5 border-l-2 border-primary/20 space-y-0.5 pb-1">
+    const subBlock = document.createElement('div');
+    subBlock.className = 'nav-sub-wrap pl-3 ml-5 border-l-2 border-primary/20 space-y-0.5 pb-1';
+    subBlock.innerHTML = `
   <a class="nav-proj-name px-2 pt-0.5 pb-1 flex items-center gap-1.5 hover:text-primary transition-colors" title="${projName}" href="/project?id=${project.id}" data-nav-tip="${projName}">
     <span class="nav-proj-icon material-symbols-outlined text-primary/80 flex-shrink-0" style="font-size:14px;display:none">home</span>
     <span class="nav-label text-[10px] font-bold uppercase tracking-widest text-primary/80 truncate">${projName}</span>
@@ -245,25 +227,24 @@ const AppNav = (() => {
     <span class="material-symbols-outlined flex-shrink-0" style="font-size:15px" ${fill}>${l.icon}</span>
     <span class="nav-label">${l.label}</span>
   </a>`;
-  }).join('')}
-</div>`;
+  }).join('')}`;
 
-    // Pass '/project' so no top-level link gets highlighted active in project context
-    // (active state is carried by the sub-links instead)
-    const links = buildNavLinks(profile, '/project');
-    let html = '';
+    // Remove any existing sub-block (no flash — just a DOM node removal)
+    navEl.querySelector('.nav-sub-wrap')?.remove();
+
+    // Find the "Projects" anchor and insert the sub-block directly after it
     let injected = false;
-    for (const l of links) {
-      html += _sidebarLinkHtml(l);
-      // Inject project sub-menu right after the "Projects" link
-      if (!injected && l.href === '/projects') {
-        html += subHtml;
-        injected = true;
-      }
+    for (const a of navEl.querySelectorAll('.nav-link')) {
+      try {
+        if (new URL(a.href, location.origin).pathname === '/projects') {
+          a.after(subBlock);
+          injected = true;
+          break;
+        }
+      } catch { /* skip malformed hrefs */ }
     }
-    // Fallback: append if Projects link wasn't in nav (e.g. CEO)
-    if (!injected) html += subHtml;
-    _setNavContent(navEl, html);
+    // Fallback: append if Projects link wasn't found (e.g. CEO role)
+    if (!injected) navEl.appendChild(subBlock);
   }
 
 
@@ -300,28 +281,17 @@ const AppNav = (() => {
     }
   }
 
-  // ── Collapsible sidebar ──────────────────────────────────────────────────────
-  // Call once per page after setupUserSection. Reads localStorage key
-  // 'pg_sidebar_collapsed'. Requires id="appSidebar", id="sidebarBrandHeader",
-  // id="sidebarMain", and id="sidebarToggle" (inside the brand header).
-  //
-  // Initial collapsed state is applied synchronously in mountSidebar (no stutter).
-  // Transitions are enabled here, after the first paint, so the initial render
-  // never animates.
+  // ── Collapsible sidebar ───────────────────────────────────────────────────────
   function setupCollapse() {
-    const sidebar     = document.getElementById('appSidebar');
-    const brandHeader = document.getElementById('sidebarBrandHeader');
-    const main        = document.getElementById('sidebarMain');
-    const btn         = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('appSidebar');
+    const main    = document.getElementById('sidebarMain');
+    const btn     = document.getElementById('sidebarToggle');
     if (!sidebar || !btn) return;
 
     const KEY = 'pg_sidebar_collapsed';
 
-    // Transitions are already injected by mountSidebar — nothing to do here.
-
     function apply(collapsed) {
       sidebar.classList.toggle('nav-collapsed', collapsed);
-      if (brandHeader) brandHeader.classList.toggle('nav-collapsed', collapsed);
       if (main) main.classList.toggle('nav-collapsed', collapsed);
       localStorage.setItem(KEY, collapsed ? '1' : '0');
     }
@@ -329,34 +299,22 @@ const AppNav = (() => {
     btn.addEventListener('click', () => apply(!sidebar.classList.contains('nav-collapsed')));
   }
 
-  // ── Mount sidebar + mobile nav into DOM ─────────────────────────────────────
-  // Call once per page (synchronously, before renderSidebar/setupUserSection).
-  // title — text shown as the tab/page name under "POLIGRID STUDIO"
+  // ── Mount sidebar + mobile nav into DOM ──────────────────────────────────────
+  // Call BEFORE await requireAuth so the shell is in the DOM from first paint.
+  // title — page label shown under "POLIGRID STUDIO"
   // opts  — { profileActive: bool }
-  //
-  // The brand header (#sidebarBrandHeader) is a separate fixed element that is
-  // always fully visible regardless of collapse state. It sits at top-0 and is
-  // always 256 px wide. The sidebar nav (#appSidebar) starts at top-16 (64 px)
-  // below it and collapses width independently.
-  //
-  // The initial collapsed state is applied synchronously here (before any paint)
-  // by reading localStorage. This prevents the stutter that occurred when the
-  // state was applied in setupCollapse (which runs after an async auth round-trip).
   function mountSidebar(title, opts = {}) {
-    if (document.getElementById('appSidebar')) return; // already in DOM (static HTML)
+    if (document.getElementById('appSidebar')) return;
 
-    // Inject collapse CSS + transitions immediately so the sidebar is correct
-    // from first paint — no deferred injection, no animation flash.
     _injectCollapseStyles();
     _injectTransitions();
 
     const KEY          = 'pg_sidebar_collapsed';
     const startCollapsed = localStorage.getItem(KEY) === '1';
-
     const label        = (title || "GOD'S EYE").toUpperCase();
     const profileActive = !!opts.profileActive;
 
-    // ── Brand header — always visible, never collapses ──────────────────────
+    // ── Brand header — pure wordmark, no toggle button ──────────────────────
     const brand = document.createElement('div');
     brand.id = 'sidebarBrandHeader';
     brand.className = [
@@ -365,19 +323,13 @@ const AppNav = (() => {
       'bg-surface-container-lowest',
       'border-r border-outline-variant/10',
       'border-b border-outline-variant/10',
-      'items-center justify-between px-5',
-      startCollapsed ? 'nav-collapsed' : '',
+      'items-center px-5',
     ].join(' ');
     brand.innerHTML = `
-      <div class="min-w-0 flex-1 pr-2">
+      <div class="min-w-0">
         <div class="text-[9px] font-bold tracking-[0.22em] uppercase text-on-surface-variant/40 leading-none">POLIGRID STUDIO</div>
         <div class="text-[14px] font-extrabold tracking-tighter text-on-surface mt-0.5 font-headline leading-tight truncate">${label}</div>
-      </div>
-      <button id="sidebarToggle"
-              class="flex-shrink-0 p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors"
-              title="Toggle sidebar">
-        <span class="material-symbols-outlined sidebar-toggle-icon" style="font-size:18px">chevron_left</span>
-      </button>`;
+      </div>`;
 
     // ── Sidebar nav — starts below brand, collapses width ───────────────────
     const aside = document.createElement('aside');
@@ -397,6 +349,13 @@ const AppNav = (() => {
     const profileIconStyle = profileActive ? " style=\"font-variation-settings:'FILL' 1\"" : '';
 
     aside.innerHTML = `
+  <div id="sidebarToggleRow" class="flex items-center justify-end px-3 py-2 border-b border-outline-variant/10">
+    <button id="sidebarToggle"
+            class="p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors"
+            title="Toggle sidebar">
+      <span class="material-symbols-outlined sidebar-toggle-icon" style="font-size:18px">chevron_left</span>
+    </button>
+  </div>
   <nav class="flex-1 px-4 py-3 space-y-1 overflow-y-auto" id="sidebarNav"></nav>
   <div class="mt-auto border-t border-outline-variant/20 pt-4 px-4 pb-6 space-y-1">
     <a id="settingsLink" href="/profile" class="${profileLinkCls}" data-nav-tip="My Profile">
@@ -409,14 +368,11 @@ const AppNav = (() => {
     </button>
   </div>`;
 
-    // ── Apply initial margin + collapsed state to main content ───────────────
+    // ── Suppress transition on initial mount so saved collapsed state snaps ─
     const main = document.getElementById('sidebarMain');
     if (main) {
-      // Suppress margin transition on the very first mount so the initial
-      // collapsed state snaps into place without animation.
       main.style.transition = 'none';
       if (startCollapsed) main.classList.add('nav-collapsed');
-      // Re-enable transition after one paint
       requestAnimationFrame(() => { main.style.transition = ''; });
     }
 
