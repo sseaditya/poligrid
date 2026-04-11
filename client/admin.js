@@ -18,6 +18,7 @@ const DEPT_LABELS = {
       await AuthClient.requireAuth(["admin"]));
   } catch { window.location.href = '/login'; return; }
 
+  AppNav.mountSidebar('TEAM ADMIN');
   AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(_profile);

@@ -300,5 +300,58 @@ const AppNav = (() => {
     btn.addEventListener('click', () => apply(!sidebar.classList.contains('nav-collapsed')));
   }
 
-  return { buildNavLinks, renderSidebar, renderSidebarWithProject, renderMobileNav, setupUserSection, setupCollapse };
+  // ── Mount sidebar + mobile nav into DOM ─────────────────────────────────────
+  // Call once per page (synchronously, before renderSidebar/setupUserSection).
+  // title    — text shown under "POLIGRID STUDIO" in the brand area (auto-uppercased)
+  // opts     — { profileActive: bool } — pass true on the My Profile page
+  function mountSidebar(title, opts = {}) {
+    if (document.getElementById('appSidebar')) return; // already in DOM (static HTML)
+
+    const label = (title || "GOD'S EYE").toUpperCase();
+    const profileActive = !!opts.profileActive;
+
+    const profileLinkCls = profileActive
+      ? 'sidebar-footer-item flex items-center gap-3 px-4 py-2 text-primary bg-primary/5 font-bold rounded-lg border-r-2 border-primary'
+      : 'sidebar-footer-item flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-low transition-colors';
+    const profileIconStyle = profileActive ? " style=\"font-variation-settings:'FILL' 1\"" : '';
+
+    const aside = document.createElement('aside');
+    aside.id = 'appSidebar';
+    aside.className = 'hidden md:flex h-screen w-64 fixed left-0 top-0 bg-surface-container-lowest flex-col z-30 border-r border-outline-variant/10';
+    aside.innerHTML = `
+  <div class="sidebar-brand px-6 py-6 mb-2 flex items-start justify-between gap-2">
+    <div class="sidebar-brand-text min-w-0">
+      <span class="text-xs font-bold tracking-[0.2em] text-on-surface-variant/50">POLIGRID STUDIO</span>
+      <h1 class="text-xl font-extrabold tracking-tighter text-on-surface mt-1 font-headline">${label}</h1>
+    </div>
+    <button id="sidebarToggle" class="flex-shrink-0 mt-1 p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all" title="Toggle sidebar">
+      <span class="material-symbols-outlined sidebar-toggle-icon" style="font-size:18px">chevron_left</span>
+    </button>
+  </div>
+  <nav class="flex-1 px-4 space-y-1" id="sidebarNav"></nav>
+  <div class="mt-auto border-t border-outline-variant/20 pt-4 px-4 pb-6 space-y-1">
+    <a id="settingsLink" href="/profile" class="${profileLinkCls}" data-nav-tip="My Profile">
+      <span class="material-symbols-outlined text-[20px]"${profileIconStyle}>account_circle</span>
+      <span class="nav-label text-xs font-medium">My Profile</span>
+    </a>
+    <button id="logoutBtn" class="sidebar-footer-item w-full flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-low text-left transition-colors" data-nav-tip="Sign Out">
+      <span class="material-symbols-outlined text-[20px]">logout</span>
+      <span class="nav-label text-xs font-medium">Sign Out</span>
+    </button>
+  </div>`;
+
+    const main = document.getElementById('sidebarMain');
+    if (main) document.body.insertBefore(aside, main);
+    else document.body.prepend(aside);
+
+    // Mobile nav
+    if (!document.getElementById('mobileNav')) {
+      const nav = document.createElement('nav');
+      nav.id = 'mobileNav';
+      nav.className = 'md:hidden fixed bottom-0 w-full bg-surface/80 backdrop-blur-xl flex justify-around items-center py-3 border-t border-surface-container z-20';
+      document.body.appendChild(nav);
+    }
+  }
+
+  return { buildNavLinks, mountSidebar, renderSidebar, renderSidebarWithProject, renderMobileNav, setupUserSection, setupCollapse };
 })();

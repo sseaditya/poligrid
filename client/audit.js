@@ -28,6 +28,7 @@ const SUBCATEGORY_LABELS = {
     return;
   }
 
+  AppNav.mountSidebar('AUDIT LOGS');
   AppNav.renderSidebar(_profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(_profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(_profile);

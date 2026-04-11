@@ -111,30 +111,6 @@
 </head>
 <body class="bg-background text-on-background font-body antialiased min-h-screen">
 
-<!-- Sidebar -->
-<aside id="appSidebar" class="hidden md:flex h-screen w-64 fixed left-0 top-0 bg-surface-container-lowest flex-col z-30 border-r border-outline-variant/10">
-  <div class="sidebar-brand px-6 py-6 mb-2 flex items-start justify-between gap-2">
-    <div class="sidebar-brand-text min-w-0">
-      <span class="text-xs font-bold tracking-[0.2em] text-on-surface-variant/50">POLIGRID STUDIO</span>
-      <h1 class="text-xl font-extrabold tracking-tighter text-on-surface mt-1 font-headline">GOD'S EYE</h1>
-    </div>
-    <button id="sidebarToggle" class="flex-shrink-0 mt-1 p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all" title="Toggle sidebar">
-      <span class="material-symbols-outlined sidebar-toggle-icon" style="font-size:18px">chevron_left</span>
-    </button>
-  </div>
-  <nav class="flex-1 px-4 space-y-1" id="sidebarNav"></nav>
-  <div class="mt-auto border-t border-outline-variant/20 pt-4 px-4 pb-6 space-y-1">
-    <a id="settingsLink" href="/profile" class="sidebar-footer-item flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-low transition-colors" data-nav-tip="My Profile">
-      <span class="material-symbols-outlined text-[20px]">account_circle</span>
-      <span class="nav-label text-xs font-medium">My Profile</span>
-    </a>
-    <button id="logoutBtn" class="sidebar-footer-item w-full flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-low text-left transition-colors" data-nav-tip="Sign Out">
-      <span class="material-symbols-outlined text-[20px]">logout</span>
-      <span class="nav-label text-xs font-medium">Sign Out</span>
-    </button>
-  </div>
-</aside>
-
 <!-- Main content -->
 <main id="sidebarMain" class="md:ml-64 min-h-screen blueprint-grid">
 
@@ -368,7 +344,6 @@
 </main>
 
 <!-- Mobile Navigation -->
-<nav class="md:hidden fixed bottom-0 left-0 w-full bg-[#f9f9f9]/90 backdrop-blur-md px-6 py-4 flex justify-around items-center z-50 border-t border-outline-variant/10" id="mobileNav"></nav>
 
 <!-- Inline Drawing Review Modal -->
 <div id="inlineReviewModal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,0.45);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px">

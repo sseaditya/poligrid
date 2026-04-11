@@ -9,6 +9,7 @@
   } catch { return; }
 
   // ── Shared nav + user section ────────────────────────────────────────────────
+  AppNav.mountSidebar("GOD'S EYE");
   AppNav.renderSidebar(profile, document.getElementById('sidebarNav'));
   AppNav.renderMobileNav(profile, document.getElementById('mobileNav'));
   AppNav.setupUserSection(profile);
