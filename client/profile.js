@@ -13,14 +13,14 @@ let _profile;
   buildSidebar(_profile);
   buildMobileNav(_profile);
 
-  const mySlug   = nameToSlug(_profile.full_name || _profile.email);
-  const pageSlug = getPageSlug();
+  const emailSlug = emailToSlug(_profile.email);
+  const pageSlug  = getPageSlug();
 
-  if (!pageSlug || pageSlug === nameToSlug(_profile.email.split('@')[0])) {
+  if (!pageSlug || pageSlug === emailSlug) {
     await loadOwnProfile();
   } else {
     if (_profile.role !== 'admin') {
-      window.location.href = `/profile/${mySlug}`;
+      window.location.href = `/profile/${emailSlug}`;
       return;
     }
     await loadOtherProfile(pageSlug);

@@ -115,6 +115,12 @@ function buildNavLinks(role) {
 function renderUserAvatar(profile) {
   const img = document.getElementById("userAvatarImg");
   if (profile.avatar_url) img.src = profile.avatar_url;
+  const slug = (profile.email || "").split("@")[0].toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  const profileUrl = `/profile/${slug}`;
+  const sidebar = document.getElementById("sidebarProfileLink");
+  const topbar  = document.getElementById("topbarProfileLink");
+  if (sidebar) sidebar.href = profileUrl;
+  if (topbar)  topbar.href  = profileUrl;
 }
 
 async function handleLogout() {
