@@ -9,15 +9,15 @@
 
 const AppNav = (() => {
 
-  // ── Collapse CSS (injected once into <head>) ─────────────────────────────────
+  // ── Collapse CSS (injected once into <head>, no transitions) ─────────────────
+  // Called early in mountSidebar so the initial collapsed state renders correctly
+  // without any animation flash.
   function _injectCollapseStyles() {
     if (document.getElementById('nav-collapse-styles')) return;
     const s = document.createElement('style');
     s.id = 'nav-collapse-styles';
     s.textContent = `
-      #appSidebar { transition: width 0.25s cubic-bezier(0.4,0,0.2,1); }
-      #sidebarMain { transition: margin-left 0.25s cubic-bezier(0.4,0,0.2,1); }
-
+      /* Sidebar collapses to icon-only width */
       #appSidebar.nav-collapsed {
         width: 64px !important;
         padding-left: 0 !important;
@@ -28,15 +28,7 @@ const AppNav = (() => {
       }
 
       /* Hide text labels */
-      #appSidebar.nav-collapsed .sidebar-brand-text,
       #appSidebar.nav-collapsed .nav-label { display: none !important; }
-
-      /* Brand area: reset side padding so toggle button is centered */
-      #appSidebar.nav-collapsed .sidebar-brand {
-        padding-left: 0 !important;
-        padding-right: 0 !important;
-        justify-content: center;
-      }
 
       /* Top-level links: center icon, strip side padding */
       #appSidebar.nav-collapsed .nav-link {
@@ -45,7 +37,7 @@ const AppNav = (() => {
         padding-right: 0;
       }
 
-      /* Project sub-block: flush to edge so icon fits inside narrow sidebar */
+      /* Project sub-block */
       #appSidebar.nav-collapsed .nav-sub-wrap {
         margin-left: 0 !important;
         padding-left: 0 !important;
@@ -73,9 +65,9 @@ const AppNav = (() => {
         padding-right: 0;
       }
 
-      /* Toggle chevron */
-      .sidebar-toggle-icon { transition: transform 0.25s ease; display: block; }
-      #appSidebar.nav-collapsed .sidebar-toggle-icon { transform: rotate(180deg); }
+      /* Toggle chevron — lives in the brand header */
+      .sidebar-toggle-icon { display: block; }
+      #sidebarBrandHeader.nav-collapsed .sidebar-toggle-icon { transform: rotate(180deg); }
 
       /* Tooltip on collapsed items — appear to the right of the sidebar */
       #appSidebar.nav-collapsed [data-nav-tip] { position: relative; }
@@ -96,6 +88,19 @@ const AppNav = (() => {
         pointer-events: none;
         letter-spacing: 0.02em;
       }
+    `;
+    document.head.appendChild(s);
+  }
+
+  // ── Transition CSS (injected after first paint to avoid load-time stutter) ───
+  function _injectTransitions() {
+    if (document.getElementById('nav-transition-styles')) return;
+    const s = document.createElement('style');
+    s.id = 'nav-transition-styles';
+    s.textContent = `
+      #appSidebar { transition: width 0.25s cubic-bezier(0.4,0,0.2,1); }
+      #sidebarMain { transition: margin-left 0.25s cubic-bezier(0.4,0,0.2,1); }
+      .sidebar-toggle-icon { transition: transform 0.25s ease; }
     `;
     document.head.appendChild(s);
   }
@@ -275,60 +280,105 @@ const AppNav = (() => {
   }
 
   // ── Collapsible sidebar ──────────────────────────────────────────────────────
-  // Call once per page after setupUserSection. Reads/writes localStorage key
-  // 'pg_sidebar_collapsed'. Requires id="appSidebar" on <aside> and
-  // id="sidebarMain" on the main content wrapper, plus id="sidebarToggle"
-  // on the toggle button inside the sidebar header.
+  // Call once per page after setupUserSection. Reads localStorage key
+  // 'pg_sidebar_collapsed'. Requires id="appSidebar", id="sidebarBrandHeader",
+  // id="sidebarMain", and id="sidebarToggle" (inside the brand header).
+  //
+  // Initial collapsed state is applied synchronously in mountSidebar (no stutter).
+  // Transitions are enabled here, after the first paint, so the initial render
+  // never animates.
   function setupCollapse() {
-    _injectCollapseStyles();
-    const sidebar = document.getElementById('appSidebar');
-    const main    = document.getElementById('sidebarMain');
-    const btn     = document.getElementById('sidebarToggle');
+    const sidebar     = document.getElementById('appSidebar');
+    const brandHeader = document.getElementById('sidebarBrandHeader');
+    const main        = document.getElementById('sidebarMain');
+    const btn         = document.getElementById('sidebarToggle');
     if (!sidebar || !btn) return;
 
     const KEY = 'pg_sidebar_collapsed';
 
+    // Enable smooth transitions only after the initial paint so restoring saved
+    // state never causes a visible width/margin animation.
+    requestAnimationFrame(() => requestAnimationFrame(() => _injectTransitions()));
+
     function apply(collapsed) {
       sidebar.classList.toggle('nav-collapsed', collapsed);
+      if (brandHeader) brandHeader.classList.toggle('nav-collapsed', collapsed);
       if (main) main.classList.toggle('nav-collapsed', collapsed);
       localStorage.setItem(KEY, collapsed ? '1' : '0');
     }
-
-    // Restore saved state immediately (before paint) to avoid layout flash
-    apply(localStorage.getItem(KEY) === '1');
 
     btn.addEventListener('click', () => apply(!sidebar.classList.contains('nav-collapsed')));
   }
 
   // ── Mount sidebar + mobile nav into DOM ─────────────────────────────────────
   // Call once per page (synchronously, before renderSidebar/setupUserSection).
-  // title    — text shown under "POLIGRID STUDIO" in the brand area (auto-uppercased)
-  // opts     — { profileActive: bool } — pass true on the My Profile page
+  // title — text shown as the tab/page name under "POLIGRID STUDIO"
+  // opts  — { profileActive: bool }
+  //
+  // The brand header (#sidebarBrandHeader) is a separate fixed element that is
+  // always fully visible regardless of collapse state. It sits at top-0 and is
+  // always 256 px wide. The sidebar nav (#appSidebar) starts at top-16 (64 px)
+  // below it and collapses width independently.
+  //
+  // The initial collapsed state is applied synchronously here (before any paint)
+  // by reading localStorage. This prevents the stutter that occurred when the
+  // state was applied in setupCollapse (which runs after an async auth round-trip).
   function mountSidebar(title, opts = {}) {
     if (document.getElementById('appSidebar')) return; // already in DOM (static HTML)
 
-    const label = (title || "GOD'S EYE").toUpperCase();
+    // Inject collapse behaviour CSS immediately (no transitions yet — those come
+    // in setupCollapse after the first paint).
+    _injectCollapseStyles();
+
+    const KEY          = 'pg_sidebar_collapsed';
+    const startCollapsed = localStorage.getItem(KEY) === '1';
+
+    const label        = (title || "GOD'S EYE").toUpperCase();
     const profileActive = !!opts.profileActive;
+
+    // ── Brand header — always visible, never collapses ──────────────────────
+    const brand = document.createElement('div');
+    brand.id = 'sidebarBrandHeader';
+    // nav-collapsed applied immediately so chevron is correct on load
+    brand.className = [
+      'hidden md:flex fixed left-0 top-0 z-40',
+      'w-64 h-16',
+      'bg-surface-container-lowest',
+      'border-r border-outline-variant/10',
+      'border-b border-outline-variant/10',
+      'items-center justify-between px-5',
+      startCollapsed ? 'nav-collapsed' : '',
+    ].join(' ');
+    brand.innerHTML = `
+      <div class="min-w-0 flex-1 pr-2">
+        <div class="text-[9px] font-bold tracking-[0.22em] uppercase text-on-surface-variant/40 leading-none">POLIGRID STUDIO</div>
+        <div class="text-[14px] font-extrabold tracking-tighter text-on-surface mt-0.5 font-headline leading-tight truncate">${label}</div>
+      </div>
+      <button id="sidebarToggle"
+              class="flex-shrink-0 p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-colors"
+              title="Toggle sidebar">
+        <span class="material-symbols-outlined sidebar-toggle-icon" style="font-size:18px">chevron_left</span>
+      </button>`;
+
+    // ── Sidebar nav — starts below brand, collapses width ───────────────────
+    const aside = document.createElement('aside');
+    aside.id = 'appSidebar';
+    aside.className = [
+      'hidden md:flex fixed left-0 top-16',
+      'h-[calc(100vh-4rem)] w-64',
+      'bg-surface-container-lowest flex-col z-30',
+      'border-r border-outline-variant/10',
+      startCollapsed ? 'nav-collapsed' : '',
+    ].join(' ');
+    aside.style.height = 'calc(100vh - 4rem)'; // reliable fallback for arbitrary Tailwind value
 
     const profileLinkCls = profileActive
       ? 'sidebar-footer-item flex items-center gap-3 px-4 py-2 text-primary bg-primary/5 font-bold rounded-lg border-r-2 border-primary'
       : 'sidebar-footer-item flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-on-surface rounded-lg hover:bg-surface-container-low transition-colors';
     const profileIconStyle = profileActive ? " style=\"font-variation-settings:'FILL' 1\"" : '';
 
-    const aside = document.createElement('aside');
-    aside.id = 'appSidebar';
-    aside.className = 'hidden md:flex h-screen w-64 fixed left-0 top-0 bg-surface-container-lowest flex-col z-30 border-r border-outline-variant/10';
     aside.innerHTML = `
-  <div class="sidebar-brand px-6 py-6 mb-2 flex items-start justify-between gap-2">
-    <div class="sidebar-brand-text min-w-0">
-      <span class="text-xs font-bold tracking-[0.2em] text-on-surface-variant/50">POLIGRID STUDIO</span>
-      <h1 class="text-xl font-extrabold tracking-tighter text-on-surface mt-1 font-headline">${label}</h1>
-    </div>
-    <button id="sidebarToggle" class="flex-shrink-0 mt-1 p-1.5 rounded-lg text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all" title="Toggle sidebar">
-      <span class="material-symbols-outlined sidebar-toggle-icon" style="font-size:18px">chevron_left</span>
-    </button>
-  </div>
-  <nav class="flex-1 px-4 space-y-1" id="sidebarNav"></nav>
+  <nav class="flex-1 px-4 py-3 space-y-1 overflow-y-auto" id="sidebarNav"></nav>
   <div class="mt-auto border-t border-outline-variant/20 pt-4 px-4 pb-6 space-y-1">
     <a id="settingsLink" href="/profile" class="${profileLinkCls}" data-nav-tip="My Profile">
       <span class="material-symbols-outlined text-[20px]"${profileIconStyle}>account_circle</span>
@@ -340,9 +390,20 @@ const AppNav = (() => {
     </button>
   </div>`;
 
+    // ── Apply initial margin to main content ─────────────────────────────────
+    // Add nav-collapsed to sidebarMain so the injected CSS sets margin-left:64px
+    // immediately (before transitions are enabled).
     const main = document.getElementById('sidebarMain');
-    if (main) document.body.insertBefore(aside, main);
-    else document.body.prepend(aside);
+    if (startCollapsed && main) main.classList.add('nav-collapsed');
+
+    // ── Insert into DOM ──────────────────────────────────────────────────────
+    if (main) {
+      document.body.insertBefore(aside, main);
+      document.body.insertBefore(brand, main);
+    } else {
+      document.body.prepend(aside);
+      document.body.prepend(brand);
+    }
 
     // Mobile nav
     if (!document.getElementById('mobileNav')) {
