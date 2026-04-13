@@ -53,7 +53,7 @@ const can = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 (async () => {
-  AppNav.mountSidebar("GOD'S EYE");
+  AppNav.mountSidebar("PROJECT");
 
   try {
     ({ session: _session, profile: _profile } = await AuthClient.requireAuth());

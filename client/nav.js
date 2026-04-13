@@ -165,7 +165,7 @@ const AppNav = (() => {
       ? 'text-primary bg-primary/5 font-bold border-r-2 border-primary'
       : 'text-on-surface-variant hover:bg-surface-container-low';
     const fill = l.active ? "style=\"font-variation-settings:'FILL' 1\"" : '';
-    return `<a class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-200 ${cls}" href="${l.href}" data-nav-tip="${l.label}">
+    return `<a class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all duration-200 ${cls}" href="${l.href}" data-nav-tip="${l.label}"${l.active ? ' onclick="event.preventDefault()"' : ''}>
   <span class="material-symbols-outlined" ${fill}>${l.icon}</span>
   <span class="nav-label">${l.label}</span>
 </a>`;
@@ -223,7 +223,7 @@ const AppNav = (() => {
       : 'nav-sub-link flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all duration-150';
     const fill = l.active ? "style=\"font-variation-settings:'FILL' 1\"" : '';
     return `
-  <a class="${cls}" href="${l.href}" data-nav-tip="${l.label}">
+  <a class="${cls}" href="${l.href}" data-nav-tip="${l.label}"${l.active ? ' onclick="event.preventDefault()"' : ''}>
     <span class="material-symbols-outlined flex-shrink-0" style="font-size:15px" ${fill}>${l.icon}</span>
     <span class="nav-label">${l.label}</span>
   </a>`;

@@ -85,22 +85,10 @@
 <main id="sidebarMain" class="md:ml-64 min-h-screen">
 
   <!-- Sticky top bar -->
-  <header class="flex justify-between items-center px-8 h-16 bg-surface/80 backdrop-blur-md sticky top-0 z-20 border-b border-outline-variant/10">
-    <div class="flex items-center gap-3">
-      <span class="font-headline font-extrabold tracking-tighter text-on-background text-base">Team Directory</span>
-    </div>
+  <header class="flex justify-end items-center px-8 h-16 bg-surface/80 backdrop-blur-md sticky top-0 z-20 border-b border-outline-variant/10">
     <div class="flex items-center gap-4">
       <button class="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all primary-btn btn-sm" id="toggleInviteBtn" style="width:auto;gap:5px">
         <span class="material-symbols-outlined text-[15px]">person_add</span>Add Member
-      </button>
-      <a id="userAvatarLink" href="/profile">
-        <div class="w-8 h-8 rounded-full bg-surface-container-high overflow-hidden border border-outline-variant/20">
-          <img alt="Profile" class="w-full h-full object-cover" id="userAvatarImg"
-            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23e4e9ea'/%3E%3C/svg%3E"/>
-        </div>
-      </a>
-      <button id="logoutBtnTop" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container text-on-surface-variant text-xs font-bold uppercase tracking-widest hover:bg-surface-container-high transition-all">
-        <span class="material-symbols-outlined text-[14px]">logout</span>Sign out
       </button>
     </div>
   </header>

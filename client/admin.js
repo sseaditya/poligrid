@@ -13,7 +13,7 @@ const DEPT_LABELS = {
 };
 
 (async () => {
-  AppNav.mountSidebar('TEAM ADMIN');
+  AppNav.mountSidebar('TEAM DIRECTORY');
 
   try {
     ({ session: _session, profile: _profile } =

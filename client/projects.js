@@ -23,7 +23,7 @@ const STATUS_CLS = {
 };
 
 (async () => {
-  AppNav.mountSidebar("GOD'S EYE");
+  AppNav.mountSidebar("PROJECTS");
 
   try {
     ({ session: _session, profile: _profile } = await AuthClient.requireAuth());

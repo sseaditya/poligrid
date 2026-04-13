@@ -3,7 +3,7 @@
 
 (async () => {
   let profile;
-  AppNav.mountSidebar("GOD'S EYE");
+  AppNav.mountSidebar("DESIGNER STUDIO");
 
   try {
     const auth = await AuthClient.requireAuth(['designer', 'lead_designer', 'admin']);

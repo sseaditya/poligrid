@@ -5,7 +5,7 @@
 let _profile;
 
 (async () => {
-  AppNav.mountSidebar("GOD'S EYE", { profileActive: true });
+  AppNav.mountSidebar("MY PROFILE", { profileActive: true });
 
   try {
     ({ profile: _profile } = await AuthClient.requireAuth());

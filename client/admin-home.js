@@ -35,7 +35,7 @@ const dotColor = s => ({ approved: '#526258', pending_review: '#d97706', revisio
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
 (async () => {
-  AppNav.mountSidebar("GOD'S EYE");
+  AppNav.mountSidebar("COMMAND CENTER");
 
   try {
     ({ profile: _profile } = await AuthClient.requireAuth(['admin', 'ceo']));
@@ -47,9 +47,7 @@ const dotColor = s => ({ approved: '#526258', pending_review: '#d97706', revisio
   AppNav.setupUserSection(_profile);
   AppNav.setupCollapse();
 
-  // Role label in header
-  document.getElementById('roleLabel').textContent =
-    _profile.role === 'admin' ? 'Admin Console' : 'CEO Overview';
+  // Role label removed from header (now shown in sidebar brand)
 
   // Greeting
   const now = new Date();
