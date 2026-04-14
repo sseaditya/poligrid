@@ -1364,6 +1364,12 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .badge-proj-on_hold   { background:rgba(184,109,53,0.1); color:var(--gold); border-color:rgba(184,109,53,0.3); }
 .badge-proj-completed { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
 .badge-proj-cancelled { background:rgba(184,64,64,0.1); color:var(--danger); border-color:rgba(184,64,64,0.3); }
+/* Phase badges */
+.badge-proj-prospect   { background:rgba(115,115,115,0.1); color:#555; border-color:rgba(115,115,115,0.3); }
+.badge-proj-design     { background:rgba(40,80,184,0.1); color:#3a5ab8; border-color:rgba(40,80,184,0.3); }
+.badge-proj-prep       { background:rgba(184,109,53,0.1); color:var(--gold); border-color:rgba(184,109,53,0.3); }
+.badge-proj-production { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+.badge-proj-execution  { background:rgba(40,167,69,0.1); color:var(--success); border-color:rgba(40,167,69,0.3); }
 .badge-active   { background:rgba(40,167,69,0.1); color:var(--success); }
 .badge-on_hold  { background:rgba(184,109,53,0.1); color:var(--gold); }
 .badge-completed { background:var(--accent-dim); color:var(--accent); }

@@ -7,14 +7,39 @@ let _myTasks           = [];
 let _drawingAssignments = [];
 let _reviewDrawingId   = null;
 
-const STATUS_OPTIONS = [
-  { value: "active",        label: "Active" },
-  { value: "advanced_paid", label: "Advance Paid" },
-  { value: "in_progress",   label: "In Progress" },
-  { value: "completed",     label: "Completed" },
-  { value: "on_hold",       label: "On Hold" },
-  { value: "cancelled",     label: "Cancelled" },
+// ── Phase system ──────────────────────────────────────────────────────────────
+const PHASE_STEPS = [
+  { value: "prospect",   label: "Prospect" },
+  { value: "design",     label: "Design" },
+  { value: "prep",       label: "Site Prep" },
+  { value: "production", label: "Production" },
+  { value: "execution",  label: "Execution" },
 ];
+
+const PHASE_ALL = [
+  ...PHASE_STEPS,
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+// Criteria checklist per phase
+// key: DB field or "_derived" prefix; canMark: role check fn (set after can{} defined)
+const PHASE_CRITERIA = {
+  prospect:   [{ key: "advance_payment_done",  label: "Advance payment received",      flagKey: "advance_payment" }],
+  design:     [
+    { key: "advance_payment_done",  label: "Advance payment received",      readOnly: true },
+    { key: "_drawings_approved",    label: "All drawings approved",          readOnly: true, derived: true },
+    { key: "design_payment_done",   label: "Design payment received",        flagKey: "design_payment_done" },
+  ],
+  prep:       [{ key: "prep_approved",         label: "Site preparation sign-off",     flagKey: "prep_approved" }],
+  production: [
+    { key: "production_done",       label: "Manufacturing complete",         flagKey: "production_done" },
+    { key: "final_payment_done",    label: "Final payment received",         flagKey: "final_payment_done" },
+  ],
+  execution:  [{ key: "execution_confirmed",   label: "Execution confirmed by supervisor", flagKey: "execution_confirmed" }],
+  completed:  [],
+  cancelled:  [],
+};
 
 const ROLE_LABELS = {
   admin: "Admin", sales: "Sales", designer: "Designer",
@@ -37,19 +62,39 @@ const DRAWING_STATUS_LABELS = {
 // ── Role helpers ──────────────────────────────────────────────────────────────
 const is = (...roles) => roles.includes(_profile?.role);
 const can = {
-  editProject:    () => is("admin", "lead_designer", "sales", "designer"),
-  changeStatus:   () => is("admin", "lead_designer"),
-  markPaid:       () => is("admin", "sales"),
-  assignTeam:     () => is("admin", "lead_designer"),
-  reviewDrawings: () => is("admin", "lead_designer"),
-  uploadDrawings: () => is("admin", "lead_designer", "designer"),
-  seeAIResults:   () => is("admin", "sales", "lead_designer", "designer"),
-  seeConcepts:    () => is("admin", "lead_designer", "designer"),
-  seeDrawings:    () => is("admin", "lead_designer", "designer"),
-  seeTasks:       () => is("designer"),
-  fitoutPlanner:  () => is("admin", "lead_designer", "sales"),
-  shareClient:    () => is("admin", "sales"),
+  editProject:          () => is("admin", "lead_designer", "sales", "designer"),
+  changeStatus:         () => is("admin", "lead_designer"), // legacy alias
+  changePhase:          () => is("admin", "lead_designer"),
+  toggleOnHold:         () => is("admin", "lead_designer"),
+  markPaid:             () => is("admin", "sales"),         // advance payment
+  markDesignPayment:    () => is("admin", "sales"),
+  markPrepApproved:     () => is("admin", "lead_designer"),
+  markProductionDone:   () => is("admin", "lead_designer"),
+  markFinalPayment:     () => is("admin", "sales"),
+  markExecutionConfirmed: () => is("admin", "lead_designer"),
+  assignTeam:           () => is("admin", "lead_designer"),
+  reviewDrawings:       () => is("admin", "lead_designer"),
+  uploadDrawings:       () => is("admin", "lead_designer", "designer"),
+  seeAIResults:         () => is("admin", "sales", "lead_designer", "designer"),
+  seeConcepts:          () => is("admin", "lead_designer", "designer"),
+  seeDrawings:          () => is("admin", "lead_designer", "designer"),
+  seeTasks:             () => is("designer"),
+  fitoutPlanner:        () => is("admin", "lead_designer", "sales"),
+  shareClient:          () => is("admin", "sales"),
 };
+
+// Map flagKey → can checker
+function canMarkFlag(flagKey) {
+  const map = {
+    advance_payment:    can.markPaid,
+    design_payment_done: can.markDesignPayment,
+    prep_approved:      can.markPrepApproved,
+    production_done:    can.markProductionDone,
+    final_payment_done: can.markFinalPayment,
+    execution_confirmed: can.markExecutionConfirmed,
+  };
+  return map[flagKey]?.() ?? false;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 (async () => {
@@ -133,35 +178,154 @@ async function loadAll() {
 
 
 
+// ─── Phase stepper helpers ────────────────────────────────────────────────────
+function buildPhaseStepper(project) {
+  const phase = project.phase || "prospect";
+  const isTerminal = phase === "completed" || phase === "cancelled";
+  const currentIdx = PHASE_STEPS.findIndex(s => s.value === phase);
+
+  const stepsHtml = PHASE_STEPS.map((step, i) => {
+    const done   = currentIdx > i || (isTerminal && phase === "completed");
+    const active = step.value === phase;
+    const future = !done && !active;
+
+    const dotStyle = done
+      ? "background:var(--color-primary);color:var(--color-on-primary)"
+      : active
+        ? "background:var(--color-primary);color:var(--color-on-primary);box-shadow:0 0 0 4px color-mix(in srgb,var(--color-primary) 20%,transparent)"
+        : "background:var(--color-surface-container);border:1.5px solid var(--color-outline-variant);color:var(--color-on-surface-variant)";
+
+    const dotInner = done
+      ? `<span class="material-symbols-outlined" style="font-size:14px;line-height:1">check</span>`
+      : active
+        ? `<span style="width:8px;height:8px;border-radius:50%;background:currentColor;display:block"></span>`
+        : `<span style="width:6px;height:6px;border-radius:50%;background:currentColor;opacity:0.3;display:block"></span>`;
+
+    const lblColor = active ? "var(--color-primary)" : done ? "var(--color-on-surface-variant)" : "color-mix(in srgb,var(--color-on-surface-variant) 50%,transparent)";
+    const lblWeight = active ? "700" : "600";
+
+    const connector = i < PHASE_STEPS.length - 1
+      ? `<div style="flex:1;height:2px;background:${done ? "var(--color-primary)" : "var(--color-outline-variant)"};margin-bottom:20px;min-width:16px;transition:background 0.3s"></div>`
+      : "";
+
+    return `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:5px;flex:0 0 auto">
+        <div style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all 0.25s;${dotStyle}">${dotInner}</div>
+        <span style="font-size:10px;font-weight:${lblWeight};text-transform:uppercase;letter-spacing:0.06em;white-space:nowrap;color:${lblColor};transition:color 0.25s">${step.label}</span>
+      </div>${connector}`;
+  }).join("");
+
+  const terminalBadge = isTerminal
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 12px;border-radius:100px;font-size:11px;font-weight:700;letter-spacing:0.04em;${phase === "completed" ? "background:var(--color-primary-container);color:var(--color-on-primary-container)" : "background:#fff0f0;color:var(--color-error)"}">
+        <span class="material-symbols-outlined" style="font-size:13px">${phase === "completed" ? "check_circle" : "cancel"}</span> ${phase === "completed" ? "Completed" : "Cancelled"}
+       </span>`
+    : "";
+
+  const onHoldBadge = project.on_hold
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 12px;border-radius:100px;background:#fff3cd;color:#7c5e00;font-size:11px;font-weight:700">
+         <span class="material-symbols-outlined" style="font-size:13px">pause_circle</span> On Hold
+       </span>`
+    : "";
+
+  return `
+    <div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:0;margin-bottom:10px">
+        ${stepsHtml}
+      </div>
+      ${terminalBadge || onHoldBadge ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">${terminalBadge}${onHoldBadge}</div>` : ""}
+    </div>`;
+}
+
+function buildCriteriaPanel(project, drawingStats) {
+  const phase = project.phase || "prospect";
+  const criteria = PHASE_CRITERIA[phase] || [];
+  if (!criteria.length) return "";
+
+  const allDrawingsApproved = drawingStats && drawingStats.total > 0 && drawingStats.approved === drawingStats.total;
+  const totalDrawings = drawingStats?.total ?? 0;
+  const approvedDrawings = drawingStats?.approved ?? 0;
+
+  const items = criteria.map(c => {
+    let checked;
+    if (c.derived && c.key === "_drawings_approved") {
+      checked = allDrawingsApproved;
+    } else {
+      checked = !!project[c.key];
+    }
+
+    const icon = checked
+      ? `<span class="material-symbols-outlined" style="font-size:16px;color:var(--color-primary);flex-shrink:0">check_circle</span>`
+      : `<span class="material-symbols-outlined" style="font-size:16px;color:var(--color-outline-variant);flex-shrink:0">radio_button_unchecked</span>`;
+
+    let extra = "";
+    if (c.derived && c.key === "_drawings_approved") {
+      extra = `<span style="font-size:11px;color:var(--color-on-surface-variant);margin-left:4px">(${approvedDrawings}/${totalDrawings})</span>`;
+    }
+
+    let actionBtn = "";
+    if (!c.readOnly && c.flagKey && canMarkFlag(c.flagKey) && !checked) {
+      actionBtn = `<button class="ghost-btn btn-sm phase-flag-btn" data-flag="${c.flagKey === "advance_payment" ? "advance_payment_done" : c.flagKey}" data-value="true" style="margin-left:auto;font-size:11px;padding:2px 10px">Mark Done</button>`;
+    } else if (!c.readOnly && c.flagKey && canMarkFlag(c.flagKey) && checked) {
+      actionBtn = `<button class="ghost-btn btn-sm phase-flag-btn" data-flag="${c.flagKey === "advance_payment" ? "advance_payment_done" : c.flagKey}" data-value="false" style="margin-left:auto;font-size:11px;padding:2px 10px;opacity:0.6">Undo</button>`;
+    }
+
+    return `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--color-outline-variant);opacity:${c.readOnly && !checked ? "0.55" : "1"}">
+        ${icon}
+        <span style="font-size:13px;color:var(--color-on-surface)">${c.label}${extra}</span>
+        ${actionBtn}
+      </div>`;
+  }).join("");
+
+  // Phase nav buttons
+  const isTerminal = phase === "completed" || phase === "cancelled";
+  const currentIdx = PHASE_STEPS.findIndex(s => s.value === phase);
+  const prevStep = currentIdx > 0 ? PHASE_STEPS[currentIdx - 1] : null;
+  const nextStep = !isTerminal && currentIdx < PHASE_STEPS.length - 1 ? PHASE_STEPS[currentIdx + 1] : null;
+
+  let navHtml = "";
+  if (can.changePhase() || can.toggleOnHold()) {
+    const backBtn = can.changePhase() && prevStep
+      ? `<button class="ghost-btn btn-sm" id="phaseBackBtn" data-phase="${prevStep.value}" style="font-size:12px">← ${prevStep.label}</button>`
+      : "";
+
+    const onHoldBtn = can.toggleOnHold() && !isTerminal
+      ? project.on_hold
+        ? `<button class="ghost-btn btn-sm" id="onHoldBtn" style="font-size:12px;border-color:var(--color-tertiary);color:var(--color-tertiary)">▶ Resume</button>`
+        : `<button class="ghost-btn btn-sm" id="onHoldBtn" style="font-size:12px">⏸ On Hold</button>`
+      : "";
+
+    const nextBtn = can.changePhase() && !isTerminal
+      ? nextStep
+        ? `<button class="ghost-btn btn-sm" id="phaseNextBtn" data-phase="${nextStep.value}" style="font-size:12px">Advance to ${nextStep.label} →</button>`
+        : `<button class="ghost-btn btn-sm" id="phaseNextBtn" data-phase="completed" style="font-size:12px">Mark Completed ✓</button>`
+      : "";
+
+    const cancelBtn = can.changePhase() && !isTerminal && phase !== "cancelled"
+      ? `<button class="ghost-btn btn-sm" id="phaseCancelBtn" data-phase="cancelled" style="font-size:12px;color:var(--color-error);border-color:var(--color-error)">✕ Cancel Project</button>`
+      : "";
+
+    navHtml = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:6px">${backBtn}${onHoldBtn}<span style="flex:1"></span>${nextBtn}${cancelBtn}</div>`;
+  }
+
+  return `
+    <div style="background:var(--color-surface-container-lowest);border:1px solid var(--color-outline-variant);border-radius:12px;padding:12px 16px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-on-surface-variant);margin-bottom:8px">Phase Criteria</div>
+      ${items}
+      ${navHtml}
+    </div>`;
+}
+
 // ─── Main render ──────────────────────────────────────────────────────────────
 function render({ project, drawingStats, thumbnailUrl }) {
-  const statusLabel = STATUS_OPTIONS.find(o => o.value === project.status)?.label || project.status;
   const createdDate = fmt(project.created_at);
   const updatedDate = fmt(project.updated_at);
   const meta = [project.property_type, project.bhk, project.bhk_type,
     project.total_area_m2 ? project.total_area_m2 + " m²" : null].filter(Boolean).join("  ·  ");
 
-  const statusHtml = can.changeStatus()
-    ? `<select class="ctx-input ctx-input-sm status-inline-select" id="statusSelect">
-        ${STATUS_OPTIONS.map(o =>
-          `<option value="${o.value}" ${project.status === o.value ? "selected" : ""}>${o.label}</option>`
-        ).join("")}
-       </select>`
-    : `<span class="badge badge-proj-${project.status}">${statusLabel}</span>`;
-
-  const advPaidHtml = project.advance_payment_done
-    ? `<span class="badge badge-advance" style="display:inline-flex;align-items:center;gap:4px">
-         <span class="material-symbols-outlined" style="font-size:13px">payments</span> Advance Paid
-       </span>`
-    : can.markPaid()
-      ? `<button class="ghost-btn btn-sm" id="markPaidBtn">
-           <span class="material-symbols-outlined" style="font-size:14px">payments</span> Mark Advance Paid
-         </button>`
-      : "";
-
   document.getElementById("projectMain").innerHTML = `
     <!-- ── Hero ──────────────────────────────────────────────────────────────── -->
-    <div class="proj-detail-hero" style="margin-bottom:28px">
+    <div class="proj-detail-hero" style="margin-bottom:16px">
       <nav style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:var(--color-on-surface-variant);margin-bottom:10px">
         <a href="/projects" style="color:inherit;text-decoration:none;transition:color 0.15s" onmouseover="this.style.color='var(--color-primary)'" onmouseout="this.style.color=''">Projects</a>
         <span class="material-symbols-outlined" style="font-size:13px">chevron_right</span>
@@ -178,8 +342,6 @@ function render({ project, drawingStats, thumbnailUrl }) {
             : ""}
         </div>
         <div class="proj-detail-hero-actions">
-          <div class="proj-detail-status-wrap">${statusHtml}</div>
-          ${advPaidHtml}
           <a class="ghost-btn btn-sm" href="/audit?projectId=${project.id}">
             <span class="material-symbols-outlined" style="font-size:14px">history</span> Audit Log
           </a>
@@ -191,6 +353,8 @@ function render({ project, drawingStats, thumbnailUrl }) {
       </div>
       ${meta ? `<p class="proj-detail-meta">${escHtml(meta)}</p>` : ""}
       <p class="proj-detail-dates">Created ${createdDate} · Updated ${updatedDate}</p>
+      ${buildPhaseStepper(project)}
+      ${buildCriteriaPanel(project, drawingStats)}
     </div>
 
     <!-- ── Workspace controls ───────────────────────────────────────────────────── -->
@@ -756,11 +920,30 @@ function buildTasksSection() {
 
 // ─── Wire interactions ────────────────────────────────────────────────────────
 function wireInteractions(project) {
-  if (can.changeStatus())
-    document.getElementById("statusSelect")?.addEventListener("change", handleStatusChange);
+  // Phase navigation buttons
+  document.getElementById("phaseNextBtn")?.addEventListener("click", e => handlePhaseChange(e.currentTarget.dataset.phase));
+  document.getElementById("phaseBackBtn")?.addEventListener("click", e => handlePhaseChange(e.currentTarget.dataset.phase));
+  document.getElementById("phaseCancelBtn")?.addEventListener("click", e => {
+    if (confirm("Are you sure you want to cancel this project?")) handlePhaseChange("cancelled");
+  });
+  document.getElementById("onHoldBtn")?.addEventListener("click", () => handleOnHoldToggle(!project.on_hold));
+
+  // Phase criteria flag buttons
+  document.querySelectorAll(".phase-flag-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const flag  = btn.dataset.flag;
+      const value = btn.dataset.value === "true";
+      // Advance payment uses its own endpoint
+      if (flag === "advance_payment_done") {
+        handleMarkPaid(value);
+      } else {
+        handlePhaseFlagToggle(flag, value);
+      }
+    });
+  });
 
   if (!project.advance_payment_done && can.markPaid())
-    document.getElementById("markPaidBtn")?.addEventListener("click", handleMarkPaid);
+    document.getElementById("markPaidBtn")?.addEventListener("click", () => handleMarkPaid(true));
 
   if (can.editProject())
     document.getElementById("editDetailsBtn")?.addEventListener("click", openEditModal);
@@ -899,36 +1082,64 @@ function wireInteractions(project) {
   });
 }
 
-// ─── Status change ────────────────────────────────────────────────────────────
-async function handleStatusChange(e) {
-  const newStatus = e.target.value;
+// ─── Phase change ─────────────────────────────────────────────────────────────
+async function handlePhaseChange(newPhase) {
   try {
-    const res = await apiFetch("/api/project/update-status", {
+    const res = await apiFetch("/api/project/update-phase", {
       method: "POST",
-      body: JSON.stringify({ projectId: _projectId, status: newStatus }),
+      body: JSON.stringify({ projectId: _projectId, phase: newPhase }),
     });
     if (!res.ok) {
       const d = await res.json();
-      alert(d.error || "Failed to update status.");
-      e.target.value = _project.status;
+      alert(d.error || "Failed to update phase.");
     } else {
-      _project.status = newStatus;
+      await loadAll();
     }
-  } catch { e.target.value = _project.status; }
+  } catch { alert("Failed to update phase."); }
+}
+
+// ─── On-hold toggle ───────────────────────────────────────────────────────────
+async function handleOnHoldToggle(onHold) {
+  try {
+    const res = await apiFetch("/api/project/toggle-on-hold", {
+      method: "POST",
+      body: JSON.stringify({ projectId: _projectId, onHold }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      alert(d.error || "Failed to update on-hold status.");
+    } else {
+      await loadAll();
+    }
+  } catch { alert("Failed to update on-hold status."); }
+}
+
+// ─── Phase criteria flag toggle ───────────────────────────────────────────────
+async function handlePhaseFlagToggle(flag, value) {
+  try {
+    const res = await apiFetch("/api/project/update-phase-flag", {
+      method: "POST",
+      body: JSON.stringify({ projectId: _projectId, flag, value }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      alert(d.error || "Failed to update.");
+    } else {
+      await loadAll();
+    }
+  } catch { alert("Failed to update."); }
 }
 
 // ─── Mark advance paid ────────────────────────────────────────────────────────
-async function handleMarkPaid() {
-  const btn = document.getElementById("markPaidBtn");
-  btn.disabled = true; btn.textContent = "Saving…";
+async function handleMarkPaid(done = true) {
   try {
     const res = await apiFetch("/api/project/advance-payment", {
       method: "POST",
-      body: JSON.stringify({ projectId: _projectId, done: true }),
+      body: JSON.stringify({ projectId: _projectId, done }),
     });
     if (res.ok) await loadAll();
-    else { btn.disabled = false; btn.textContent = "Mark Advance Paid"; }
-  } catch { btn.disabled = false; btn.textContent = "Mark Advance Paid"; }
+    else { const d = await res.json(); alert(d.error || "Failed to update advance payment."); }
+  } catch { alert("Failed to update advance payment."); }
 }
 
 // ─── Edit modal ───────────────────────────────────────────────────────────────

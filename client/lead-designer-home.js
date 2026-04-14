@@ -152,11 +152,18 @@
   // ── Project list (tabular) ───────────────────────────────────────────────────
   function renderProjects(projects, summary, allAssignments) {
     const container = document.getElementById('projectListContainer');
-    const statusLabel = { active: 'Active', advanced_paid: 'Advance Paid', in_progress: 'In Progress',
-      completed: 'Completed', on_hold: 'On Hold', cancelled: 'Cancelled' };
-    const statusCls = { active: 'text-primary bg-primary-container', advanced_paid: 'text-secondary bg-secondary-container',
-      in_progress: 'text-tertiary bg-tertiary-container', completed: 'text-primary bg-primary-container',
-      on_hold: 'text-on-surface-variant bg-surface-container', cancelled: 'text-error bg-[#fff0f0]' };
+    const statusLabel = {
+      prospect: 'Prospect', design: 'Design', prep: 'Site Prep',
+      production: 'Production', execution: 'Execution',
+      completed: 'Completed', cancelled: 'Cancelled' };
+    const statusCls = {
+      prospect: 'text-on-surface-variant bg-surface-container',
+      design: 'text-secondary bg-secondary-container',
+      prep: 'text-tertiary bg-tertiary-container',
+      production: 'text-primary bg-primary-container',
+      execution: 'text-primary bg-primary-container',
+      completed: 'text-primary bg-primary-container',
+      cancelled: 'text-error bg-[#fff0f0]' };
     const dtLabel = { civil: 'Civil', electrical: 'Electrical', plumbing: 'Plumbing',
       hvac: 'HVAC', firefighting: 'Fire', architectural: 'Arch', structural: 'Structural',
       interior: 'Interior', landscape: 'Landscape', other: 'Other' };
@@ -168,8 +175,9 @@
       const approvedPct = s.total ? Math.round((s.approved / s.total) * 100) : 0;
       const reviewPct   = s.total ? Math.round((s.pending_review / s.total) * 100) : 0;
       const allDone     = s.total > 0 && s.approved === s.total;
-      const sCls = statusCls[p.status] || 'text-on-surface-variant bg-surface-container';
-      const sLbl = statusLabel[p.status] || p.status || '—';
+      const sCls = statusCls[p.phase || p.status] || 'text-on-surface-variant bg-surface-container';
+      const sLbl = statusLabel[p.phase || p.status] || p.phase || p.status || '—';
+      const onHoldChip = p.on_hold ? `<span class="ml-1 px-2 py-0.5 rounded-full text-[9px] font-bold" style="background:#fff3cd;color:#7c5e00">On Hold</span>` : '';
       const meta = [p.bhk, p.property_type, p.total_area_m2 ? p.total_area_m2 + ' m²' : null].filter(Boolean).join(' · ');
 
       const projAssignments = allAssignments[p.id] || [];
@@ -205,7 +213,7 @@
           </td>
           <td class="px-5 py-4">
             <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${sCls}">${esc(sLbl)}</span>
-            ${p.advance_payment_done ? `<span class="ml-1 text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-container px-2.5 py-1 rounded-full">₹ Paid</span>` : ''}
+            ${onHoldChip}
           </td>
           <td class="px-5 py-4 hidden md:table-cell" style="min-width:160px">
             ${s.total > 0 ? `

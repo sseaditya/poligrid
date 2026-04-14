@@ -66,7 +66,8 @@ async function loadProjects(session, profile) {
           <div class="proj-mini-info">
             <span class="proj-mini-name">${escHtml(p.name || "Untitled")}</span>
             <span class="proj-mini-meta">${escHtml(p.bhk || "")} ${escHtml(p.property_type || "")} ${p.client_name ? "· " + escHtml(p.client_name) : ""}</span>
-            ${p.status !== "active" ? `<span class="badge badge-${p.status}">${p.status}</span>` : ""}
+            ${p.phase && p.phase !== "prospect" ? `<span class="badge badge-proj-${p.phase}">${p.phase.replace(/_/g, " ")}</span>` : ""}
+            ${p.on_hold ? `<span class="badge" style="background:#fff3cd;color:#7c5e00;font-size:9px">On Hold</span>` : ""}
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             <button class="advance-pay-btn ${p.advance_payment_done ? "advance-pay-done" : ""}"

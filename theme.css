@@ -332,12 +332,18 @@
 .badge-completed { background: var(--color-primary-container); color: var(--color-primary); }
 .badge-cancelled { background: rgba(159,64,61,0.1);  color: var(--color-error); }
 .badge-success   { background: rgba(46,125,67,0.12); color: var(--success); border-color: rgba(46,125,67,0.3); }
-.badge-proj-active    { background: rgba(46,125,67,0.1);  color: var(--success); border-color: rgba(46,125,67,0.3); }
-.badge-proj-on_hold   { background: rgba(184,109,53,0.1); color: var(--gold); border-color: rgba(184,109,53,0.3); }
-.badge-proj-completed { background: var(--color-primary-container); color: var(--color-primary); border-color: var(--color-primary-fixed-dim); }
-.badge-proj-cancelled { background: rgba(159,64,61,0.1);  color: var(--color-error); border-color: rgba(159,64,61,0.3); }
+.badge-proj-active      { background: rgba(46,125,67,0.1);  color: var(--success); border-color: rgba(46,125,67,0.3); }
+.badge-proj-on_hold     { background: rgba(184,109,53,0.1); color: var(--gold); border-color: rgba(184,109,53,0.3); }
+.badge-proj-completed   { background: var(--color-primary-container); color: var(--color-primary); border-color: var(--color-primary-fixed-dim); }
+.badge-proj-cancelled   { background: rgba(159,64,61,0.1);  color: var(--color-error); border-color: rgba(159,64,61,0.3); }
 .badge-proj-advanced_paid { background: var(--color-primary-container); color: var(--color-primary); border-color: var(--color-primary-fixed-dim); }
 .badge-proj-in_progress   { background: rgba(40,80,184,0.1); color: #3a5ab8; border-color: rgba(40,80,184,0.3); }
+/* Phase badges */
+.badge-proj-prospect   { background: rgba(115,115,115,0.1); color: var(--color-on-surface-variant); border-color: rgba(115,115,115,0.3); }
+.badge-proj-design     { background: var(--color-secondary-container); color: var(--color-on-secondary-container); border-color: var(--color-secondary-fixed-dim); }
+.badge-proj-prep       { background: rgba(40,80,184,0.1); color: #3a5ab8; border-color: rgba(40,80,184,0.3); }
+.badge-proj-production { background: var(--color-primary-container); color: var(--color-primary); border-color: var(--color-primary-fixed-dim); }
+.badge-proj-execution  { background: rgba(46,125,67,0.1); color: var(--success); border-color: rgba(46,125,67,0.3); }
 .badge-advance   { background: rgba(46,125,67,0.12); color: var(--success); border-color: rgba(46,125,67,0.3); }
 .badge-proj-adv-paid { background: rgba(100,60,200,0.1); color: #8b5cf6; border-color: rgba(100,60,200,0.3); }
 

@@ -24,12 +24,18 @@ async function loadProjectList() {
 }
 
 const PROJ_STATUS_META = {
-  active:        { label: "Active",         cls: "badge-proj-active" },
-  advanced_paid: { label: "Advanced Paid",  cls: "badge-proj-adv-paid" },
-  in_progress:   { label: "In Progress",    cls: "badge-proj-active" },
-  completed:     { label: "Completed",      cls: "badge-proj-completed" },
+  prospect:   { label: "Prospect",   cls: "badge-proj-prospect" },
+  design:     { label: "Design",     cls: "badge-proj-design" },
+  prep:       { label: "Site Prep",  cls: "badge-proj-prep" },
+  production: { label: "Production", cls: "badge-proj-production" },
+  execution:  { label: "Execution",  cls: "badge-proj-execution" },
+  completed:  { label: "Completed",  cls: "badge-proj-completed" },
+  cancelled:  { label: "Cancelled",  cls: "badge-proj-cancelled" },
+  // legacy fallbacks
+  active:        { label: "Prospect",       cls: "badge-proj-prospect" },
+  advanced_paid: { label: "Design",         cls: "badge-proj-design" },
+  in_progress:   { label: "Design",         cls: "badge-proj-design" },
   on_hold:       { label: "On Hold",        cls: "badge-proj-on_hold" },
-  cancelled:     { label: "Cancelled",      cls: "badge-proj-cancelled" },
 };
 
 function renderProjectCards(projects) {
@@ -48,13 +54,14 @@ function renderProjectCards(projects) {
     card.dataset.id = p.id;
     const date = new Date(p.updated_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
     const meta = [p.property_type, p.bhk_type || p.bhk, p.total_area_m2 ? p.total_area_m2 + " m²" : null].filter(Boolean).join(" · ");
-    const statusMeta = PROJ_STATUS_META[p.status] || null;
+    const statusMeta = PROJ_STATUS_META[p.phase || p.status] || null;
+    const onHoldChip = p.on_hold ? `<span class="badge badge-proj-on_hold" style="font-size:9px;padding:1px 6px">On Hold</span>` : "";
 
-    // "Mark Advanced Paid" shown to sales/admin if not already advanced_paid or completed
+    // "Mark Advance Paid" shown to sales/admin if not yet done and project not closed
     const showAdvPaidBtn = isSalesOrAdmin &&
-      p.status !== "advanced_paid" &&
-      p.status !== "completed" &&
-      p.status !== "cancelled";
+      !p.advance_payment_done &&
+      p.phase !== "completed" &&
+      p.phase !== "cancelled";
 
     card.innerHTML = `
       <div class="proj-card-thumb">
@@ -63,7 +70,7 @@ function renderProjectCards(projects) {
       <div class="proj-card-body">
         <div class="proj-card-name-row">
           <span class="proj-card-name">${escapeHtml(p.name || "Untitled project")}</span>
-          ${statusMeta ? `<span class="badge ${statusMeta.cls} proj-status-badge">${statusMeta.label}</span>` : ""}
+          ${statusMeta ? `<span class="badge ${statusMeta.cls} proj-status-badge">${statusMeta.label}</span>` : ""}${onHoldChip}
         </div>
         <div class="proj-card-meta">${escapeHtml(meta)}</div>
         ${p.summary ? `<div class="proj-card-summary">${escapeHtml(p.summary)}</div>` : ""}
@@ -85,16 +92,17 @@ function renderProjectCards(projects) {
         btn.textContent = "Saving…";
         try {
           const headers = await AuthClient.authHeader();
-          const res = await fetch("/api/project/update-status", {
+          const res = await fetch("/api/project/advance-payment", {
             method: "POST",
             headers: { ...headers, "Content-Type": "application/json" },
-            body: JSON.stringify({ projectId: p.id, status: "advanced_paid" }),
+            body: JSON.stringify({ projectId: p.id, done: true }),
           });
           if (!res.ok) throw new Error((await res.json()).error);
-          p.status = "advanced_paid";
+          p.advance_payment_done = true;
+          if (p.phase === "prospect") p.phase = "design";
           // Re-render just this card's badge and button
           const badgeEl = card.querySelector(".proj-status-badge");
-          const footerMeta = PROJ_STATUS_META["advanced_paid"];
+          const footerMeta = PROJ_STATUS_META[p.phase] || PROJ_STATUS_META["design"];
           if (badgeEl) {
             badgeEl.className = `badge ${footerMeta.cls} proj-status-badge`;
             badgeEl.textContent = footerMeta.label;

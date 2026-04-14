@@ -483,7 +483,7 @@ async function projectList(auth) {
 
   let query = sb
     .from("projects")
-    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by, advance_payment_done, floor_plans(storage_path)")
+    .select("id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, phase, on_hold, client_name, created_by, advance_payment_done, design_payment_done, prep_approved, production_done, final_payment_done, execution_confirmed, floor_plans(storage_path)")
     .order("updated_at", { ascending: false });
 
   // Filter by role when auth is present
@@ -614,33 +614,92 @@ async function projectSaveBrief(body) {
   return { ok: true };
 }
 
-async function projectUpdateStatus(body, auth) {
-  const { projectId, status } = body;
-  if (!projectId || !status) throw httpError(400, "projectId, status required.");
+async function projectUpdatePhase(body, auth) {
+  const { projectId, phase } = body;
+  if (!projectId || !phase) throw httpError(400, "projectId, phase required.");
 
-  const VALID = ["active", "advanced_paid", "in_progress", "completed", "on_hold", "cancelled"];
-  if (!VALID.includes(status)) throw httpError(400, `Invalid status. Must be: ${VALID.join(", ")}`);
+  const VALID = ["prospect", "design", "prep", "production", "execution", "completed", "cancelled"];
+  if (!VALID.includes(phase)) throw httpError(400, `Invalid phase. Must be: ${VALID.join(", ")}`);
 
   const sb = db.getClient();
   const { data: projectBefore } = await sb
     .from("projects")
-    .select("name, status")
+    .select("name, phase")
     .eq("id", projectId)
     .maybeSingle();
 
   const { error } = await sb.from("projects")
-    .update({ status, updated_at: new Date().toISOString() })
+    .update({ phase, updated_at: new Date().toISOString() })
     .eq("id", projectId);
-  if (error) throw httpError(500, "Status update failed: " + error.message);
+  if (error) throw httpError(500, "Phase update failed: " + error.message);
 
   await logAuditEvent({
     category: auth?.profile?.role === "sales" ? "sales" : "design",
-    subcategory: "project_status_change",
+    subcategory: "project_phase_change",
     projectId,
     actionedBy: auth?.profile?.id || null,
     actionedByName: auth?.profile?.full_name || null,
-    logMessage: `${auth?.profile?.full_name || "User"} changed project status from ${projectBefore?.status || "unknown"} to ${status} for ${projectBefore?.name || "project"}.`,
-    metadata: { previousStatus: projectBefore?.status || null, newStatus: status },
+    logMessage: `${auth?.profile?.full_name || "User"} changed project phase from ${projectBefore?.phase || "unknown"} to ${phase} for ${projectBefore?.name || "project"}.`,
+    metadata: { previousPhase: projectBefore?.phase || null, newPhase: phase },
+  });
+
+  return { ok: true };
+}
+
+async function projectToggleOnHold(body, auth) {
+  const { projectId, onHold } = body;
+  if (!projectId || typeof onHold !== "boolean") throw httpError(400, "projectId and onHold (boolean) required.");
+
+  const sb = db.getClient();
+  const { data: project } = await sb.from("projects").select("name, phase").eq("id", projectId).maybeSingle();
+  const { error } = await sb.from("projects")
+    .update({ on_hold: onHold, updated_at: new Date().toISOString() })
+    .eq("id", projectId);
+  if (error) throw httpError(500, "On-hold toggle failed: " + error.message);
+
+  await logAuditEvent({
+    category: "design",
+    subcategory: onHold ? "project_on_hold" : "project_resumed",
+    projectId,
+    actionedBy: auth?.profile?.id || null,
+    actionedByName: auth?.profile?.full_name || null,
+    logMessage: `${auth?.profile?.full_name || "User"} ${onHold ? "placed" : "resumed"} project ${project?.name || "project"} ${onHold ? "on hold" : "from hold"}.`,
+    metadata: { phase: project?.phase || null, onHold },
+  });
+
+  return { ok: true };
+}
+
+async function projectUpdatePhaseFlag(req, body) {
+  const { projectId, flag, value } = body;
+  if (!projectId || !flag) throw httpError(400, "projectId and flag required.");
+
+  const ALLOWED_FLAGS = {
+    design_payment_done:  ["admin", "sales"],
+    prep_approved:        ["admin", "lead_designer"],
+    production_done:      ["admin", "lead_designer"],
+    final_payment_done:   ["admin", "sales"],
+    execution_confirmed:  ["admin", "lead_designer"],
+  };
+  if (!ALLOWED_FLAGS[flag]) throw httpError(400, `Unknown flag: ${flag}`);
+
+  const { profile } = await requireAuth(req, ALLOWED_FLAGS[flag]);
+
+  const sb = db.getClient();
+  const { data: project } = await sb.from("projects").select("name").eq("id", projectId).maybeSingle();
+  const { error } = await sb.from("projects")
+    .update({ [flag]: !!value, updated_at: new Date().toISOString() })
+    .eq("id", projectId);
+  if (error) throw httpError(500, `Flag update failed: ${error.message}`);
+
+  await logAuditEvent({
+    category: "design",
+    subcategory: "project_phase_flag",
+    projectId,
+    actionedBy: profile.id,
+    actionedByName: profile.full_name,
+    logMessage: `${profile.full_name} marked ${flag.replace(/_/g, " ")} as ${value ? "done" : "undone"} for ${project?.name || "project"}.`,
+    metadata: { flag, value: !!value },
   });
 
   return { ok: true };
@@ -652,7 +711,7 @@ async function salesProjectList(auth) {
   const supabaseUrl = process.env.SUPABASE_URL;
   const userId = auth.profile.id;
 
-  const FIELDS = "id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, client_name, created_by, floor_plans(storage_path)";
+  const FIELDS = "id, name, property_type, bhk, bhk_type, total_area_m2, summary, created_at, updated_at, status, phase, on_hold, client_name, created_by, advance_payment_done, floor_plans(storage_path)";
   const toProject = ({ floor_plans, ...p }) => {
     const fp = Array.isArray(floor_plans) ? floor_plans[0] : floor_plans;
     return {
@@ -690,6 +749,7 @@ async function projectCreate(req, body) {
     client_name: clientName?.trim() || null,
     created_by:  profile.id,
     status:      "active",
+    phase:       "prospect",
   });
   if (error) throw httpError(500, error.message);
 
@@ -720,10 +780,14 @@ async function projectAdvancePayment(req, body) {
   if (!projectId) throw httpError(400, "projectId required.");
 
   const sb = db.getClient();
-  const { data: project } = await sb.from("projects").select("name").eq("id", projectId).maybeSingle();
+  const { data: project } = await sb.from("projects").select("name, phase").eq("id", projectId).maybeSingle();
+
+  // Auto-advance from prospect → design when advance payment is marked done
+  const phaseUpdate = (done && project?.phase === "prospect") ? { phase: "design" } : {};
+
   const { error } = await sb
     .from("projects")
-    .update({ advance_payment_done: !!done, updated_at: new Date().toISOString() })
+    .update({ advance_payment_done: !!done, ...phaseUpdate, updated_at: new Date().toISOString() })
     .eq("id", projectId);
   if (error) throw httpError(500, error.message);
 
@@ -734,7 +798,8 @@ async function projectAdvancePayment(req, body) {
       projectId,
       actionedBy: profile.id,
       actionedByName: profile.full_name,
-      logMessage: `${profile.full_name} marked ${project?.name || "project"} as advance paid.`,
+      logMessage: `${profile.full_name} marked ${project?.name || "project"} as advance paid.${phaseUpdate.phase ? " Project advanced to Design phase." : ""}`,
+      metadata: { phaseAdvanced: !!phaseUpdate.phase },
     });
   }
 
@@ -853,7 +918,10 @@ module.exports = {
   projectLoad,
   projectLoadVersions,
   salesProjectList,
-  projectUpdateStatus,
+  projectUpdateStatus: projectUpdatePhase, // backward-compat alias
+  projectUpdatePhase,
+  projectToggleOnHold,
+  projectUpdatePhaseFlag,
   projectCreate,
   projectAdvancePayment,
   projectDetail,

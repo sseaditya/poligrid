@@ -114,5 +114,9 @@ function renderTable() {
 }
 
 function statusLabel(s) {
-  return { active: "Active", on_hold: "On Hold", completed: "Completed", cancelled: "Cancelled" }[s] || s || "—";
+  return {
+    prospect: "Prospect", design: "Design", prep: "Site Prep",
+    production: "Production", execution: "Execution",
+    completed: "Completed", cancelled: "Cancelled"
+  }[s] || s || "—";
 }

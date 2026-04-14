@@ -27,6 +27,9 @@ const {
   projectLoadVersions,
   salesProjectList,
   projectUpdateStatus,
+  projectUpdatePhase,
+  projectToggleOnHold,
+  projectUpdatePhaseFlag,
   projectCreate,
   projectAdvancePayment,
   projectDetail,
@@ -177,6 +180,17 @@ module.exports = async (req, res) => {
     if (req.method === "POST" && pathname === "/api/project/update-status") {
       const auth = await getAuthProfile(req);
       return sendJson(res, 200, await projectUpdateStatus(await readJson(req), auth));
+    }
+    if (req.method === "POST" && pathname === "/api/project/update-phase") {
+      const auth = await requireAuth(req, ["admin", "lead_designer"]);
+      return sendJson(res, 200, await projectUpdatePhase(await readJson(req), auth));
+    }
+    if (req.method === "POST" && pathname === "/api/project/toggle-on-hold") {
+      const auth = await requireAuth(req, ["admin", "lead_designer"]);
+      return sendJson(res, 200, await projectToggleOnHold(await readJson(req), auth));
+    }
+    if (req.method === "POST" && pathname === "/api/project/update-phase-flag") {
+      return sendJson(res, 200, await projectUpdatePhaseFlag(req, await readJson(req)));
     }
     if (req.method === "POST" && pathname === "/api/project/advance-payment") {
       return sendJson(res, 200, await projectAdvancePayment(req, await readJson(req)));

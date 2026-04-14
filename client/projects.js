@@ -4,22 +4,24 @@ let _session, _profile;
 let _allProjects   = [];
 let _drawingSummary = {};   // { [projectId]: { total, approved, pending_review, revision_requested } }
 
-const STATUS_LABELS = {
-  active:        "Active",
-  advanced_paid: "Advance Paid",
-  in_progress:   "In Progress",
-  completed:     "Completed",
-  on_hold:       "On Hold",
-  cancelled:     "Cancelled",
+const PHASE_LABELS = {
+  prospect:   "Prospect",
+  design:     "Design",
+  prep:       "Site Prep",
+  production: "Production",
+  execution:  "Execution",
+  completed:  "Completed",
+  cancelled:  "Cancelled",
 };
 
-const STATUS_CLS = {
-  active:        "text-primary bg-primary-container",
-  advanced_paid: "text-secondary bg-secondary-container",
-  in_progress:   "text-tertiary bg-tertiary-container",
-  completed:     "text-primary bg-primary-container",
-  on_hold:       "text-on-surface-variant bg-surface-container",
-  cancelled:     "text-error bg-[#fff0f0]",
+const PHASE_CLS = {
+  prospect:   "text-on-surface-variant bg-surface-container",
+  design:     "text-secondary bg-secondary-container",
+  prep:       "text-tertiary bg-tertiary-container",
+  production: "text-primary bg-primary-container",
+  execution:  "text-primary bg-primary-container",
+  completed:  "text-primary bg-primary-container",
+  cancelled:  "text-error bg-[#fff0f0]",
 };
 
 (async () => {
@@ -107,7 +109,7 @@ function renderTable() {
     );
   }
   if (status) {
-    list = list.filter(p => p.status === status);
+    list = list.filter(p => p.phase === status);
   }
 
   if (!list.length) {
@@ -123,8 +125,9 @@ function renderTable() {
   const showDrawings = ["designer", "lead_designer", "admin"].includes(role);
 
   const rows = list.map(p => {
-    const sCls   = STATUS_CLS[p.status] || "text-on-surface-variant bg-surface-container";
-    const sLbl   = STATUS_LABELS[p.status] || p.status || "—";
+    const sCls   = PHASE_CLS[p.phase] || "text-on-surface-variant bg-surface-container";
+    const sLbl   = PHASE_LABELS[p.phase] || p.phase || "—";
+    const onHoldChip = p.on_hold ? `<span class="badge" style="background:#fff3cd;color:#7c5e00;font-size:9px;padding:1px 6px">On Hold</span>` : "";
     const meta   = [p.bhk, p.property_type, p.total_area_m2 ? p.total_area_m2 + " m²" : null].filter(Boolean).join(" · ");
     const date   = new Date(p.updated_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 
@@ -189,8 +192,10 @@ function renderTable() {
           <p class="font-body text-xs text-on-surface-variant">${escHtml(meta || "—")}</p>
         </td>
         <td class="px-5 py-4">
-          <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${sCls}">${escHtml(sLbl)}</span>
-          ${p.advance_payment_done ? `<span class="ml-1 text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-container px-2.5 py-1 rounded-full">₹ Paid</span>` : ""}
+          <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+            <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${sCls}">${escHtml(sLbl)}</span>
+            ${onHoldChip}
+          </div>
         </td>
         ${drawingsCell}
         <td class="px-5 py-4 hidden lg:table-cell">

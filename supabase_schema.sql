@@ -54,7 +54,9 @@ CREATE TABLE IF NOT EXISTS projects (
   client_name    TEXT,
   client_email   TEXT,
   client_phone   TEXT,
-  status         TEXT        NOT NULL DEFAULT 'active',
+  status         TEXT        NOT NULL DEFAULT 'active',  -- legacy; kept for audit compat
+  phase          TEXT        NOT NULL DEFAULT 'prospect', -- prospect|design|prep|production|execution|completed|cancelled
+  on_hold        BOOLEAN     NOT NULL DEFAULT FALSE,      -- overlay: project paused within current phase
   property_type  TEXT,
   bhk            TEXT,
   bhk_type       TEXT,
@@ -63,7 +65,13 @@ CREATE TABLE IF NOT EXISTS projects (
   notes          TEXT,
   orientation    TEXT,
   summary        TEXT,
-  advance_payment_done BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Phase completion criteria flags
+  advance_payment_done  BOOLEAN NOT NULL DEFAULT FALSE,  -- Phase 1: prospect
+  design_payment_done   BOOLEAN NOT NULL DEFAULT FALSE,  -- Phase 2: design
+  prep_approved         BOOLEAN NOT NULL DEFAULT FALSE,  -- Phase 3: prep
+  production_done       BOOLEAN NOT NULL DEFAULT FALSE,  -- Phase 4: production
+  final_payment_done    BOOLEAN NOT NULL DEFAULT FALSE,  -- Phase 4: production
+  execution_confirmed   BOOLEAN NOT NULL DEFAULT FALSE,  -- Phase 5: execution
   created_by     UUID        REFERENCES auth.users(id)
 );
 
@@ -74,6 +82,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 CREATE INDEX IF NOT EXISTS idx_projects_created_by ON projects(created_by);
 CREATE INDEX IF NOT EXISTS idx_projects_status     ON projects(status);
+CREATE INDEX IF NOT EXISTS idx_projects_phase      ON projects(phase);
 
 -- ─── 2. Profiles (extends Supabase auth.users) ───────────────────────────────
 
@@ -429,11 +438,13 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_actioned_on ON audit_logs(actioned_on 
 
 -- ─── 19. CEO Dashboard View ──────────────────────────────────────────────────
 
-CREATE OR REPLACE VIEW ceo_project_dashboard AS
+-- Note: use DROP + CREATE (not CREATE OR REPLACE) when adding columns to a view
+CREATE VIEW ceo_project_dashboard AS
 SELECT
   p.id                                                                       AS project_id,
   p.name                                                                     AS project_name,
-  p.status                                                                   AS project_status,
+  p.phase                                                                    AS project_status,  -- phase value (prospect|design|prep|…)
+  p.on_hold                                                                  AS project_on_hold,
   p.client_name,
   p.created_at,
   creator.full_name                                                          AS sales_person,
@@ -448,7 +459,7 @@ LEFT JOIN profiles creator          ON p.created_by = creator.id
 LEFT JOIN project_assignments pa    ON p.id = pa.project_id
 LEFT JOIN drawings d                ON p.id = d.project_id
 LEFT JOIN tasks t                   ON p.id = t.project_id
-GROUP BY p.id, p.name, p.status, p.client_name, p.created_at, creator.full_name;
+GROUP BY p.id, p.name, p.phase, p.on_hold, p.client_name, p.created_at, creator.full_name;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Storage Buckets (create manually in Supabase Dashboard → Storage)

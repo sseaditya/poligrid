@@ -12,18 +12,24 @@ let _projects = [];
 let _projectsLoaded = false;
 let _dashProjects = []; // from /api/ceo/dashboard
 
-// Status display helpers (shared with renderProjects)
+// Phase display helpers (shared with renderProjects)
 const STATUS_LABELS = {
-  active: 'Active', in_progress: 'In Progress', advanced_paid: 'Advanced Paid',
-  on_hold: 'On Hold', completed: 'Completed', cancelled: 'Cancelled',
+  prospect:   'Prospect',
+  design:     'Design',
+  prep:       'Site Prep',
+  production: 'Production',
+  execution:  'Execution',
+  completed:  'Completed',
+  cancelled:  'Cancelled',
 };
 const STATUS_CLS = {
-  active:        'text-primary bg-primary-container',
-  advanced_paid: 'text-secondary bg-secondary-container',
-  in_progress:   'text-tertiary bg-tertiary-container',
-  completed:     'text-primary bg-primary-container',
-  on_hold:       'text-on-surface-variant bg-surface-container',
-  cancelled:     'text-error bg-[#fff0f0]',
+  prospect:   'text-on-surface-variant bg-surface-container',
+  design:     'text-secondary bg-secondary-container',
+  prep:       'text-tertiary bg-tertiary-container',
+  production: 'text-primary bg-primary-container',
+  execution:  'text-primary bg-primary-container',
+  completed:  'text-primary bg-primary-container',
+  cancelled:  'text-error bg-[#fff0f0]',
 };
 const DT_LABEL = {
   civil: 'Civil', electrical: 'Electrical', plumbing: 'Plumbing', hvac: 'HVAC',
@@ -147,18 +153,15 @@ function renderKPIs() {
   if (!_projectsLoaded) return;
 
   const total    = _projects.length;
-  const active   = _projects.filter(p => p.status === 'active').length;
-  const advPaid  = _projects.filter(p => p.advance_payment_done).length;
-  const onHold   = _projects.filter(p => p.status === 'on_hold').length;
-
-  const completed       = _projects.filter(p => p.status === 'completed').length;
+  const inDesign = _projects.filter(p => p.phase === 'design').length;
+  const onHold   = _projects.filter(p => p.on_hold).length;
+  const completed       = _projects.filter(p => p.phase === 'completed').length;
   const pendingDrawings = _teamStats?.pendingDrawingsTotal ?? '—';
 
   const kpis = [
     { label: 'Total Projects',     value: total,           icon: 'architecture',  accent: false },
-    { label: 'Active',             value: active,          icon: 'trending_up',   accent: false },
-    { label: 'Advance Paid',       value: advPaid,         icon: 'payments',      accent: true  },
-    { label: 'On Hold',            value: onHold,          icon: 'pause_circle',  accent: false },
+    { label: 'In Design',          value: inDesign,        icon: 'draw',          accent: false },
+    { label: 'On Hold',            value: onHold,          icon: 'pause_circle',  accent: onHold > 0 },
     { label: 'Drawings to Review', value: pendingDrawings, icon: 'rate_review',   accent: Number(pendingDrawings) > 0 },
     { label: 'Completed',          value: completed,       icon: 'check_circle',  accent: completed > 0 },
   ];
@@ -203,7 +206,7 @@ function renderProjectList(summaryOrEvent, assignmentsArg) {
     const matchSearch = !search ||
       (p.name || '').toLowerCase().includes(search) ||
       (p.client_name || '').toLowerCase().includes(search);
-    const matchStatus = !filter || p.status === filter;
+    const matchStatus = !filter || p.phase === filter;
     return matchSearch && matchStatus;
   });
 
@@ -226,8 +229,9 @@ function renderProjectList(summaryOrEvent, assignmentsArg) {
     const approvedPct = s.total ? Math.round((s.approved / s.total) * 100) : 0;
     const reviewPct   = s.total ? Math.round((s.pending_review / s.total) * 100) : 0;
     const allDone     = s.total > 0 && s.approved === s.total;
-    const sCls        = STATUS_CLS[p.status] || 'text-on-surface-variant bg-surface-container';
-    const sLbl        = STATUS_LABELS[p.status] || p.status || '—';
+    const sCls        = STATUS_CLS[p.phase] || 'text-on-surface-variant bg-surface-container';
+    const sLbl        = STATUS_LABELS[p.phase] || p.phase || '—';
+    const onHoldChip  = p.on_hold ? `<span class="ml-1 px-2 py-0.5 rounded-full text-[9px] font-bold" style="background:#fff3cd;color:#7c5e00">On Hold</span>` : '';
     const meta        = [p.bhk, p.property_type, p.total_area_m2 ? p.total_area_m2 + ' m²' : null].filter(Boolean).join(' · ');
     const salesPerson = d.sales_person ? `<span class="font-label text-[10px] text-on-surface-variant">by ${esc(d.sales_person)}</span>` : '';
 
@@ -269,7 +273,7 @@ function renderProjectList(summaryOrEvent, assignmentsArg) {
         </td>
         <td class="px-5 py-4">
           <span class="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full ${sCls}">${esc(sLbl)}</span>
-          ${p.advance_payment_done ? `<span class="ml-1 text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-container px-2.5 py-1 rounded-full">₹ Paid</span>` : ''}
+          ${onHoldChip}
           ${tasksBadge}
         </td>
         <td class="px-5 py-4 hidden md:table-cell" style="min-width:160px">
