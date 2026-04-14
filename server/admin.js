@@ -64,8 +64,35 @@ async function userUpdateRole(req, body) {
   if (!Object.keys(updates).length) throw httpError(400, "Nothing to update.");
 
   const sb = db.getClient();
+
+  // Fetch prior state for audit diff
+  const { data: target } = await sb.from("profiles").select("full_name, role, is_active").eq("id", userId).maybeSingle();
+
   const { error } = await sb.from("profiles").update(updates).eq("id", userId);
   if (error) throw httpError(500, error.message);
+
+  if (role !== undefined && target?.role !== role) {
+    await logAuditEvent({
+      category: "admin",
+      subcategory: "role_change",
+      actionedBy: admin.id,
+      actionedByName: admin.full_name,
+      logMessage: `${admin.full_name} changed ${target?.full_name || userId}'s role from ${target?.role || "?"} to ${role}.`,
+      metadata: { targetUserId: userId, fromRole: target?.role, toRole: role },
+    });
+  }
+
+  if (isActive !== undefined && target?.is_active !== isActive) {
+    await logAuditEvent({
+      category: "admin",
+      subcategory: isActive ? "user_activated" : "user_deactivated",
+      actionedBy: admin.id,
+      actionedByName: admin.full_name,
+      logMessage: `${admin.full_name} ${isActive ? "activated" : "deactivated"} ${target?.full_name || userId}.`,
+      metadata: { targetUserId: userId },
+    });
+  }
+
   return { ok: true };
 }
 
@@ -132,16 +159,34 @@ async function projectAssignUser(req, body) {
 
 // ─── Remove a user from a project ─────────────────────────────────────────────
 async function projectUnassignUser(req, body) {
-  await requireAuth(req, ["admin", "lead_designer"]);
+  const { profile } = await requireAuth(req, ["admin", "lead_designer"]);
   const { projectId, userId } = body;
   if (!projectId || !userId) throw httpError(400, "projectId, userId required.");
   const sb = db.getClient();
+
+  // Fetch context before deletion so we can write a meaningful audit entry
+  const [{ data: project }, { data: removedUser }] = await Promise.all([
+    sb.from("projects").select("name").eq("id", projectId).maybeSingle(),
+    sb.from("profiles").select("id, full_name, role").eq("id", userId).maybeSingle(),
+  ]);
+
   const { error } = await sb
     .from("project_assignments")
     .delete()
     .eq("project_id", projectId)
     .eq("user_id", userId);
   if (error) throw httpError(500, error.message);
+
+  await logAuditEvent({
+    category: "design",
+    subcategory: "team_removal",
+    projectId,
+    actionedBy: profile.id,
+    actionedByName: profile.full_name,
+    logMessage: `${profile.full_name} removed ${removedUser?.full_name || "team member"} from ${project?.name || "project"} team.`,
+    metadata: { removedUserId: userId, removedUserRole: removedUser?.role || null },
+  });
+
   return { ok: true };
 }
 

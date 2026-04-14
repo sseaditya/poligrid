@@ -363,12 +363,36 @@ function renderAssignmentsTable() {
 }
 
 function wireAssignmentEvents(container) {
-  // Remove member
+  // Remove member — 2-step confirm to prevent accidental removals
   container.querySelectorAll(".pa-tag-remove").forEach(btn => {
     btn.addEventListener("click", async e => {
       e.stopPropagation();
-      const { pid, uid } = btn.dataset;
+      const tag = btn.closest(".pa-tag");
+
+      if (!btn.dataset.confirming) {
+        // Stage 1: ask for confirmation
+        btn.dataset.confirming = "1";
+        btn.textContent = "✓ Remove?";
+        btn.title = "Click again to confirm removal";
+        btn.style.cssText = "background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;color:#dc2626;font-size:9px;font-weight:700;flex-shrink:0;opacity:1";
+        if (tag) tag.style.outline = "2px solid #fca5a5";
+
+        btn._confirmTimer = setTimeout(() => {
+          delete btn.dataset.confirming;
+          btn.textContent = "×";
+          btn.title = "Remove";
+          btn.style.cssText = "";
+          if (tag) tag.style.outline = "";
+        }, 3000);
+        return;
+      }
+
+      // Stage 2: confirmed — execute removal
+      clearTimeout(btn._confirmTimer);
       btn.disabled = true;
+      if (tag) tag.style.opacity = "0.5";
+
+      const { pid, uid } = btn.dataset;
       await fetch("/api/project/unassign-user", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },

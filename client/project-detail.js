@@ -1180,7 +1180,9 @@ async function handleAssignDesigner() {
 }
 
 async function handleUnassign(userId) {
-  if (!confirm("Remove this team member from the project?")) return;
+  const member = _team?.find(t => t.user_id === userId);
+  const name = member?.profile?.full_name || "this team member";
+  if (!confirm(`Remove ${name} from this project?\n\nNote: their drawing type assignments will also be cleared.`)) return;
   try {
     await apiFetch("/api/project/unassign-user", {
       method: "POST", body: JSON.stringify({ projectId: _projectId, userId }),
