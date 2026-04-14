@@ -121,10 +121,10 @@ const AppNav = (() => {
       return { href: slug ? `/sales/${slug}` : '/projects', icon: 'dashboard', label: 'Dashboard' };
     }
     return {
-      admin:         { href: '/admin_home',         icon: 'dashboard', label: 'Command Center' },
-      ceo:           { href: '/ceo',                 icon: 'bar_chart', label: 'CEO Dashboard'  },
-      designer:      { href: '/designer_home',       icon: 'dashboard', label: 'My Dashboard'   },
-      lead_designer: { href: '/lead_designer_home',  icon: 'dashboard', label: 'Command Center' },
+      admin: { href: '/admin_home', icon: 'dashboard', label: 'Command Center' },
+      ceo: { href: '/ceo', icon: 'bar_chart', label: 'CEO Dashboard' },
+      designer: { href: '/designer_home', icon: 'dashboard', label: 'My Dashboard' },
+      lead_designer: { href: '/lead_designer_home', icon: 'dashboard', label: 'Command Center' },
     }[role] || { href: '/homepage', icon: 'dashboard', label: 'Home' };
   }
 
@@ -143,9 +143,9 @@ const AppNav = (() => {
     }
 
     if (role === 'admin') {
-      links.push({ href: '/admin', icon: 'manage_accounts', label: 'Team'       });
-      links.push({ href: '/ceo',   icon: 'bar_chart',       label: 'CEO View'   });
-      links.push({ href: '/audit', icon: 'history',         label: 'Audit Logs' });
+      links.push({ href: '/admin', icon: 'manage_accounts', label: 'Team' });
+      links.push({ href: '/ceo', icon: 'bar_chart', label: 'CEO View' });
+      links.push({ href: '/audit', icon: 'history', label: 'Audit Logs' });
     }
 
     if (role === 'ceo') {
@@ -208,7 +208,7 @@ const AppNav = (() => {
     });
 
     const projName = (project.name || 'Project')
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
     const subBlock = document.createElement('div');
     subBlock.className = 'nav-sub-wrap pl-3 ml-5 border-l-2 border-primary/20 space-y-0.5 pb-1';
@@ -218,16 +218,16 @@ const AppNav = (() => {
     <span class="nav-label text-[10px] font-bold uppercase tracking-widest text-primary/80 truncate">${projName}</span>
   </a>
   ${subLinks.map(l => {
-    const cls = l.active
-      ? 'nav-sub-link flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] text-primary bg-primary/5 font-bold border-r-2 border-primary transition-all duration-150'
-      : 'nav-sub-link flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all duration-150';
-    const fill = l.active ? "style=\"font-variation-settings:'FILL' 1\"" : '';
-    return `
+      const cls = l.active
+        ? 'nav-sub-link flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] text-primary bg-primary/5 font-bold border-r-2 border-primary transition-all duration-150'
+        : 'nav-sub-link flex items-center gap-2 px-2 py-1.5 rounded-lg text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface transition-all duration-150';
+      const fill = l.active ? "style=\"font-variation-settings:'FILL' 1\"" : '';
+      return `
   <a class="${cls}" href="${l.href}" data-nav-tip="${l.label}"${l.active ? ' onclick="event.preventDefault()"' : ''}>
     <span class="material-symbols-outlined flex-shrink-0" style="font-size:15px" ${fill}>${l.icon}</span>
     <span class="nav-label">${l.label}</span>
   </a>`;
-  }).join('')}`;
+    }).join('')}`;
 
     // Remove any existing sub-block (no flash — just a DOM node removal)
     navEl.querySelector('.nav-sub-wrap')?.remove();
@@ -284,8 +284,8 @@ const AppNav = (() => {
   // ── Collapsible sidebar ───────────────────────────────────────────────────────
   function setupCollapse() {
     const sidebar = document.getElementById('appSidebar');
-    const main    = document.getElementById('sidebarMain');
-    const btn     = document.getElementById('sidebarToggle');
+    const main = document.getElementById('sidebarMain');
+    const btn = document.getElementById('sidebarToggle');
     if (!sidebar || !btn) return;
 
     const KEY = 'pg_sidebar_collapsed';
@@ -309,9 +309,9 @@ const AppNav = (() => {
     _injectCollapseStyles();
     _injectTransitions();
 
-    const KEY          = 'pg_sidebar_collapsed';
+    const KEY = 'pg_sidebar_collapsed';
     const startCollapsed = localStorage.getItem(KEY) === '1';
-    const label        = (title || "GOD'S EYE").toUpperCase();
+    const label = (title || "GOD'S EYE").toUpperCase();
     const profileActive = !!opts.profileActive;
 
     // ── Brand header — pure wordmark, no toggle button ──────────────────────
@@ -320,7 +320,7 @@ const AppNav = (() => {
     brand.className = [
       'hidden md:flex fixed left-0 top-0 z-40',
       'w-64 h-16',
-      'bg-surface-container-lowest',
+      'bg-background',
       'border-r border-outline-variant/10',
       'border-b border-outline-variant/10',
       'items-center px-5',

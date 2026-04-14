@@ -72,8 +72,7 @@ async function loadProjects() {
     const { projects } = await res.json();
     _allProjects = projects || [];
     const countEl = document.getElementById("projectCount");
-    countEl.textContent = _allProjects.length + " projects";
-    countEl.classList.remove("hidden");
+    if (countEl) countEl.hidden = true;
   } catch {
     _allProjects = [];
   }
