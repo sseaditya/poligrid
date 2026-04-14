@@ -88,18 +88,15 @@ async function loadProjects() {
   _projectsLoaded = true;
 
   renderKPIs();
-  renderPipeline();
 
   // Now fetch drawing + assignment data for the project list
   const ids = _projects.map(p => p.id);
-  const [summary, allAssignments, reviewData] = await Promise.all([
+  const [summary, allAssignments] = await Promise.all([
     fetchDrawingSummary(ids),
     fetchAllAssignments(ids),
-    fetchPendingReview(),
   ]);
 
   renderProjectList(summary, allAssignments);
-  renderReviewQueue(reviewData);
 }
 
 async function loadDashboard() {
@@ -115,9 +112,8 @@ async function loadTeamStats() {
   try {
     const res = await studioFetch('/api/ceo/team-stats');
     _teamStats = await res.json();
-    renderTeamPulse(_teamStats);
     renderKPIs();
-  } catch { renderTeamPulse(null); }
+  } catch { }
 }
 
 // ── Sub-fetchers ──────────────────────────────────────────────────────────────
@@ -145,14 +141,6 @@ async function fetchAllAssignments(ids) {
   } catch { return {}; }
 }
 
-async function fetchPendingReview() {
-  try {
-    const r = await studioFetch('/api/drawings/pending');
-    if (!r.ok) return null;
-    return await r.json();
-  } catch { return null; }
-}
-
 // ── Render: KPI cards ─────────────────────────────────────────────────────────
 
 function renderKPIs() {
@@ -163,8 +151,8 @@ function renderKPIs() {
   const advPaid  = _projects.filter(p => p.advance_payment_done).length;
   const onHold   = _projects.filter(p => p.status === 'on_hold').length;
 
+  const completed       = _projects.filter(p => p.status === 'completed').length;
   const pendingDrawings = _teamStats?.pendingDrawingsTotal ?? '—';
-  const openTasks       = _teamStats?.pendingTasksTotal    ?? '—';
 
   const kpis = [
     { label: 'Total Projects',     value: total,           icon: 'architecture',  accent: false },
@@ -172,7 +160,7 @@ function renderKPIs() {
     { label: 'Advance Paid',       value: advPaid,         icon: 'payments',      accent: true  },
     { label: 'On Hold',            value: onHold,          icon: 'pause_circle',  accent: false },
     { label: 'Drawings to Review', value: pendingDrawings, icon: 'rate_review',   accent: Number(pendingDrawings) > 0 },
-    { label: 'Open Tasks',         value: openTasks,       icon: 'task_alt',      accent: Number(openTasks) > 0 },
+    { label: 'Completed',          value: completed,       icon: 'check_circle',  accent: completed > 0 },
   ];
 
   document.getElementById('kpiRow').innerHTML = kpis.map(k => `
@@ -186,60 +174,6 @@ function renderKPIs() {
   `).join('');
 }
 
-// ── Render: Pipeline breakdown ─────────────────────────────────────────────────
-
-function renderPipeline() {
-  const total = _projects.length || 1;
-  const statusOrder = ['active', 'in_progress', 'advanced_paid', 'on_hold', 'completed', 'cancelled'];
-  const barColor = {
-    active: 'bg-green-500', in_progress: 'bg-purple-400', advanced_paid: 'bg-primary',
-    on_hold: 'bg-yellow-400', completed: 'bg-blue-400', cancelled: 'bg-red-300',
-  };
-
-  const counts = {};
-  statusOrder.forEach(s => counts[s] = 0);
-  _projects.forEach(p => { if (counts[p.status] != null) counts[p.status]++; });
-
-  const rows = statusOrder
-    .filter(s => counts[s] > 0)
-    .map(s => {
-      const pct = Math.round((counts[s] / total) * 100);
-      return `
-        <div class="flex items-center gap-3">
-          <span class="w-24 shrink-0 text-xs font-label font-semibold text-on-surface-variant">${STATUS_LABELS[s] || s}</span>
-          <div class="flex-1 h-2 bg-surface-container-high rounded-full overflow-hidden">
-            <div class="${barColor[s] || 'bg-gray-300'} h-full rounded-full transition-all" style="width:${pct}%"></div>
-          </div>
-          <span class="w-8 text-right text-xs font-headline font-bold text-on-background">${counts[s]}</span>
-        </div>`;
-    });
-
-  document.getElementById('pipelineBreakdown').innerHTML =
-    rows.length ? rows.join('') : `<p class="text-sm text-on-surface-variant">No projects yet.</p>`;
-}
-
-// ── Render: Team pulse ────────────────────────────────────────────────────────
-
-function renderTeamPulse(stats) {
-  const el = document.getElementById('teamPulse');
-  if (!stats) { el.innerHTML = `<p class="text-sm text-on-surface-variant">Could not load team data.</p>`; return; }
-  const rc = stats.roleCount || {};
-  const rows = [
-    { label: 'Sales',          key: 'sales',        icon: 'point_of_sale', color: 'text-blue-600',   bg: 'bg-blue-50'   },
-    { label: 'Designers',      key: 'designer',      icon: 'edit_square',   color: 'text-purple-600', bg: 'bg-purple-50' },
-    { label: 'Lead Designers', key: 'lead_designer', icon: 'verified',      color: 'text-yellow-700', bg: 'bg-yellow-50' },
-    { label: 'Admins',         key: 'admin',         icon: 'shield_person', color: 'text-primary',    bg: 'bg-primary/5' },
-    { label: 'CEO',            key: 'ceo',           icon: 'stars',         color: 'text-slate-600',  bg: 'bg-slate-50'  },
-  ].filter(r => rc[r.key]);
-
-  el.innerHTML = rows.map(r => `
-    <div class="flex items-center gap-3 p-3 rounded-lg ${r.bg}">
-      <span class="material-symbols-outlined text-[18px] ${r.color}">${r.icon}</span>
-      <span class="flex-1 text-sm font-label font-semibold text-on-background">${r.label}</span>
-      <span class="font-headline font-bold text-lg text-on-background">${rc[r.key]}</span>
-    </div>
-  `).join('');
-}
 
 // ── Render: Project list (lead-designer card style) ───────────────────────────
 
@@ -385,40 +319,6 @@ function renderProjectList(summaryOrEvent, assignmentsArg) {
         <tbody>${rows}</tbody>
       </table>
     </div>`;
-}
-
-// ── Render: Drawings review queue ─────────────────────────────────────────────
-
-function renderReviewQueue(reviewData) {
-  const container = document.getElementById('reviewQueueContainer');
-  const drawings = reviewData?.drawings || [];
-  if (!drawings.length) {
-    container.innerHTML = `
-      <div class="bg-surface-container-lowest rounded-xl p-6 flex items-center gap-4">
-        <span class="material-symbols-outlined text-primary text-2xl">check_circle</span>
-        <p class="font-body text-sm text-on-surface-variant">No drawings awaiting review. All clear!</p>
-      </div>`;
-    return;
-  }
-  container.innerHTML = drawings.slice(0, 10).map(d => `
-    <div class="bg-surface-container-lowest rounded-xl px-5 py-4 flex items-center gap-4">
-      <span class="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-container px-2.5 py-1 rounded-full flex-shrink-0">${esc(d.drawing_type)}</span>
-      <div class="flex-1 min-w-0">
-        <p class="font-body text-sm font-semibold text-on-background truncate">${esc(d.title)}</p>
-        <p class="font-body text-[11px] text-on-surface-variant mt-0.5">
-          ${d.project?.name ? esc(d.project.name) : 'Unknown project'}
-          ${d.project?.client_name ? '· ' + esc(d.project.client_name) : ''}
-          · v${d.version_number}
-          ${d.uploader?.full_name ? '· ' + esc(d.uploader.full_name) : ''}
-        </p>
-      </div>
-      <div class="flex-shrink-0">
-        <a href="/designer?projectId=${d.project_id}" class="inline-flex items-center gap-1.5 text-primary font-bold text-sm hover:gap-2.5 transition-all">
-          Review <span class="material-symbols-outlined text-[15px]">east</span>
-        </a>
-      </div>
-    </div>
-  `).join('');
 }
 
 // ── Create project modal ──────────────────────────────────────────────────────

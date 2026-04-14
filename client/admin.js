@@ -1,6 +1,7 @@
 // ─── Admin Panel ──────────────────────────────────────────────────────────────
 
-let _session, _profile, _allUsers = [], _currentProjectId;
+let _session, _profile, _allUsers = [];
+let _allProjects = [], _projectTeams = {};
 
 const ROLES = ["sales", "designer", "lead_designer", "admin", "ceo"];
 const ROLE_LABELS = {
@@ -11,6 +12,15 @@ const DEPT_LABELS = {
   sales: "Sales", designer: "Design Studio",
   lead_designer: "Design Studio", admin: "Admin", ceo: "Executive",
 };
+
+// Role columns for the assignments matrix
+const ASSIGN_ROLES = [
+  { key: "sales",         label: "Sales",         accent: "#1d4ed8", bg: "#dbeafe", tagColor: "#1e3a8a" },
+  { key: "lead_designer", label: "Lead Designer",  accent: "#92400e", bg: "#fef3c7", tagColor: "#78350f" },
+  { key: "designer",      label: "Designer",       accent: "#526258", bg: "#d5e7da", tagColor: "#33433a" },
+  { key: "procurement",   label: "Procurement",    accent: "#5b21b6", bg: "#ede9fe", tagColor: "#4c1d95", future: true },
+  { key: "supervisor",    label: "Supervisor",     accent: "#065f46", bg: "#d1fae5", tagColor: "#064e3b", future: true },
+];
 
 (async () => {
   AppNav.mountSidebar('TEAM DIRECTORY');
@@ -28,16 +38,6 @@ const DEPT_LABELS = {
   await Promise.all([loadUsers(), loadProjects(), loadInvitations()]);
 
   document.getElementById("inviteBtn").addEventListener("click", handleInvite);
-
-  document.getElementById("assignProjectSelect").addEventListener("change", e => {
-    _currentProjectId = e.target.value;
-    document.getElementById("assignBtn").disabled = !_currentProjectId;
-    if (_currentProjectId) loadTeam(_currentProjectId);
-    else document.getElementById("teamWrap").innerHTML =
-      `<div style="font-size:12px;color:var(--color-on-surface-variant);text-align:center;padding:8px 0">Select a project to see its team</div>`;
-  });
-
-  document.getElementById("assignBtn").addEventListener("click", handleAssign);
 })();
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -149,8 +149,7 @@ async function loadInvitations() {
 // ── Users table ────────────────────────────────────────────────────────────────
 
 async function loadUsers() {
-  const tbody     = document.getElementById("usersBody");
-  const userSelect = document.getElementById("assignUserSelect");
+  const tbody = document.getElementById("usersBody");
   try {
     const res = await fetch("/api/users/list", {
       headers: { Authorization: `Bearer ${_session.access_token}` },
@@ -231,12 +230,6 @@ async function loadUsers() {
       });
     });
 
-    // Populate user dropdown for assignments
-    userSelect.innerHTML = `<option value="">Select member…</option>` +
-      _allUsers.filter(u => u.id !== _profile.id).map(u =>
-        `<option value="${u.id}">${u.full_name} (${ROLE_LABELS[u.role] || u.role})</option>`
-      ).join("");
-
   } catch {
     tbody.innerHTML = `<tr><td colspan="5" style="padding:24px;text-align:center;color:#9f403d">Failed to load users.</td></tr>`;
   }
@@ -264,79 +257,163 @@ async function updateUser(userId, updates) {
   }
 }
 
-// ── Projects & Assignments ─────────────────────────────────────────────────────
+// ── Projects & Assignments Matrix ─────────────────────────────────────────────
 
 async function loadProjects() {
-  const select = document.getElementById("assignProjectSelect");
+  const wrap = document.getElementById("assignmentsTableWrap");
   try {
     const res = await fetch("/api/project/list", {
       headers: { Authorization: `Bearer ${_session.access_token}` },
     });
     const { projects } = await res.json();
-    select.innerHTML = `<option value="">Select project…</option>` +
-      (projects || []).map(p =>
-        `<option value="${p.id}">${p.name || "Untitled"}${p.client_name ? " · " + p.client_name : ""}</option>`
-      ).join("");
+    _allProjects = projects || [];
+
+    // Load team for every project in parallel
+    const results = await Promise.all(
+      _allProjects.map(async p => {
+        try {
+          const r = await fetch(`/api/project/team?id=${p.id}`, {
+            headers: { Authorization: `Bearer ${_session.access_token}` },
+          });
+          const d = await r.json();
+          return { id: p.id, team: d.team || [] };
+        } catch { return { id: p.id, team: [] }; }
+      })
+    );
+    results.forEach(r => { _projectTeams[r.id] = r.team; });
+
+    renderAssignmentsTable();
   } catch {
-    select.innerHTML = `<option value="">Error loading projects</option>`;
+    document.getElementById("assignmentsTableWrap").innerHTML =
+      `<p style="color:#9f403d;padding:20px">Failed to load project data.</p>`;
   }
 }
 
-async function loadTeam(projectId) {
-  const wrap = document.getElementById("teamWrap");
-  wrap.innerHTML = `<div style="font-size:12px;color:#5a6e6f;padding:8px 0">Loading…</div>`;
-  try {
-    const res = await fetch(`/api/project/team?id=${projectId}`, {
-      headers: { Authorization: `Bearer ${_session.access_token}` },
-    });
-    const { team } = await res.json();
-    if (!team?.length) {
-      wrap.innerHTML = `<div style="font-size:12px;color:#5a6e6f;text-align:center;padding:8px 0">No members assigned yet.</div>`;
-      return;
-    }
-    wrap.innerHTML = team.map(t => `
-      <div class="adm-team-member">
-        <div class="adm-avatar role-${t.profile?.role}" style="width:28px;height:28px;font-size:10px;flex-shrink:0">
-          ${_initials(t.profile?.full_name)}
+function renderAssignmentsTable() {
+  const wrap = document.getElementById("assignmentsTableWrap");
+  if (!_allProjects.length) {
+    wrap.innerHTML = `<p style="font-size:13px;color:var(--color-on-surface-variant);padding:20px">No projects yet.</p>`;
+    return;
+  }
+
+  const rows = _allProjects.map(p => {
+    const team = _projectTeams[p.id] || [];
+
+    const cells = ASSIGN_ROLES.map(role => {
+      if (role.future) {
+        return `<td><div class="pa-cell"><span class="pa-future-label">Coming soon</span></div></td>`;
+      }
+      const members = team.filter(t => t.profile?.role === role.key);
+      const tags = members.map(t => `
+        <span class="pa-tag" style="background:${role.bg};border-color:${role.accent}30;color:${role.tagColor}">
+          <div class="adm-avatar role-${role.key}" style="width:16px;height:16px;font-size:7px;flex-shrink:0">${_initials(t.profile?.full_name)}</div>
+          <span class="pa-tag-name">${esc(t.profile?.full_name || "Unknown")}</span>
+          <button class="pa-tag-remove" data-pid="${p.id}" data-uid="${t.user_id}" title="Remove">×</button>
+        </span>`).join("");
+
+      const available = _allUsers.filter(u => u.role === role.key && !members.find(m => m.user_id === u.id));
+      const dropdownItems = available.length
+        ? available.map(u => `
+            <div class="pa-dropdown-item" data-pid="${p.id}" data-uid="${u.id}">
+              <div class="adm-avatar role-${u.role}" style="width:22px;height:22px;font-size:9px;flex-shrink:0">${_initials(u.full_name)}</div>
+              <span>${esc(u.full_name || u.email)}</span>
+            </div>`).join("")
+        : `<div class="pa-dropdown-empty">No ${role.label.toLowerCase()}s available</div>`;
+
+      return `<td>
+        <div class="pa-cell">
+          ${tags}
+          <div class="pa-add-wrap">
+            <button class="pa-add-btn" data-pid="${p.id}" data-role="${role.key}">
+              <span class="material-symbols-outlined" style="font-size:11px">add</span> Add
+            </button>
+            <div class="pa-dropdown hidden" id="drop-${p.id}-${role.key}">
+              ${dropdownItems}
+            </div>
+          </div>
         </div>
-        <span class="adm-team-member-name">${t.profile?.full_name || "Unknown"}</span>
-        <span class="adm-team-member-role">${ROLE_LABELS[t.profile?.role] || t.profile?.role}</span>
-        <button class="adm-team-remove unassign-btn" data-uid="${t.user_id}" title="Remove">
-          <span class="material-symbols-outlined">close</span>
-        </button>
-      </div>`).join("");
+      </td>`;
+    }).join("");
 
-    wrap.querySelectorAll(".unassign-btn").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        btn.disabled = true;
-        await fetch("/api/project/unassign-user", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
-          body: JSON.stringify({ projectId: _currentProjectId, userId: btn.dataset.uid }),
-        });
-        loadTeam(_currentProjectId);
-      });
-    });
-  } catch {
-    wrap.innerHTML = `<div style="font-size:12px;color:#9f403d;padding:8px 0">Failed to load team.</div>`;
-  }
+    return `<tr>
+      <td style="padding:10px 14px;vertical-align:top">
+        <a href="/project?id=${p.id}" class="pa-project-name">${esc(p.name || "Untitled")}</a>
+        ${p.client_name ? `<span class="pa-project-client">${esc(p.client_name)}</span>` : ""}
+      </td>
+      ${cells}
+    </tr>`;
+  }).join("");
+
+  const headers = ASSIGN_ROLES.map(r =>
+    `<th class="pa-th-role${r.future ? " pa-th-future" : ""}">${r.label}${r.future ? " <span style='font-size:9px;font-weight:400;font-style:italic'>(soon)</span>" : ""}</th>`
+  ).join("");
+
+  wrap.innerHTML = `
+    <table class="pa-table">
+      <thead>
+        <tr>
+          <th class="pa-th-project">Project</th>
+          ${headers}
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  wireAssignmentEvents(wrap);
 }
 
-async function handleAssign() {
-  const userId = document.getElementById("assignUserSelect").value;
-  if (!userId || !_currentProjectId) return;
-  const btn = document.getElementById("assignBtn");
-  btn.disabled = true;
-  btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:15px">hourglass_top</span> Assigning…`;
-  try {
-    await fetch("/api/project/assign-user", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
-      body: JSON.stringify({ projectId: _currentProjectId, userId }),
+function wireAssignmentEvents(container) {
+  // Remove member
+  container.querySelectorAll(".pa-tag-remove").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      const { pid, uid } = btn.dataset;
+      btn.disabled = true;
+      await fetch("/api/project/unassign-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
+        body: JSON.stringify({ projectId: pid, userId: uid }),
+      });
+      _projectTeams[pid] = (_projectTeams[pid] || []).filter(t => t.user_id !== uid);
+      renderAssignmentsTable();
     });
-    loadTeam(_currentProjectId);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = `<span class="material-symbols-outlined" style="font-size:15px">person_add_alt</span> Assign to Project`;
-  }
+  });
+
+  // Toggle add dropdown
+  container.querySelectorAll(".pa-add-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const { pid, role } = btn.dataset;
+      const dropdown = document.getElementById(`drop-${pid}-${role}`);
+      const isOpen = !dropdown.classList.contains("hidden");
+      container.querySelectorAll(".pa-dropdown").forEach(d => d.classList.add("hidden"));
+      if (!isOpen) dropdown.classList.remove("hidden");
+    });
+  });
+
+  // Assign member
+  container.querySelectorAll(".pa-dropdown-item").forEach(item => {
+    item.addEventListener("click", async e => {
+      e.stopPropagation();
+      const { pid, uid } = item.dataset;
+      item.style.opacity = "0.5";
+      item.style.pointerEvents = "none";
+      await fetch("/api/project/assign-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
+        body: JSON.stringify({ projectId: pid, userId: uid }),
+      });
+      const user = _allUsers.find(u => u.id === uid);
+      if (user) {
+        if (!_projectTeams[pid]) _projectTeams[pid] = [];
+        _projectTeams[pid].push({ user_id: uid, profile: user });
+      }
+      renderAssignmentsTable();
+    });
+  });
+
+  // Close dropdowns on outside click
+  document.addEventListener("click", () => {
+    container.querySelectorAll(".pa-dropdown").forEach(d => d.classList.add("hidden"));
+  }, { once: true });
 }
