@@ -3,6 +3,16 @@
 let _session, _profile, _allUsers = [];
 let _allProjects = [], _projectTeams = {};
 
+// Edit mode state — team members
+let _teamEditMode = false;
+let _pendingUserChanges = {}; // { [userId]: { role?, isActive? } }
+
+// Edit mode state — project assignments
+let _assignEditMode = false;
+let _pendingAssignAdd    = []; // [{projectId, userId}]
+let _pendingAssignRemove = []; // [{projectId, userId}]
+let _originalProjectTeams = {};
+
 const ROLES = ["sales", "designer", "lead_designer", "admin", "ceo"];
 const ROLE_LABELS = {
   sales: "Sales", designer: "Designer",
@@ -38,7 +48,104 @@ const ASSIGN_ROLES = [
   await Promise.all([loadUsers(), loadProjects(), loadInvitations()]);
 
   document.getElementById("inviteBtn").addEventListener("click", handleInvite);
+
+  // ── Team table edit / save / cancel ────────────────────────────────────────
+  document.getElementById("teamEditBtn").addEventListener("click", () => {
+    _teamEditMode = true;
+    _pendingUserChanges = {};
+    renderUsersTable();
+    setTeamEditUI(true);
+  });
+
+  document.getElementById("teamSaveBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("teamSaveBtn");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    try {
+      await Promise.all(
+        Object.entries(_pendingUserChanges).map(([uid, changes]) => updateUser(uid, changes))
+      );
+    } catch { /* individual errors handled inside updateUser */ }
+    _teamEditMode = false;
+    _pendingUserChanges = {};
+    await loadUsers();          // refresh from server + re-render read mode
+    setTeamEditUI(false);
+    btn.disabled = false;
+    btn.textContent = "Save Changes";
+  });
+
+  document.getElementById("teamCancelBtn").addEventListener("click", () => {
+    _teamEditMode = false;
+    _pendingUserChanges = {};
+    renderUsersTable();
+    setTeamEditUI(false);
+  });
+
+  // ── Assignments edit / save / cancel ───────────────────────────────────────
+  document.getElementById("assignEditBtn").addEventListener("click", () => {
+    _assignEditMode = true;
+    _originalProjectTeams = JSON.parse(JSON.stringify(_projectTeams));
+    _pendingAssignAdd    = [];
+    _pendingAssignRemove = [];
+    renderAssignmentsTable();
+    setAssignEditUI(true);
+  });
+
+  document.getElementById("assignSaveBtn").addEventListener("click", async () => {
+    const btn = document.getElementById("assignSaveBtn");
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    try {
+      await Promise.all([
+        ..._pendingAssignAdd.map(({ projectId, userId }) =>
+          fetch("/api/project/assign-user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
+            body: JSON.stringify({ projectId, userId }),
+          })
+        ),
+        ..._pendingAssignRemove.map(({ projectId, userId }) =>
+          fetch("/api/project/unassign-user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
+            body: JSON.stringify({ projectId, userId }),
+          })
+        ),
+      ]);
+    } catch { /* silently continue */ }
+    _assignEditMode = false;
+    _pendingAssignAdd    = [];
+    _pendingAssignRemove = [];
+    await loadProjects();       // refresh from server + re-render read mode
+    setAssignEditUI(false);
+    btn.disabled = false;
+    btn.textContent = "Save Changes";
+  });
+
+  document.getElementById("assignCancelBtn").addEventListener("click", () => {
+    _assignEditMode = false;
+    _projectTeams = JSON.parse(JSON.stringify(_originalProjectTeams));
+    _pendingAssignAdd    = [];
+    _pendingAssignRemove = [];
+    renderAssignmentsTable();
+    setAssignEditUI(false);
+  });
 })();
+
+// ── UI mode helpers ────────────────────────────────────────────────────────────
+
+function setTeamEditUI(editing) {
+  document.getElementById("teamEditBtn").style.display  = editing ? "none" : "";
+  document.getElementById("teamSaveBtn").style.display  = editing ? "" : "none";
+  document.getElementById("teamCancelBtn").style.display = editing ? "" : "none";
+}
+
+function setAssignEditUI(editing) {
+  document.getElementById("assignEditBtn").style.display  = editing ? "none" : "";
+  document.getElementById("assignSaveBtn").style.display  = editing ? "" : "none";
+  document.getElementById("assignCancelBtn").style.display = editing ? "" : "none";
+  document.getElementById("assignHint").style.display     = editing ? "none" : "";
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -156,105 +263,109 @@ async function loadUsers() {
     });
     const { users } = await res.json();
     _allUsers = users || [];
-
     _updateComposition(_allUsers);
-
-    tbody.innerHTML = _allUsers.map(u => `
-      <tr data-id="${u.id}">
-        <td>
-          <div class="adm-member-cell">
-            <div class="adm-avatar role-${u.role}">${_initials(u.full_name)}</div>
-            <div class="adm-member-info">
-              <span class="adm-member-name">${u.full_name || "—"}</span>
-              <span class="adm-member-email">${u.email}</span>
-            </div>
-          </div>
-        </td>
-        <td><span class="adm-dept-text">${DEPT_LABELS[u.role] || u.role}</span></td>
-        <td>
-          <select class="role-select-inline role-select" data-uid="${u.id}"
-            ${u.id === _profile.id ? "disabled title='Cannot change your own role'" : ""}>
-            ${ROLES.map(r => `<option value="${r}" ${u.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}
-          </select>
-        </td>
-        <td>
-          <label class="adm-status-toggle" style="cursor:${u.id === _profile.id ? 'not-allowed' : 'pointer'}">
-            <input type="checkbox" class="active-toggle" data-uid="${u.id}"
-              ${u.is_active ? "checked" : ""} ${u.id === _profile.id ? "disabled" : ""}
-              style="display:none" />
-            <span class="adm-status-pill ${u.is_active ? 'active' : 'inactive'}" id="status-pill-${u.id}">
-              <span class="adm-status-dot ${u.is_active ? 'active' : 'inactive'}" id="status-dot-${u.id}"></span>
-              <span id="status-text-${u.id}">${u.is_active ? "Active" : "Inactive"}</span>
-            </span>
-          </label>
-        </td>
-        <td>
-          <div class="adm-actions-cell">
-            <span class="adm-save-badge" id="saved-${u.id}"></span>
-          </div>
-        </td>
-      </tr>
-    `).join("");
-
-    // Wire role selects
-    tbody.querySelectorAll(".role-select").forEach(sel => {
-      sel.addEventListener("change", async () => {
-        await updateUser(sel.dataset.uid, { role: sel.value });
-        // Refresh avatar/dept after role change
-        const row = document.querySelector(`tr[data-id="${sel.dataset.uid}"]`);
-        if (row) {
-          const av   = row.querySelector(".adm-avatar");
-          const dept = row.querySelector(".adm-dept-text");
-          if (av)   av.className   = `adm-avatar role-${sel.value}`;
-          if (dept) dept.textContent = DEPT_LABELS[sel.value] || sel.value;
-          // Update cached user role for composition
-          const u = _allUsers.find(u => u.id === sel.dataset.uid);
-          if (u) u.role = sel.value;
-          _updateComposition(_allUsers);
-        }
-      });
-    });
-
-    // Wire active toggles
-    tbody.querySelectorAll(".active-toggle").forEach(chk => {
-      chk.addEventListener("change", async () => {
-        await updateUser(chk.dataset.uid, { isActive: chk.checked });
-        const pill = document.getElementById(`status-pill-${chk.dataset.uid}`);
-        const dot  = document.getElementById(`status-dot-${chk.dataset.uid}`);
-        const txt  = document.getElementById(`status-text-${chk.dataset.uid}`);
-        if (pill) pill.className   = `adm-status-pill ${chk.checked ? "active" : "inactive"}`;
-        if (dot)  dot.className    = `adm-status-dot  ${chk.checked ? "active" : "inactive"}`;
-        if (txt)  txt.textContent  = chk.checked ? "Active" : "Inactive";
-        const u = _allUsers.find(u => u.id === chk.dataset.uid);
-        if (u) u.is_active = chk.checked;
-      });
-    });
-
+    renderUsersTable();
   } catch {
-    tbody.innerHTML = `<tr><td colspan="5" style="padding:24px;text-align:center;color:#9f403d">Failed to load users.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" style="padding:24px;text-align:center;color:#9f403d">Failed to load users.</td></tr>`;
   }
 }
 
-async function updateUser(userId, updates) {
-  const badge = document.getElementById(`saved-${userId}`);
-  try {
-    const res = await fetch("/api/users/update-role", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
-      body: JSON.stringify({ userId, ...updates }),
+function renderUsersTable() {
+  const tbody = document.getElementById("usersBody");
+
+  tbody.innerHTML = _allUsers.map(u => {
+    const staged      = _pendingUserChanges[u.id] || {};
+    const displayRole = staged.role     !== undefined ? staged.role     : u.role;
+    const displayActive = staged.isActive !== undefined ? staged.isActive : u.is_active;
+
+    // Access Level cell
+    const roleCell = _teamEditMode
+      ? `<select class="role-select-inline role-select" data-uid="${u.id}"
+           ${u.id === _profile.id ? "disabled title='Cannot change your own role'" : ""}>
+           ${ROLES.map(r => `<option value="${r}" ${displayRole === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}
+         </select>`
+      : `<span class="role-badge role-${u.role}">${ROLE_LABELS[u.role] || u.role}</span>`;
+
+    // Status cell
+    const statusCell = _teamEditMode
+      ? `<label class="adm-status-toggle" style="cursor:${u.id === _profile.id ? 'not-allowed' : 'pointer'}">
+           <input type="checkbox" class="active-toggle" data-uid="${u.id}"
+             ${displayActive ? "checked" : ""} ${u.id === _profile.id ? "disabled" : ""}
+             style="display:none" />
+           <span class="adm-status-pill ${displayActive ? 'active' : 'inactive'}" id="status-pill-${u.id}">
+             <span class="adm-status-dot ${displayActive ? 'active' : 'inactive'}"></span>
+             <span id="status-text-${u.id}">${displayActive ? "Active" : "Inactive"}</span>
+           </span>
+         </label>`
+      : `<span class="adm-status-pill ${u.is_active ? 'active' : 'inactive'}">
+           <span class="adm-status-dot ${u.is_active ? 'active' : 'inactive'}"></span>
+           ${u.is_active ? "Active" : "Inactive"}
+         </span>`;
+
+    return `<tr data-id="${u.id}">
+      <td>
+        <div class="adm-member-cell">
+          <div class="adm-avatar role-${u.role}" id="avatar-${u.id}">${_initials(u.full_name)}</div>
+          <div class="adm-member-info">
+            <span class="adm-member-name">${u.full_name || "—"}</span>
+            <span class="adm-member-email">${u.email}</span>
+          </div>
+        </div>
+      </td>
+      <td><span class="adm-dept-text" id="dept-${u.id}">${DEPT_LABELS[displayRole] || displayRole}</span></td>
+      <td>${roleCell}</td>
+      <td>${statusCell}</td>
+    </tr>`;
+  }).join("");
+
+  if (_teamEditMode) wireUserTableEvents();
+}
+
+function wireUserTableEvents() {
+  const tbody = document.getElementById("usersBody");
+
+  // Role select
+  tbody.querySelectorAll(".role-select").forEach(sel => {
+    sel.addEventListener("change", () => {
+      if (!_pendingUserChanges[sel.dataset.uid]) _pendingUserChanges[sel.dataset.uid] = {};
+      _pendingUserChanges[sel.dataset.uid].role = sel.value;
+      // Update avatar class + dept label in place (no full re-render)
+      const av   = document.getElementById(`avatar-${sel.dataset.uid}`);
+      const dept = document.getElementById(`dept-${sel.dataset.uid}`);
+      if (av)   av.className   = `adm-avatar role-${sel.value}`;
+      if (dept) dept.textContent = DEPT_LABELS[sel.value] || sel.value;
     });
-    if (!res.ok) throw new Error();
-    if (badge) {
-      badge.textContent = "Saved";
-      badge.className = "adm-save-badge show";
-      setTimeout(() => { badge.className = "adm-save-badge"; }, 2000);
-    }
-  } catch {
-    if (badge) {
-      badge.textContent = "Error";
-      badge.className = "adm-save-badge show error";
-    }
-  }
+  });
+
+  // Active toggle
+  tbody.querySelectorAll(".active-toggle").forEach(chk => {
+    chk.addEventListener("change", () => {
+      if (!chk.checked) {
+        const user = _allUsers.find(u => u.id === chk.dataset.uid);
+        const name = user?.full_name || "this user";
+        if (!confirm(`Deactivate ${name}? They will lose access to the platform.`)) {
+          chk.checked = true; // revert
+          return;
+        }
+      }
+      if (!_pendingUserChanges[chk.dataset.uid]) _pendingUserChanges[chk.dataset.uid] = {};
+      _pendingUserChanges[chk.dataset.uid].isActive = chk.checked;
+      // Update pill visuals in place
+      const pill = document.getElementById(`status-pill-${chk.dataset.uid}`);
+      const txt  = document.getElementById(`status-text-${chk.dataset.uid}`);
+      if (pill) pill.className = `adm-status-pill ${chk.checked ? "active" : "inactive"}`;
+      if (txt)  txt.textContent = chk.checked ? "Active" : "Inactive";
+    });
+  });
+}
+
+async function updateUser(userId, updates) {
+  const res = await fetch("/api/users/update-role", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
+    body: JSON.stringify({ userId, ...updates }),
+  });
+  if (!res.ok) throw new Error(`Failed to update user ${userId}`);
 }
 
 // ── Projects & Assignments Matrix ─────────────────────────────────────────────
@@ -268,7 +379,6 @@ async function loadProjects() {
     const { projects } = await res.json();
     _allProjects = projects || [];
 
-    // Load team for every project in parallel
     const results = await Promise.all(
       _allProjects.map(async p => {
         try {
@@ -304,33 +414,42 @@ function renderAssignmentsTable() {
         return `<td><div class="pa-cell"><span class="pa-future-label">Coming soon</span></div></td>`;
       }
       const members = team.filter(t => t.profile?.role === role.key);
-      const tags = members.map(t => `
-        <span class="pa-tag" style="background:${role.bg};border-color:${role.accent}30;color:${role.tagColor}">
+
+      const tags = members.map(t => {
+        const removeBtn = _assignEditMode
+          ? `<button class="pa-tag-remove" data-pid="${p.id}" data-uid="${t.user_id}" title="Remove">×</button>`
+          : "";
+        return `<span class="pa-tag" style="background:${role.bg};border-color:${role.accent}30;color:${role.tagColor}">
           <div class="adm-avatar role-${role.key}" style="width:16px;height:16px;font-size:7px;flex-shrink:0">${_initials(t.profile?.full_name)}</div>
           <span class="pa-tag-name">${esc(t.profile?.full_name || "Unknown")}</span>
-          <button class="pa-tag-remove" data-pid="${p.id}" data-uid="${t.user_id}" title="Remove">×</button>
-        </span>`).join("");
+          ${removeBtn}
+        </span>`;
+      }).join("");
 
-      const available = _allUsers.filter(u => u.role === role.key && !members.find(m => m.user_id === u.id));
-      const dropdownItems = available.length
-        ? available.map(u => `
-            <div class="pa-dropdown-item" data-pid="${p.id}" data-uid="${u.id}">
-              <div class="adm-avatar role-${u.role}" style="width:22px;height:22px;font-size:9px;flex-shrink:0">${_initials(u.full_name)}</div>
-              <span>${esc(u.full_name || u.email)}</span>
-            </div>`).join("")
-        : `<div class="pa-dropdown-empty">No ${role.label.toLowerCase()}s available</div>`;
+      const addWrap = _assignEditMode ? (() => {
+        const available = _allUsers.filter(u => u.role === role.key && !members.find(m => m.user_id === u.id));
+        const dropdownItems = available.length
+          ? available.map(u => `
+              <div class="pa-dropdown-item" data-pid="${p.id}" data-uid="${u.id}">
+                <div class="adm-avatar role-${u.role}" style="width:22px;height:22px;font-size:9px;flex-shrink:0">${_initials(u.full_name)}</div>
+                <span>${esc(u.full_name || u.email)}</span>
+              </div>`).join("")
+          : `<div class="pa-dropdown-empty">No ${role.label.toLowerCase()}s available</div>`;
+
+        return `<div class="pa-add-wrap">
+          <button class="pa-add-btn" data-pid="${p.id}" data-role="${role.key}">
+            <span class="material-symbols-outlined" style="font-size:11px">add</span> Add
+          </button>
+          <div class="pa-dropdown hidden" id="drop-${p.id}-${role.key}">
+            ${dropdownItems}
+          </div>
+        </div>`;
+      })() : "";
 
       return `<td>
         <div class="pa-cell">
           ${tags}
-          <div class="pa-add-wrap">
-            <button class="pa-add-btn" data-pid="${p.id}" data-role="${role.key}">
-              <span class="material-symbols-outlined" style="font-size:11px">add</span> Add
-            </button>
-            <div class="pa-dropdown hidden" id="drop-${p.id}-${role.key}">
-              ${dropdownItems}
-            </div>
-          </div>
+          ${addWrap}
         </div>
       </td>`;
     }).join("");
@@ -359,46 +478,32 @@ function renderAssignmentsTable() {
       <tbody>${rows}</tbody>
     </table>`;
 
-  wireAssignmentEvents(wrap);
+  if (_assignEditMode) wireAssignmentEvents(wrap);
 }
 
 function wireAssignmentEvents(container) {
-  // Remove member — 2-step confirm to prevent accidental removals
+  // Remove member — confirm popup
   container.querySelectorAll(".pa-tag-remove").forEach(btn => {
-    btn.addEventListener("click", async e => {
+    btn.addEventListener("click", e => {
       e.stopPropagation();
-      const tag = btn.closest(".pa-tag");
-
-      if (!btn.dataset.confirming) {
-        // Stage 1: ask for confirmation
-        btn.dataset.confirming = "1";
-        btn.textContent = "✓ Remove?";
-        btn.title = "Click again to confirm removal";
-        btn.style.cssText = "background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;color:#dc2626;font-size:9px;font-weight:700;flex-shrink:0;opacity:1";
-        if (tag) tag.style.outline = "2px solid #fca5a5";
-
-        btn._confirmTimer = setTimeout(() => {
-          delete btn.dataset.confirming;
-          btn.textContent = "×";
-          btn.title = "Remove";
-          btn.style.cssText = "";
-          if (tag) tag.style.outline = "";
-        }, 3000);
-        return;
-      }
-
-      // Stage 2: confirmed — execute removal
-      clearTimeout(btn._confirmTimer);
-      btn.disabled = true;
-      if (tag) tag.style.opacity = "0.5";
-
       const { pid, uid } = btn.dataset;
-      await fetch("/api/project/unassign-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
-        body: JSON.stringify({ projectId: pid, userId: uid }),
-      });
+      const user    = _allUsers.find(u => u.id === uid);
+      const project = _allProjects.find(p => p.id === pid);
+      const name  = user?.full_name    || "this member";
+      const pname = project?.name      || "this project";
+
+      if (!confirm(`Remove ${name} from ${pname}?`)) return;
+
+      // Update local display state
       _projectTeams[pid] = (_projectTeams[pid] || []).filter(t => t.user_id !== uid);
+
+      // Stage: if this was a pending add, cancel it; otherwise add to removes
+      const addIdx = _pendingAssignAdd.findIndex(a => a.projectId === pid && a.userId === uid);
+      if (addIdx >= 0) {
+        _pendingAssignAdd.splice(addIdx, 1);
+      } else {
+        _pendingAssignRemove.push({ projectId: pid, userId: uid });
+      }
       renderAssignmentsTable();
     });
   });
@@ -417,20 +522,23 @@ function wireAssignmentEvents(container) {
 
   // Assign member
   container.querySelectorAll(".pa-dropdown-item").forEach(item => {
-    item.addEventListener("click", async e => {
+    item.addEventListener("click", e => {
       e.stopPropagation();
       const { pid, uid } = item.dataset;
-      item.style.opacity = "0.5";
-      item.style.pointerEvents = "none";
-      await fetch("/api/project/assign-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${_session.access_token}` },
-        body: JSON.stringify({ projectId: pid, userId: uid }),
-      });
+
+      // Update local display state
       const user = _allUsers.find(u => u.id === uid);
       if (user) {
         if (!_projectTeams[pid]) _projectTeams[pid] = [];
         _projectTeams[pid].push({ user_id: uid, profile: user });
+      }
+
+      // Stage: if this was a pending remove, cancel it; otherwise add to adds
+      const removeIdx = _pendingAssignRemove.findIndex(r => r.projectId === pid && r.userId === uid);
+      if (removeIdx >= 0) {
+        _pendingAssignRemove.splice(removeIdx, 1);
+      } else {
+        _pendingAssignAdd.push({ projectId: pid, userId: uid });
       }
       renderAssignmentsTable();
     });
