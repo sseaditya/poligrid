@@ -19,6 +19,13 @@ function openBoqEditPanel(category = null, mode = 'edit') {
     ? allItems.filter(it => (it.category || "Uncategorized") === category)
     : allItems;
 
+  // In pdf mode, always exclude categories the user has unchecked in the BOQ view
+  if (mode === 'pdf') {
+    _editBoqData = _editBoqData.filter(
+      it => !_disabledBoqCategories.has(it.category || "Uncategorized")
+    );
+  }
+
   // Update title and hint
   const titleEl = el("boqEditTitle");
   const hintEl  = el("boqEditHint");
