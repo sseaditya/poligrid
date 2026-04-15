@@ -40,9 +40,11 @@
     <!-- ── TOP BAR ──────────────────────────────────────────────────────────── -->
     <header class="top-bar">
       <div class="top-bar-left">
-        <a href="/homepage" class="logo-link"><span class="logo-text">Poligrid</span><span class="logo-studio"> Studio</span></a>
+        <a href="/homepage" class="logo-link logo-stack">
+          <span class="logo-eyebrow">POLIGRID STUDIO</span>
+          <span class="logo-page-name">Fitout Planner</span>
+        </a>
         <a href="/projects" id="backToProjectBtn" class="ghost-sm back-to-project-btn">← Project</a>
-        <button id="sidebarToggle" class="ghost-sm sidebar-toggle-btn" title="Toggle sidebar">&#8644;</button>
       </div>
       <nav class="phase-bar" id="phaseBar">
         <button class="phase-pill active" data-phase="1" id="pill1">
@@ -313,7 +315,10 @@
 
           <!-- BOQ section -->
           <div class="results-boq-section">
-            <h2 class="results-section-heading">Bill of Quantities</h2>
+            <div class="results-boq-heading-row">
+              <h2 class="results-section-heading">Bill of Quantities</h2>
+              <button class="ghost-sm" id="boqExportPdfBtn">↓ Export PDF</button>
+            </div>
             <div id="boqAccordionContainer" class="boq-accordion-container"></div>
             <div class="boq-grand-total-row">
               <span class="boq-total-label">Grand Total</span>
@@ -357,8 +362,8 @@
 
         <header class="boq-edit-header">
           <div class="boq-edit-header-left">
-            <h2 class="boq-edit-title">Edit Before Print</h2>
-            <span class="boq-edit-hint">Changes here are only for this PDF unless you choose to save them.</span>
+            <h2 class="boq-edit-title" id="boqEditTitle">Edit Section</h2>
+            <span class="boq-edit-hint" id="boqEditHint"></span>
           </div>
           <button class="ghost-sm" id="boqEditClose">✕ Cancel</button>
         </header>
@@ -396,7 +401,7 @@
 
         <!-- Action footer -->
         <footer class="boq-edit-footer">
-          <div class="boq-edit-footer-note">
+          <div class="boq-edit-footer-note" id="boqEditSaveNote" hidden>
             <label class="boq-edit-save-toggle">
               <input type="checkbox" id="boqEditSaveToDb" />
               <span>Save these edits to the project database</span>
@@ -404,7 +409,8 @@
           </div>
           <div class="boq-edit-footer-actions">
             <button class="ghost-btn" id="boqEditCancel">Cancel</button>
-            <button class="primary-btn boq-edit-generate-btn" id="boqEditGenerate">✦ Generate PDF</button>
+            <button class="primary-btn" id="boqEditSave" hidden>✓ Save Changes</button>
+            <button class="primary-btn boq-edit-generate-btn" id="boqEditGenerate" hidden>✦ Export PDF</button>
           </div>
         </footer>
 
@@ -430,13 +436,6 @@
       AuthClient.requireAuth(["sales", "lead_designer", "admin", "ceo"]).then(({ profile }) => {
         window._authProfile = profile;
       }).catch(() => {});
-
-      // Sidebar collapse toggle
-      document.getElementById("sidebarToggle").addEventListener("click", function() {
-        const sidebar = document.getElementById("sidebar");
-        sidebar.classList.toggle("collapsed");
-        this.title = sidebar.classList.contains("collapsed") ? "Expand sidebar" : "Collapse sidebar";
-      });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <script src="analysis.js"></script>

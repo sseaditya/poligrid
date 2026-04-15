@@ -1,12 +1,42 @@
 // ─── BOQ display + edit panel ────────────────────────────────────────────────
 
-function openBoqEditPanel() {
+let _boqEditMode = 'edit';     // 'edit' | 'pdf'
+let _boqEditCategory = null;   // null = all, string = filter to one category
+
+function openBoqEditPanel(category = null, mode = 'edit') {
+  _boqEditMode = mode;
+  _boqEditCategory = category;
+
   // Build working copy, tagging each item with its origin so we can split on save
   const latestVer = _allVersions[_allVersions.length - 1] || {};
-  _editBoqData = [
+  const allItems = [
     ..._projectBoqItems.map(it => ({ ...it, _origin: "project" })),
     ...(latestVer.boqItems || []).map(it => ({ ...it, _origin: "version" }))
   ];
+
+  // Filter to section if in edit mode with a category
+  _editBoqData = category
+    ? allItems.filter(it => (it.category || "Uncategorized") === category)
+    : allItems;
+
+  // Update title and hint
+  const titleEl = el("boqEditTitle");
+  const hintEl  = el("boqEditHint");
+  if (mode === 'edit') {
+    if (titleEl) titleEl.textContent = category ? `Edit: ${category}` : "Edit Items";
+    if (hintEl)  hintEl.textContent  = category ? `Showing items in "${category}" only.` : "Edit all line items.";
+  } else {
+    if (titleEl) titleEl.textContent = "Export to PDF";
+    if (hintEl)  hintEl.textContent  = "Changes here are only for this PDF unless you choose to save them.";
+  }
+
+  // Show/hide buttons per mode
+  const saveBtn  = el("boqEditSave");
+  const genBtn   = el("boqEditGenerate");
+  const saveNote = el("boqEditSaveNote");
+  if (saveBtn)  saveBtn.hidden  = (mode === 'pdf');
+  if (genBtn)   genBtn.hidden   = (mode === 'edit');
+  if (saveNote) saveNote.hidden = (mode === 'edit');
 
   // Populate project name field
   const nameInput = el("boqEditProjectName");
@@ -158,15 +188,67 @@ async function generatePdfFromEditor() {
   }
 }
 
+async function saveBoqEdits() {
+  const latestVer = _allVersions[_allVersions.length - 1] || {};
+
+  const finalItems = _editBoqData.map(it => ({
+    ...it,
+    amount: (parseFloat(it.qty) || 0) * (parseFloat(it.rate) || 0)
+  }));
+
+  let newProjectItems = [..._projectBoqItems];
+  let newVersionItems = [...(latestVer.boqItems || [])];
+
+  if (_boqEditCategory) {
+    // Replace only items belonging to this category
+    newProjectItems = newProjectItems.filter(it => (it.category || "Uncategorized") !== _boqEditCategory);
+    newVersionItems = newVersionItems.filter(it => (it.category || "Uncategorized") !== _boqEditCategory);
+    for (const it of finalItems) {
+      const { _origin, ...rest } = it;
+      if (_origin === "project") newProjectItems.push(rest);
+      else newVersionItems.push(rest);
+    }
+  } else {
+    newProjectItems = finalItems.filter(it => it._origin === "project").map(({ _origin, ...rest }) => rest);
+    newVersionItems = finalItems.filter(it => it._origin !== "project").map(({ _origin, ...rest }) => rest);
+  }
+
+  try {
+    await fetch("/api/project/update-boq", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: appState.projectId,
+        versionId: latestVer.id || null,
+        projectItems: newProjectItems,
+        versionItems: newVersionItems
+      })
+    });
+    _projectBoqItems = newProjectItems;
+    if (latestVer.boqItems !== undefined) latestVer.boqItems = newVersionItems;
+    appState.globalBoq = newProjectItems;
+    const combinedBoq = [...newProjectItems, ...newVersionItems];
+    drawBoq(combinedBoq);
+    latestArtifacts = buildArtifacts(planner?.getSceneState() || {}, combinedBoq);
+  } catch (e) {
+    console.error("[BOQ Edit] Save failed:", e);
+  }
+
+  closeBoqEditPanel();
+}
+
 // Wire up edit panel buttons (called once DOM is ready)
 function initBoqEditPanel() {
   el("boqEditClose")?.addEventListener("click", closeBoqEditPanel);
   el("boqEditCancel")?.addEventListener("click", closeBoqEditPanel);
+  el("boqEditSave")?.addEventListener("click", saveBoqEdits);
   el("boqEditGenerate")?.addEventListener("click", generatePdfFromEditor);
   el("boqEditAddRow")?.addEventListener("click", () => {
-    _editBoqData.push({ category: "", item: "", qty: 1, unit: "LS", rate: 0, amount: 0, _origin: "version" });
+    _editBoqData.push({ category: _boqEditCategory || "", item: "", qty: 1, unit: "LS", rate: 0, amount: 0, _origin: "version" });
     renderEditTable();
   });
+  // Export PDF button in results opens panel in pdf mode (all items)
+  el("boqExportPdfBtn")?.addEventListener("click", () => openBoqEditPanel(null, 'pdf'));
   // Close on backdrop click
   el("boqEditOverlay")?.addEventListener("click", e => {
     if (e.target === el("boqEditOverlay")) closeBoqEditPanel();
@@ -232,7 +314,7 @@ function drawBoq(globalBoq) {
     editBtn.addEventListener("click", e => {
       e.preventDefault();
       e.stopPropagation();
-      openBoqEditPanel();
+      openBoqEditPanel(catName, 'edit');
     });
 
     summary.appendChild(chk);

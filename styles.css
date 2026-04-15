@@ -60,6 +60,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .logo-text { font-family: var(--font-serif); font-size: 15px; font-weight: 800; color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase; }
 .logo-studio { font-size: 10px; font-weight: 500; color: var(--text-dim); letter-spacing: 0.05em; margin-left: 2px; }
 .logo-sub  { font-size: 10px; color: var(--text-dim); letter-spacing: 0.05em; }
+/* Stacked logo for fitout planner — matches nav.js brand header style */
+.logo-stack { display: flex; flex-direction: column; gap: 0; line-height: 1; }
+.logo-eyebrow { font-family: var(--font); font-size: 9px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(90,96,97,0.5); }
+.logo-page-name { font-family: var(--font-serif); font-size: 14px; font-weight: 800; letter-spacing: -0.03em; color: var(--text); margin-top: 1px; }
 .top-bar-actions { display: flex; gap: 8px; margin-left: auto; }
 .back-to-project-btn { text-decoration: none; }
 .sidebar-toggle-btn { font-size: 14px; line-height: 1; }
@@ -990,6 +994,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 
 /* ── BOQ section in results ──────────────────────────────────────────────────── */
 .results-boq-section { display: flex; flex-direction: column; gap: 8px; }
+.results-boq-heading-row { display: flex; align-items: center; justify-content: space-between; }
 .results-section-heading {
   font-family: var(--font);
   font-size: 22px; font-weight: 800; color: var(--text);
