@@ -21,8 +21,8 @@
     coverDim:  [128, 148, 140],
   };
 
-  // ─── A4 layout constants ────────────────────────────────────────────────────
-  const PW = 210, PH = 297;
+  // ─── A4 landscape layout constants ──────────────────────────────────────────
+  const PW = 297, PH = 210;
   const ML = 16, MR = 16, MB = 12;
   const IW = PW - ML - MR;
 
@@ -115,18 +115,14 @@
     });
   }
 
-  // Composite floor plan + room editor + planner canvases into one JPEG.
+  // Capture only the uploaded floor plan image
   function captureFloorPlan() {
     const bg = document.getElementById('floorBgCanvas');
-    const re = document.getElementById('roomEditorCanvas');
-    const pl = document.getElementById('plannerCanvas');
     if (!bg || bg.width === 0) return null;
     const c = document.createElement('canvas');
     c.width = bg.width; c.height = bg.height;
     const ctx = c.getContext('2d');
     ctx.drawImage(bg, 0, 0);
-    if (re && !re.hidden && re.width > 0) ctx.drawImage(re, 0, 0);
-    if (pl && !pl.hidden && pl.width > 0) ctx.drawImage(pl, 0, 0);
     return c.toDataURL('image/jpeg', 0.92);
   }
 
@@ -314,7 +310,7 @@ Respond ONLY with valid JSON (no markdown fences): {"intro":"...","highlights":[
         (floorData ? 1 : 0);                 // floor plan
 
       let pg = 0;
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
       function np() { pg++; if (pg > 1) doc.addPage(); }
 
       // ══════════════════════════════════════════════════════════════════════
@@ -425,70 +421,25 @@ Respond ONLY with valid JSON (no markdown fences): {"intro":"...","highlights":[
         np();
         doc.setFillColor(...C.offWhite);
         doc.rect(0, 0, PW, PH, 'F');
-        pageHeader(doc, 'Space Layout', 'Floor plan with room designations and camera viewpoints');
+        pageHeader(doc, 'Space Layout', 'Site floor plan');
         pageFooter(doc, pg, totalPages, projectName);
 
-        const fpTop   = 29;
-        const fpAvailH = PH - fpTop - MB - 58;
-        const fpAvailW = IW;
-
+        const fpTop = 29;
         const dims = await imgDims(floorData);
         const aspect = dims.w / dims.h;
-        let fpW = fpAvailW, fpH = fpW / aspect;
-        if (fpH > fpAvailH) { fpH = fpAvailH; fpW = fpH * aspect; }
-        const fpX = ML + (fpAvailW - fpW) / 2;
 
-        doc.addImage(floorData, 'JPEG', fpX, fpTop, fpW, fpH, undefined, 'MEDIUM');
-        doc.setDrawColor(...C.border);
-        doc.setLineWidth(0.3);
-        doc.rect(fpX, fpTop, fpW, fpH);
-
-        // Room legend
-        const legY = fpTop + fpH + 8;
-        if (rooms.length > 0) {
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(8);
-          doc.setTextColor(...C.teal);
-          doc.text('ROOMS', ML, legY + 4);
-
-          const lCols = 3, lCW = IW / lCols;
-          rooms.forEach((room, i) => {
-            const lc = i % lCols, lr = Math.floor(i / lCols);
-            const lx = ML + lc * lCW;
-            const ly = legY + 12 + lr * 9;
-            if (ly > PH - MB - 18) return;
-            const rc = hexToRgb(ROOM_DOT_COLORS[room.roomType || room.type] || '#6050a0');
-            doc.setFillColor(...rc);
-            doc.circle(lx + 2.5, ly - 1.5, 2, 'F');
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7.5);
-            doc.setTextColor(...C.dark);
-            const dimStr = room.widthM && room.lengthM
-              ? ` · ${Math.round(parseFloat(room.widthM) * 3.28084)}×${Math.round(parseFloat(room.lengthM) * 3.28084)}ft` : '';
-            doc.text(`${room.label || room.name}${dimStr}`, lx + 7, ly, { maxWidth: lCW - 10 });
-          });
+        let fpW = PW;
+        let fpH = fpW / aspect;
+        
+        // If it somehow exceeds the page, scale down
+        if (fpTop + fpH > PH) {
+          fpH = PH - fpTop;
+          fpW = fpH * aspect;
         }
+        
+        const fpX = (PW - fpW) / 2;
 
-        // Camera pin legend
-        const pinLegY = legY + 12 + Math.ceil(rooms.length / 3) * 9 + 4;
-        if (activeCameraPins.length > 0 && pinLegY < PH - MB - 15) {
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(8);
-          doc.setTextColor(...C.gold);
-          doc.text('CAMERA VIEWPOINTS', ML, pinLegY + 4);
-
-          activeCameraPins.forEach((pin, i) => {
-            const py = pinLegY + 12 + i * 8;
-            if (py > PH - MB - 8) return;
-            doc.setFillColor(...C.gold);
-            doc.circle(ML + 2.5, py - 1.5, 2, 'F');
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7.5);
-            doc.setTextColor(...C.dark);
-            const pInfo = `${pin.room_label || 'Room'} · ${pin.angle_deg ?? '—'}° direction · ${pin.fov_deg ?? 60}° FOV`;
-            doc.text(pInfo, ML + 7, py);
-          });
-        }
+        doc.addImage(floorData, 'JPEG', fpX, fpTop, fpW, fpH);
       }
 
       // ══════════════════════════════════════════════════════════════════════
@@ -581,50 +532,7 @@ Respond ONLY with valid JSON (no markdown fences): {"intro":"...","highlights":[
         }
       }
 
-      // — Room summary strip at bottom —
-      if (rooms.length > 0) {
-        const sY = PH - MB - 40;
-        doc.setFillColor(...C.cream);
-        doc.roundedRect(ML, sY, IW, 32, 2, 2, 'F');
-        doc.setDrawColor(...C.border);
-        doc.setLineWidth(0.25);
-        doc.roundedRect(ML, sY, IW, 32, 2, 2, 'S');
-
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.setTextColor(...C.teal);
-        doc.text('SPACE SUMMARY', ML + 5, sY + 7);
-
-        const dispRooms = rooms.slice(0, 6);
-        const rCW = IW / dispRooms.length;
-        dispRooms.forEach((room, i) => {
-          const rx = ML + i * rCW;
-          if (i > 0) {
-            doc.setDrawColor(...C.border);
-            doc.setLineWidth(0.15);
-            doc.line(rx, sY + 4, rx, sY + 30);
-          }
-          const rc = hexToRgb(ROOM_DOT_COLORS[room.roomType || room.type] || '#6050a0');
-          doc.setFillColor(...rc);
-          doc.circle(rx + 5, sY + 17, 2, 'F');
-
-          const rname = (room.label || room.name || 'Room');
-          const rNameLines = doc.splitTextToSize(rname, rCW - 12);
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(7.5);
-          doc.setTextColor(...C.dark);
-          rNameLines.slice(0, 2).forEach((nl, ni) => {
-            doc.text(nl, rx + 10, sY + 15 + ni * 5);
-          });
-
-          if (room.widthM && room.lengthM) {
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7);
-            doc.setTextColor(...C.dim);
-            doc.text(`${Math.round(parseFloat(room.widthM) * 3.28084)}×${Math.round(parseFloat(room.lengthM) * 3.28084)}ft`, rx + 10, sY + 26);
-          }
-        });
-      }
+      // ── Space summary block removed as per request ──
 
       // ══════════════════════════════════════════════════════════════════════
       // PAGES 3+ — ROOM RENDERS
@@ -649,69 +557,27 @@ Respond ONLY with valid JSON (no markdown fences): {"intro":"...","highlights":[
           pageFooter(doc, pg, totalPages, projectName);
 
           const imgTop = 29;
-          const labelBarH = 6;
-          const imgH      = 165; // Make the render nice and large
-
-          // ── Full-width render with a top card label ─────────────────────
-          doc.setFillColor(...C.dark);
-          doc.rect(ML, imgTop, IW, labelBarH, 'F');
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(6.5);
-          doc.setTextColor(...C.goldPale);
-          doc.text('FURNISHED  DESIGN  RENDER', ML + 5, imgTop + 4.2);
 
           if (render.imgData) {
-            await placeImg(doc, render.imgData, ML, imgTop + labelBarH, IW, imgH);
-            doc.setDrawColor(...C.border);
-            doc.setLineWidth(0.35);
-            doc.rect(ML, imgTop + labelBarH, IW, imgH);
+            const dims = await imgDims(render.imgData);
+            const aspect = dims.w / dims.h;
+            let imgW = PW;
+            let imgH = imgW / aspect;
+
+            if (imgTop + imgH > PH) {
+               imgH = PH - imgTop;
+               imgW = imgH * aspect;
+            }
+            
+            const rX = Math.max(0, (PW - imgW) / 2);
+            doc.addImage(render.imgData, 'JPEG', rX, imgTop, imgW, imgH);
           } else {
             doc.setFillColor(...C.cream);
-            doc.rect(ML, imgTop + labelBarH, IW, imgH, 'F');
+            doc.rect(ML, imgTop, IW, 165, 'F');
             doc.setFont('helvetica', 'italic');
             doc.setFontSize(9);
             doc.setTextColor(...C.dim);
-            doc.text('Render pending', ML + IW / 2, imgTop + labelBarH + imgH / 2, { align: 'center' });
-          }
-
-          let infoY = imgTop + labelBarH + imgH + 12;
-
-          // Furniture list
-          let furList = [];
-          try {
-            if (render.furniture_list) {
-              furList = typeof render.furniture_list === 'string'
-                ? JSON.parse(render.furniture_list)
-                : render.furniture_list;
-            }
-          } catch {}
-
-          if (furList.length > 0 && infoY < PH - MB - 20) {
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(8.5);
-            doc.setTextColor(...C.teal);
-            doc.text('Key Furniture & Finishes', ML, infoY);
-            doc.setDrawColor(...C.teal);
-            doc.setLineWidth(0.4);
-            doc.line(ML, infoY + 2, ML + 54, infoY + 2);
-            infoY += 9;
-
-            const fItems = furList.slice(0, 12);
-            const fCols = 3;
-            const fCW = IW / fCols;
-            fItems.forEach((item, fi) => {
-              const fc = fi % fCols, fr = Math.floor(fi / fCols);
-              const fx = ML + fc * fCW;
-              const fy = infoY + fr * 8;
-              if (fy > PH - MB - 10) return;
-              doc.setFillColor(...C.gold);
-              doc.circle(fx + 2.2, fy - 1.5, 1.3, 'F');
-              doc.setFont('helvetica', 'normal');
-              doc.setFontSize(7.5);
-              doc.setTextColor(...C.dark);
-              const fname = typeof item === 'string' ? item : (item.label || item.name || item.item || '');
-              doc.text(fname.slice(0, 32), fx + 6.5, fy, { maxWidth: fCW - 9 });
-            });
+            doc.text('Render pending', ML + IW / 2, imgTop + 165 / 2, { align: 'center' });
           }
         }
       }
