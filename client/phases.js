@@ -257,7 +257,15 @@ function init() {
   el("setupFloorPlan")?.addEventListener("change", onSetupFloorPlanPicked);
   el("setupInspirationInput")?.addEventListener("change", onSetupInspirationPicked);
   el("setupAnalyseBtn")?.addEventListener("click", onSetupAnalyse);
-  el("setupCancelBtn")?.addEventListener("click", () => { hideSetupScreen(); showProjectPicker(); });
+  el("setupCancelBtn")?.addEventListener("click", () => {
+    const pid = new URLSearchParams(location.search).get('id');
+    if (pid) {
+      window.location.href = `/project?id=${pid}`;
+    } else {
+      hideSetupScreen();
+      showProjectPicker();
+    }
+  });
 
   // Setup screen: property type segmented control
   el("setupPropTypeCtrl")?.addEventListener("click", e => {
@@ -1158,7 +1166,10 @@ function onPinFieldChange() {
   const params = new URLSearchParams(location.search);
   const projectId = params.get('id');
   if (projectId) {
-    // Linked directly to a project (e.g. from projects page)
+    // Wire back button immediately so it's correct even before loadProject resolves
+    const backBtn = document.getElementById("backToProjectBtn");
+    if (backBtn) backBtn.href = `/project?id=${projectId}`;
+    // Linked directly to a project (e.g. from project detail page)
     await loadProject(projectId);
   } else {
     // No project selected — send to projects list

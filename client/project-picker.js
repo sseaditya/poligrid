@@ -181,8 +181,9 @@ async function loadProject(id) {
     if (nameEl) nameEl.value = proj.name || "";
     hideProjectPicker();
 
-    if (!data.floorPlan?.url) {
-      // Pre-populate setup screen with existing project data
+    const floorPlanSynthesized = data.floorPlan?.url && data.rooms?.length > 0;
+    if (!floorPlanSynthesized) {
+      // No floor plan OR floor plan uploaded but not yet analysed — open the setup wizard
       el("setupProjectName").value = proj.name || "";
       el("setupAreaInput").value = proj.total_area_m2 || "";
       el("setupCtxNotes").value = proj.notes || "";
