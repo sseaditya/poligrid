@@ -99,10 +99,11 @@ async function furnishRoomWithOpenAi(body) {
   const _debug = [];
 
   // STEP 1: Extract Style from Inspiration Images (skip if pre-computed by caller)
+  const inlineImagePrompts = Array.isArray(body.imagePrompts) ? body.imagePrompts : [];
   let styleGuidance = String(body.precomputedStyleGuidance || "").trim();
   if (!styleGuidance && inspirationImages.length > 0) {
     console.log(`[OpenAI] furnishRoom STEP1 → extracting style from ${inspirationImages.length} images (inline, not pre-computed)`);
-    const extracted = await extractFurnishStyleGuidance({ inspirationBase64: inspirationImages, visionModel });
+    const extracted = await extractFurnishStyleGuidance({ inspirationBase64: inspirationImages, imagePrompts: inlineImagePrompts, visionModel });
     styleGuidance = extracted.styleGuidance;
     console.log(`[OpenAI] furnishRoom STEP1 ✓ styleGuidance ${styleGuidance.length} chars`);
     _debug.push({ step: "Vision Style Extraction (inline)", styleGuidance });
@@ -172,8 +173,8 @@ async function furnishRoomWithOpenAi(body) {
       });
     }
 
-    // Include inspiration images in planning so AI picks style-matching furniture
-    for (const inspBase64 of inspirationImages.slice(0, 2)) {
+    // Include all inspiration images in planning so AI picks style-matching furniture
+    for (const inspBase64 of inspirationImages.slice(0, 20)) {
       contentArray.push({
         type: "input_image",
         image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:image/jpeg;base64,${inspBase64}`
