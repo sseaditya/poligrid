@@ -18,10 +18,12 @@
             "background": "#f3f4f6",
             "surface": "#ffffff",
             "on-surface": "#111827",
+            "on-surface-variant": "#6b7280",
+            "surface-container-lowest": "#ffffff",
+            "surface-container-low": "#f9fafb",
+            "outline-variant": "#e5e7eb",
             "ai-purple-start": "#6d28d9",
             "ai-purple-end": "#a855f7",
-            "surface-variant": "#f9fafb",
-            "outline-variant": "#e5e7eb"
           },
           fontFamily: {
             "headline": ["Manrope"],
@@ -55,45 +57,11 @@
 </head>
 <body class="bg-background text-on-surface flex min-h-screen">
 
-<!-- SideNavBar -->
-<aside class="h-screen w-64 fixed left-0 top-0 bg-white border-r border-outline-variant flex flex-col py-8 px-6 gap-y-6 z-50">
-  <div class="flex flex-col gap-1">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 bg-black rounded flex items-center justify-center text-white">
-        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">visibility</span>
-      </div>
-      <h1 class="text-lg font-black text-black tracking-tight">GOD'S EYE</h1>
-    </div>
-    <p class="text-[10px] font-bold tracking-widest text-gray-400 uppercase ml-11">by POLIGRID</p>
-  </div>
-  <nav class="flex flex-col gap-y-2 mt-8">
-    <a class="group flex items-center gap-3 py-3 px-4 rounded-lg text-black font-bold transition-all bg-gray-50" href="/sales/home">
-      <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">folder_open</span>
-      <span class="text-xs font-semibold">Projects</span>
-    </a>
-    <a class="group flex items-center gap-3 py-3 px-4 rounded-lg text-gray-500 hover:bg-gray-50 transition-all" href="/index">
-      <span class="material-symbols-outlined">architecture</span>
-      <span class="text-xs font-semibold">Fitout Planner</span>
-    </a>
-    <a class="group flex items-center gap-3 py-3 px-4 rounded-lg text-gray-500 hover:bg-gray-50 transition-all" id="adminNavLink" href="/admin" style="display:none">
-      <span class="material-symbols-outlined">manage_accounts</span>
-      <span class="text-xs font-semibold">Admin</span>
-    </a>
-    <a class="group flex items-center gap-3 py-3 px-4 rounded-lg text-gray-500 hover:bg-gray-50 transition-all" id="ceoNavLink" href="/ceo" style="display:none">
-      <span class="material-symbols-outlined">analytics</span>
-      <span class="text-xs font-semibold">CEO Dashboard</span>
-    </a>
-  </nav>
-  <div class="mt-auto">
-    <button onclick="window.location='/projects'" class="w-full bg-black text-white py-4 px-4 rounded font-bold text-xs flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors shadow-sm">
-      <span class="material-symbols-outlined text-sm">add_circle</span>
-      Start New Project
-    </button>
-  </div>
-</aside>
+<!-- Sidebar injected by AppNav.mountSidebar() -->
 
 <!-- Main Content Canvas -->
-<main class="flex-1 ml-64 min-h-screen flex flex-col">
+<div id="sidebarMain" class="md:ml-64 flex flex-col min-h-screen w-full">
+<main class="flex-1 flex flex-col">
   <!-- TopNavBar -->
   <header class="w-full h-16 flex items-center sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-outline-variant px-8 justify-between">
     <div class="flex items-center flex-1 max-w-xl">
@@ -109,7 +77,7 @@
           <p class="text-[10px] text-gray-500 uppercase tracking-tighter" id="userRoleLabel">—</p>
         </div>
         <div class="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-sm font-bold text-gray-600" id="userAvatar">—</div>
-        <button id="logoutBtn" class="text-gray-400 hover:text-black transition-colors" title="Sign out">
+        <button id="logoutBtnTop" class="text-gray-400 hover:text-black transition-colors" title="Sign out">
           <span class="material-symbols-outlined text-lg">logout</span>
         </button>
       </div>
@@ -137,6 +105,26 @@
       </div>
     </section>
 
+    <!-- Stat Row -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" id="statRow">
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm px-6 py-5">
+        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Projects</p>
+        <p class="text-3xl font-extrabold text-black headline" id="statTotal">—</p>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm px-6 py-5">
+        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Active</p>
+        <p class="text-3xl font-extrabold ai-text-gradient headline" id="statActive">—</p>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm px-6 py-5">
+        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Advance Paid</p>
+        <p class="text-3xl font-extrabold text-green-600 headline" id="statPaid">—</p>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-100 shadow-sm px-6 py-5">
+        <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Pending Payment</p>
+        <p class="text-3xl font-extrabold text-amber-500 headline" id="statUnpaid">—</p>
+      </div>
+    </div>
+
     <!-- Main Content Layout -->
     <div class="grid grid-cols-12 gap-8">
 
@@ -148,7 +136,6 @@
 
         <!-- Project Cards Grid -->
         <div class="grid grid-cols-2 gap-6" id="projectCardsGrid">
-          <!-- Populated by JS -->
           <div class="bg-white p-6 rounded-xl border border-gray-100 flex items-center justify-center h-48 text-gray-300">
             <span class="material-symbols-outlined text-4xl">hourglass_empty</span>
           </div>
@@ -195,12 +182,10 @@
 
       <!-- Right: Quick Actions Panel -->
       <div class="col-span-4 space-y-6">
-        <!-- AI Estimation panel -->
         <div class="bg-white rounded-2xl p-8 sticky top-24 h-fit border border-gray-100 shadow-sm">
           <div class="flex justify-between items-center mb-6">
             <h3 class="text-xl font-extrabold headline">Quick Actions</h3>
           </div>
-          <!-- Two primary action buttons -->
           <a href="/index" class="w-full flex items-center gap-4 p-5 rounded-xl border-2 border-gray-200 hover:border-black hover:bg-gray-50 transition-all">
             <div class="w-11 h-11 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
               <span class="material-symbols-outlined text-gray-700">architecture</span>
@@ -232,36 +217,40 @@
     </div>
   </div>
 </main>
+</div><!-- end #sidebarMain -->
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="/client/auth.js"></script>
+<script src="/client/nav.js"></script>
 <script>
+// Mount sidebar shell before auth so it's in the DOM from first paint
+AppNav.mountSidebar("DASHBOARD");
+
 (async () => {
   let session, profile;
   try {
-    ({ session, profile } = await AuthClient.requireAuth(["sales", "admin"]));
+    ({ session, profile } = await AuthClient.requireAuth(["sales", "admin", "lead_designer"]));
   } catch {
     window.location.href = "/login";
     return;
   }
 
-  // User info
+  // Wire sidebar nav (role-restricted automatically by AppNav)
+  AppNav.renderSidebar(profile, document.getElementById("sidebarNav"));
+  AppNav.renderMobileNav(profile, document.getElementById("mobileNav"));
+  AppNav.setupUserSection(profile);
+  AppNav.setupCollapse();
+
+  // Top bar user info
   const firstName = profile.full_name ? profile.full_name.split(" ")[0] : "there";
   document.getElementById("userDisplayName").textContent = profile.full_name || "—";
   document.getElementById("userRoleLabel").textContent = roleLabel(profile.role);
   document.getElementById("userAvatar").textContent = (profile.full_name || "?").charAt(0).toUpperCase();
-  document.getElementById("logoutBtn").addEventListener("click", () => AuthClient.signOut());
 
   // Greeting
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
   document.getElementById("greetingText").textContent = `${greeting}, ${firstName}.`;
-
-  // Admin/CEO nav links
-  if (profile.role === "admin") {
-    document.getElementById("adminNavLink").style.display = "flex";
-    document.getElementById("ceoNavLink").style.display = "flex";
-  }
 
   _currentSession = session;
 
@@ -271,12 +260,19 @@
     const res = await fetch("/api/project/list", { headers });
     const { projects } = await res.json();
 
-    const active = (projects || []).filter(p => p.status !== "archived" && p.status !== "completed");
-    document.getElementById("activeProjectCount").textContent = active.length;
+    const all = projects || [];
+    const active = all.filter(p => !p.on_hold && p.phase !== "prospect");
+    const paid = all.filter(p => p.advance_payment_done);
 
-    renderProjectCards(projects || [], session);
-    renderProjectTable(projects || [], session);
-    setupSearch(projects || [], session);
+    document.getElementById("activeProjectCount").textContent = active.length;
+    document.getElementById("statTotal").textContent = all.length;
+    document.getElementById("statActive").textContent = active.length;
+    document.getElementById("statPaid").textContent = paid.length;
+    document.getElementById("statUnpaid").textContent = all.length - paid.length;
+
+    renderProjectCards(all, session);
+    renderProjectTable(all, session);
+    setupSearch(all, session);
   } catch (e) {
     document.getElementById("projectTableBody").innerHTML =
       `<tr><td colspan="5" class="px-8 py-10 text-center text-red-400 text-sm">Failed to load projects.</td></tr>`;
@@ -293,7 +289,7 @@ function renderProjectCards(projects, session) {
 
   const cards = projects.slice(0, 4);
   grid.innerHTML = cards.map(p => {
-    const statusBadge = statusBadgeHtml(p.status);
+    const statusBadge = statusBadgeHtml(p.phase || p.status);
     const thumb = p.thumbnail_url
       ? `<img alt="${escHtml(p.name)}" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="${escHtml(p.thumbnail_url)}" />`
       : `<div class="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center"><span class="material-symbols-outlined text-gray-400 text-4xl">home_work</span></div>`;
@@ -361,7 +357,7 @@ function renderTableRows(projects) {
         </div>
       </td>
       <td class="px-8 py-5 text-sm font-semibold text-gray-700">${escHtml(p.client_name || "—")}</td>
-      <td class="px-8 py-5">${statusBadgeHtml(p.status)}</td>
+      <td class="px-8 py-5">${statusBadgeHtml(p.phase || p.status)}</td>
       <td class="px-8 py-5">
         <button class="advance-toggle text-xs font-bold px-2.5 py-1 rounded border transition-all ${p.advance_payment_done ? "advance-btn-done" : "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"}"
           data-id="${p.id}" data-done="${p.advance_payment_done ? "1" : "0"}"
@@ -414,16 +410,20 @@ async function toggleAdvance(btn, session) {
     if (!res.ok) throw new Error();
     btn.dataset.done = newDone ? "1" : "0";
     if (newDone) {
-      btn.textContent = btn.textContent.includes("Advance") ? "Advance Paid ✓" : "Advance Paid ✓";
+      btn.textContent = btn.closest("#projectCardsGrid") ? "₹ Advance Paid ✓" : "Advance Paid ✓";
       btn.className = btn.className.replace(/bg-amber-\S+|border-amber-\S+|text-amber-\S+|hover:bg-amber-\S+|bg-gray-50|border-gray-200|text-gray-600|hover:bg-gray-100/g, "").trim() + " advance-btn-done";
     } else {
-      const isCard = btn.closest("#projectCardsGrid");
+      const isCard = !!btn.closest("#projectCardsGrid");
       btn.textContent = isCard ? "₹ Mark Advance Paid" : "Mark Paid";
       btn.className = btn.className.replace(/advance-btn-done/g, "").trim() + (isCard ? " bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100" : " bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100");
     }
-    // Sync the matching project in _allProjects
+    // Sync local state
     const proj = _allProjects.find(p => p.id === projectId);
     if (proj) proj.advance_payment_done = newDone;
+    // Update stat counters
+    const paid = _allProjects.filter(p => p.advance_payment_done).length;
+    document.getElementById("statPaid").textContent = paid;
+    document.getElementById("statUnpaid").textContent = _allProjects.length - paid;
   } catch {
     alert("Could not update payment status.");
   } finally {
@@ -434,11 +434,16 @@ async function toggleAdvance(btn, session) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function statusBadgeHtml(status) {
   const map = {
-    active:     { cls: "ai-gradient text-white", label: "Active" },
-    draft:      { cls: "bg-gray-100 text-gray-600", label: "Draft" },
-    completed:  { cls: "bg-black text-white", label: "Completed" },
-    archived:   { cls: "bg-gray-200 text-gray-500", label: "Archived" },
-    generating: { cls: "bg-yellow-100 text-yellow-700", label: "Generating…" },
+    prospect:    { cls: "bg-gray-100 text-gray-600", label: "Prospect" },
+    design:      { cls: "ai-gradient text-white", label: "Design" },
+    prep:        { cls: "bg-blue-100 text-blue-700", label: "Prep" },
+    production:  { cls: "bg-purple-100 text-purple-700", label: "Production" },
+    execution:   { cls: "bg-green-100 text-green-700", label: "Execution" },
+    active:      { cls: "ai-gradient text-white", label: "Active" },
+    draft:       { cls: "bg-gray-100 text-gray-600", label: "Draft" },
+    completed:   { cls: "bg-black text-white", label: "Completed" },
+    archived:    { cls: "bg-gray-200 text-gray-500", label: "Archived" },
+    generating:  { cls: "bg-yellow-100 text-yellow-700", label: "Generating…" },
   };
   const s = map[status] || map.draft;
   return `<span class="${s.cls} px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tight">${s.label}</span>`;
@@ -453,7 +458,7 @@ function escHtml(str) {
 }
 
 function filterProjects() {
-  // placeholder - could open a filter modal
+  // placeholder — could open a filter modal
 }
 </script>
 </body>
