@@ -890,7 +890,8 @@ function onPinFieldChange() {
     return;
   }
 
-  AuthClient.renderUserChip(profile, document.getElementById('userChipWrap'));
+  const chipWrap = document.getElementById('userChipWrap');
+  if (chipWrap) AuthClient.renderUserChip(profile, chipWrap);
 
   init();
   initBoqEditPanel();

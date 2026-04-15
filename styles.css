@@ -47,17 +47,19 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .top-bar {
   position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h);
   z-index: 100;
-  background: #2d3435;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: rgba(249,249,249,0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(173,179,180,0.15);
   display: flex; align-items: center; gap: 16px;
   padding: 0 20px;
 }
 .top-bar-left { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .top-bar-right { min-width: 120px; display: flex; justify-content: flex-end; }
 .logo-link { text-decoration: none; }
-.logo-text { font-family: var(--font-serif); font-size: 18px; font-weight: 900; color: #d5e7da; letter-spacing: 0.18em; text-transform: uppercase; }
-.logo-studio { font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.38); letter-spacing: 0.05em; margin-left: 2px; }
-.logo-sub  { font-size: 10px; color: rgba(255,255,255,0.38); letter-spacing: 0.05em; }
+.logo-text { font-family: var(--font-serif); font-size: 15px; font-weight: 800; color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase; }
+.logo-studio { font-size: 10px; font-weight: 500; color: var(--text-dim); letter-spacing: 0.05em; margin-left: 2px; }
+.logo-sub  { font-size: 10px; color: var(--text-dim); letter-spacing: 0.05em; }
 .top-bar-actions { display: flex; gap: 8px; margin-left: auto; }
 .back-to-project-btn { text-decoration: none; }
 .sidebar-toggle-btn { font-size: 14px; line-height: 1; }
@@ -68,17 +70,6 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 }
 .topbar-results-actions[hidden] { display: none !important; }
 
-/* Ghost buttons inside dark top bar */
-.top-bar .ghost-sm, .top-bar .ghost-btn {
-  border-color: rgba(255,255,255,0.2);
-  color: rgba(255,255,255,0.65);
-}
-.top-bar .ghost-sm:hover, .top-bar .ghost-btn:hover {
-  border-color: rgba(255,255,255,0.5);
-  color: rgba(255,255,255,0.95);
-  background: rgba(255,255,255,0.06);
-}
-.top-bar .ghost-sm:disabled { opacity: 0.35; }
 
 /* ── Step Sub-Header (removed — phases are now in top bar) ──────────────────── */
 .step-sub-header { display: none !important; }
@@ -89,30 +80,29 @@ html, body { height: 100%; overflow: hidden; background: var(--bg0); color: var(
 .phase-bar { display: flex; align-items: center; gap: 0; flex: 1; justify-content: center; }
 .phase-pill {
   display: flex; align-items: center; gap: 5px;
-  background: none; border: 1px solid rgba(255,255,255,0.18);
-  color: rgba(255,255,255,0.5); font-family: var(--font); font-size: 11px; font-weight: 500;
+  background: none; border: 1px solid rgba(173,179,180,0.4);
+  color: var(--text-dim); font-family: var(--font); font-size: 11px; font-weight: 500;
   padding: 4px 10px; border-radius: 20px;
   cursor: default; transition: all 0.2s;
   white-space: nowrap;
 }
 .phase-pill.active {
-  border-color: #d5e7da; color: #d5e7da;
-  background: rgba(213,231,218,0.12);
-  box-shadow: 0 0 10px rgba(213,231,218,0.15);
+  border-color: var(--accent); color: var(--accent);
+  background: rgba(82,98,88,0.08);
 }
 .phase-pill.done {
-  border-color: rgba(46,125,67,0.5); color: #6ec98a;
-  background: rgba(46,125,67,0.1); cursor: pointer;
+  border-color: rgba(46,125,67,0.4); color: var(--success);
+  background: rgba(46,125,67,0.07); cursor: pointer;
 }
-.phase-pill:not(:disabled):not(.active):hover { border-color: rgba(255,255,255,0.4); color: rgba(255,255,255,0.85); cursor: pointer; }
+.phase-pill:not(:disabled):not(.active):hover { border-color: var(--border-hi); color: var(--text); cursor: pointer; }
 .pill-num {
   width: 16px; height: 16px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 9px; font-weight: 700; background: currentColor;
-  color: #2d3435; flex-shrink: 0;
+  color: var(--bg1); flex-shrink: 0;
 }
 .pill-label { font-weight: 600; }
-.phase-connector { flex: 1; height: 1px; background: rgba(255,255,255,0.14); min-width: 8px; max-width: 28px; }
+.phase-connector { flex: 1; height: 1px; background: rgba(173,179,180,0.3); min-width: 8px; max-width: 28px; }
 
 /* ── Layout ──────────────────────────────────────────────────────────────────── */
 .workspace {
