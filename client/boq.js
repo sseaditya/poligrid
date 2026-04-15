@@ -267,6 +267,12 @@ function drawBoq(globalBoq) {
     return;
   }
 
+  // Rebuild disabled set from items that were saved with disabled:true
+  // (only seed — don't clear manual in-session toggles that aren't yet persisted)
+  for (const item of globalBoq) {
+    if (item.disabled) _disabledBoqCategories.add(item.category || "Uncategorized");
+  }
+
   // Group by category
   const categories = {};
   for (const item of globalBoq) {
@@ -372,22 +378,20 @@ function drawBoq(globalBoq) {
 
 function _persistBoqDisabledState() {
   if (!appState.projectId) return;
-  // Save only the enabled items to DB
-  const enabledProjectItems = _projectBoqItems.filter(
-    it => !_disabledBoqCategories.has(it.category || "Uncategorized")
-  );
+  // Save ALL items to DB with disabled:true/false on each item.
   const latestVer = _allVersions[_allVersions.length - 1] || {};
-  const enabledVersionItems = (latestVer.boqItems || []).filter(
-    it => !_disabledBoqCategories.has(it.category || "Uncategorized")
-  );
+  const tag = it => ({
+    ...it,
+    disabled: _disabledBoqCategories.has(it.category || "Uncategorized")
+  });
   fetch("/api/project/update-boq", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       projectId: appState.projectId,
       versionId: latestVer.id || null,
-      projectItems: enabledProjectItems,
-      versionItems: enabledVersionItems
+      projectItems: _projectBoqItems.map(tag),
+      versionItems: (latestVer.boqItems || []).map(tag)
     })
   }).catch(e => console.warn("[BOQ toggle] DB save failed:", e.message));
 }

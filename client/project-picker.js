@@ -151,6 +151,7 @@ async function loadProject(id) {
     _allVersions = [];
     _activeCameraPins = [];
     _projectBoqItems = [];
+    _disabledBoqCategories = new Set(); // clear per-project toggle state
     _inspirationDataUrls = [];
     planner = null;
     roomEditor = null;
@@ -202,7 +203,15 @@ async function loadProject(id) {
     const rooms = (data.rooms || []).map(dbRoomToAppRoom);
     appState.detectedRooms = rooms;
     appState.confirmedRooms = rooms;
-    appState.globalBoq = (data.boqItems || []).map(
+
+    // Restore disabled-category state from the disabled column saved in DB
+    _disabledBoqCategories = new Set();
+    const rawBoqItems = data.boqItems || [];
+    for (const it of rawBoqItems) {
+      if (it.disabled) _disabledBoqCategories.add(it.category || "Uncategorized");
+    }
+    // Strip DB-only fields before storing in memory; _disabledBoqCategories tracks toggle state
+    appState.globalBoq = rawBoqItems.map(
       ({ category, item, qty, unit, rate, amount }) => ({ category, item, qty, unit, rate, amount })
     );
     _projectBoqItems = appState.globalBoq;

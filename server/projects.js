@@ -425,7 +425,8 @@ async function projectUpdateBoq(body) {
         qty: b.qty,
         unit: b.unit,
         rate: b.rate,
-        amount: b.amount
+        amount: b.amount,
+        disabled: !!b.disabled
       }))
     );
   }
@@ -444,7 +445,8 @@ async function projectUpdateBoq(body) {
         qty: b.qty,
         unit: b.unit,
         rate: b.rate,
-        amount: b.amount
+        amount: b.amount,
+        disabled: !!b.disabled
       }));
       const { error: insErr } = await sb.from("boq_items").insert(rows);
       if (insErr) console.error("[DB] Insert updated version BOQ failed:", insErr.message);

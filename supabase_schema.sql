@@ -301,8 +301,12 @@ CREATE TABLE IF NOT EXISTS boq_items (
   qty         NUMERIC,
   unit        TEXT,
   rate        NUMERIC,
-  amount      NUMERIC
+  amount      NUMERIC,
+  disabled    BOOLEAN     NOT NULL DEFAULT FALSE  -- TRUE = user unchecked this category in the BOQ view
 );
+
+-- Migration: add disabled column to existing tables
+ALTER TABLE boq_items ADD COLUMN IF NOT EXISTS disabled BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_boq_items_project_id  ON boq_items(project_id);
 CREATE INDEX IF NOT EXISTS idx_boq_items_version_id  ON boq_items(version_id);
