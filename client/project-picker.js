@@ -182,7 +182,25 @@ async function loadProject(id) {
     hideProjectPicker();
 
     if (!data.floorPlan?.url) {
-      advancePhase(1);
+      // Pre-populate setup screen with existing project data
+      el("setupProjectName").value = proj.name || "";
+      el("setupAreaInput").value = proj.total_area_m2 || "";
+      el("setupCtxNotes").value = proj.notes || "";
+      const propType = proj.property_type || "Apartment";
+      el("setupPropTypeCtrl")?.querySelectorAll(".seg-btn").forEach(b =>
+        b.classList.toggle("active", b.dataset.val === propType)
+      );
+      const isComm = propType === "Commercial";
+      el("setupConfigRowResidential").style.display = isComm ? "none" : "";
+      el("setupConfigRowCommercial").style.display = isComm ? "" : "none";
+      const bhkVal = proj.bhk || "2BHK";
+      el("setupBhkCtrl")?.querySelectorAll(".seg-btn").forEach(b =>
+        b.classList.toggle("active", b.dataset.val === bhkVal)
+      );
+      el("setupCommCtrl")?.querySelectorAll(".seg-btn").forEach(b =>
+        b.classList.toggle("active", b.dataset.val === bhkVal)
+      );
+      showSetupScreen();
       return;
     }
 

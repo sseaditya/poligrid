@@ -1,8 +1,8 @@
 "use strict";
 const { httpError, safeJson, extractJsonFromText, extractResponsesText,
-        extractApiError, resolveApiKey, decodeBase64Image, mToFtIn, m2ToSqft } = require("./utils");
+  extractApiError, resolveApiKey, decodeBase64Image, mToFtIn, m2ToSqft } = require("./utils");
 const { DEFAULT_OPENAI_IMAGE_MODEL, DEFAULT_OPENAI_TEXT_MODEL,
-        DEFAULT_OPENAI_VISION_MODEL } = require("./config");
+  DEFAULT_OPENAI_VISION_MODEL } = require("./config");
 async function renderWithOpenAi(body) {
   const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
   const model = String(body.model || "gpt-image-1.5").trim();
@@ -184,7 +184,7 @@ async function furnishRoomWithOpenAi(body) {
     const payload = {
       model: visionModel,
       reasoning: { effort: "medium" },
-      max_output_tokens: 4000,
+      max_output_tokens: 8000,
       input: [{ role: "user", content: contentArray }]
     };
 
@@ -1211,9 +1211,9 @@ async function extractStyleWithOpenAi(body) {
 
 async function generateText(body) {
   const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
-  const model   = DEFAULT_OPENAI_TEXT_MODEL;
-  const prompt  = String(body.prompt || "").trim();
-  const maxTok  = Math.min(parseInt(body.maxTokens) || 500, 1000);
+  const model = DEFAULT_OPENAI_TEXT_MODEL;
+  const prompt = String(body.prompt || "").trim();
+  const maxTok = Math.min(parseInt(body.maxTokens) || 500, 1000);
   if (!prompt) throw httpError(400, "Missing prompt for text generation.");
 
   const payload = {

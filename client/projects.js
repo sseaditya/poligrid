@@ -265,7 +265,7 @@ async function handleCreateProject() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to create project.");
-    window.location.href = `/project?id=${data.projectId}`;
+    window.location.href = `/index?id=${data.projectId}`;
   } catch (err) {
     errEl.textContent    = err.message;
     errEl.style.display  = "block";
