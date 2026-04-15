@@ -265,16 +265,6 @@ const MODULE_LIBRARY = [
   }
 ];
 
-const COST_RATES = {
-  plywood18: 115,
-  edgeBandPerM: 14,
-  hinge: 180,
-  channelPair: 420,
-  handle: 120,
-  cuttingPerCut: 35,
-  groovePerM: 28,
-  transportInstall: 8500
-};
 
 const DEFAULT_OPENAI_IMAGE_MODEL = "gpt-image-1.5";
 
@@ -705,88 +695,6 @@ function goBack(targetPhase) {
 // ─── Init ──────────────────────────────────────────────────────────────────────
 
 // ─── HYD furniture rates (Hyderabad premium market, INR) ──────────────────────
-// Granular label-based pricing; falls back to type-level rates
-const HYD_FURNITURE_RATES = {
-  // Modular (built-in / fitted)
-  cabinet: 65000,   // generic built-in cabinet
-  study:   55000,   // study unit
-  // Loose (free-standing)
-  bed:     58000,
-  seating: 65000,
-  table:   32000,
-  decor:   10000,
-  custom:  32000
-};
-
-// ─── Granular furniture pricing (Hyderabad premium market, INR) ───────────────
-function pricePlacement(p) {
-  const lbl = (p.label || '').toLowerCase();
-  const type = (p.type || '').toLowerCase();
-
-  // ── Modular (built-in / fitted) ────────────────────────────────────────────
-  if (/sliding.*wardrobe|wardrobe.*sliding/.test(lbl))          return { cat: 'Modular furniture', rate: 95000 };
-  if (/wardrobe|almirah|closet/.test(lbl))                      return { cat: 'Modular furniture', rate: 85000 };
-  if (/kitchen.*base|base.*cabinet|modular.*kitchen/.test(lbl)) return { cat: 'Modular furniture', rate: 48000 };
-  if (/kitchen.*wall|wall.*cabinet|overhead.*cabinet/.test(lbl))return { cat: 'Modular furniture', rate: 32000 };
-  if (/kitchen/.test(lbl))                                       return { cat: 'Modular furniture', rate: 75000 };
-  if (/tv unit|tv cabinet|media unit|entertainment unit/.test(lbl)) return { cat: 'Modular furniture', rate: 70000 };
-  if (/study.*hutch|desk.*hutch|study.*unit|work.*unit/.test(lbl)) return { cat: 'Modular furniture', rate: 55000 };
-  if (/crockery unit|display unit|bar unit/.test(lbl))          return { cat: 'Modular furniture', rate: 65000 };
-  if (/shoe rack|shoe cabinet/.test(lbl))                       return { cat: 'Modular furniture', rate: 28000 };
-  if (/vanity unit|bathroom vanity|wash basin unit/.test(lbl))  return { cat: 'Modular furniture', rate: 38000 };
-  if (/loft cabinet|loft storage/.test(lbl))                    return { cat: 'Modular furniture', rate: 22000 };
-  if (/bookshelf|bookcase|wall shelf/.test(lbl))                return { cat: 'Modular furniture', rate: 40000 };
-
-  // ── Seating ────────────────────────────────────────────────────────────────
-  if (/sectional|l.shape.*sofa|corner.*sofa/.test(lbl))        return { cat: 'Loose furniture', rate: 110000 };
-  if (/3.seat|three.seat/.test(lbl) && /sofa|couch/.test(lbl)) return { cat: 'Loose furniture', rate: 75000 };
-  if (/2.seat|two.seat/.test(lbl) && /sofa|couch/.test(lbl))   return { cat: 'Loose furniture', rate: 52000 };
-  if (/sofa|couch/.test(lbl))                                   return { cat: 'Loose furniture', rate: 68000 };
-  if (/lounge chair|accent chair|arm chair|armchair/.test(lbl)) return { cat: 'Loose furniture', rate: 28000 };
-  if (/dining chair|chair/.test(lbl))                           return { cat: 'Loose furniture', rate: 12000 };
-  if (/bar stool|stool/.test(lbl))                              return { cat: 'Loose furniture', rate: 8000 };
-  if (/ottoman|pouf/.test(lbl))                                 return { cat: 'Loose furniture', rate: 14000 };
-  if (/bean bag/.test(lbl))                                     return { cat: 'Loose furniture', rate: 10000 };
-  if (/office chair|study chair|desk chair/.test(lbl))         return { cat: 'Loose furniture', rate: 18000 };
-
-  // ── Beds ───────────────────────────────────────────────────────────────────
-  if (/king.*bed|super king/.test(lbl))                         return { cat: 'Loose furniture', rate: 72000 };
-  if (/queen.*bed|double.*bed/.test(lbl))                       return { cat: 'Loose furniture', rate: 58000 };
-  if (/single.*bed|twin.*bed/.test(lbl))                        return { cat: 'Loose furniture', rate: 38000 };
-  if (/bed|cot/.test(lbl))                                      return { cat: 'Loose furniture', rate: 55000 };
-
-  // ── Tables ─────────────────────────────────────────────────────────────────
-  if (/dining.*table|dining table/.test(lbl))                   return { cat: 'Loose furniture', rate: 55000 };
-  if (/coffee table|center table/.test(lbl))                    return { cat: 'Loose furniture', rate: 28000 };
-  if (/side table|end table|bedside|nightstand/.test(lbl))      return { cat: 'Loose furniture', rate: 14000 };
-  if (/console table|hallway table/.test(lbl))                  return { cat: 'Loose furniture', rate: 22000 };
-  if (/study.*table|study.*desk|work.*desk|writing desk/.test(lbl)) return { cat: 'Loose furniture', rate: 24000 };
-  if (/dressing table|vanity.*table/.test(lbl))                 return { cat: 'Loose furniture', rate: 32000 };
-
-  // ── Decor & soft furnishings ───────────────────────────────────────────────
-  if (/floor lamp/.test(lbl))                                   return { cat: 'Loose furniture', rate: 12000 };
-  if (/table lamp/.test(lbl))                                   return { cat: 'Loose furniture', rate: 8000 };
-  if (/pendant|chandelier/.test(lbl))                           return { cat: 'Loose furniture', rate: 22000 };
-  if (/rug|carpet/.test(lbl))                                   return { cat: 'Loose furniture', rate: 22000 };
-  if (/curtain|blind|drape/.test(lbl))                          return { cat: 'Loose furniture', rate: 18000 };
-  if (/mirror/.test(lbl))                                       return { cat: 'Loose furniture', rate: 16000 };
-  if (/art|painting|canvas|print/.test(lbl))                    return { cat: 'Loose furniture', rate: 14000 };
-  if (/plant|pot|planter/.test(lbl))                            return { cat: 'Loose furniture', rate: 5000 };
-  if (/vase|sculpture|figurine|decor/.test(lbl))               return { cat: 'Loose furniture', rate: 8000 };
-  if (/throw|cushion|pillow/.test(lbl))                         return { cat: 'Loose furniture', rate: 3000 };
-
-  // ── Type-level fallback ────────────────────────────────────────────────────
-  const TYPE_FALLBACK = {
-    cabinet: { cat: 'Modular furniture', rate: HYD_FURNITURE_RATES.cabinet },
-    study:   { cat: 'Modular furniture', rate: HYD_FURNITURE_RATES.study },
-    bed:     { cat: 'Loose furniture',   rate: HYD_FURNITURE_RATES.bed },
-    seating: { cat: 'Loose furniture',   rate: HYD_FURNITURE_RATES.seating },
-    table:   { cat: 'Loose furniture',   rate: HYD_FURNITURE_RATES.table },
-    decor:   { cat: 'Loose furniture',   rate: HYD_FURNITURE_RATES.decor },
-  };
-  return TYPE_FALLBACK[type] || { cat: 'Loose furniture', rate: HYD_FURNITURE_RATES.custom };
-}
-
 // ─── API Inspector (Debug Logger) ─────────────────────────────────────────────
 const Debugger = {
   _seq:     0,
@@ -1966,7 +1874,7 @@ async function onGenerate() {
     // BOQ = floor plan structural items + furniture from AI renders (HYD premium pricing)
     const finalBoq = [...(appState.globalBoq || [])];
 
-    // Add furniture from AI renders — use AI-provided rateINR, fall back to label-based lookup
+    // Add furniture from AI renders — rateINR and category are set by OpenAI (server-side)
     for (const result of roomResults) {
       if (!Array.isArray(result.placements)) continue;
       const seen = new Set();
@@ -1974,18 +1882,15 @@ async function onGenerate() {
         const key = `${result.room.label}:${(p.label || '').toLowerCase()}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        // AI provides rateINR and category; pricePlacement is the fallback
-        const aiRate = p.rateINR && p.rateINR > 0 ? p.rateINR : null;
-        const { cat, rate: fallbackRate } = pricePlacement(p);
-        const cat_ = p.category || cat;
-        const rate = aiRate || fallbackRate;
+        const rate = p.rateINR > 0 ? p.rateINR : 0;
         finalBoq.push({
-          category: cat_,
+          category: p.category || 'Loose furniture',
           item: `${p.label || 'Item'} — ${result.room.label}`,
           qty: 1,
           unit: 'pcs',
           rate,
-          amount: rate
+          amount: rate,
+          _priceMissing: p._priceMissing || false
         });
       }
     }
@@ -2587,13 +2492,16 @@ function drawBoq(globalBoq) {
       const q = parseFloat(line.qty) || 0;
       const r = parseFloat(line.rate) || 0;
       const a = parseFloat(line.amount) || 0;
+      const rateCell = line._priceMissing
+        ? `<td style="color:#b45309;font-weight:600" title="OpenAI could not price this item — enter rate manually">⚠ Rate needed</td>`
+        : `<td>₹${r.toLocaleString("en-IN")}</td>`;
       rowsHtml += `
-        <tr>
+        <tr${line._priceMissing ? ' style="background:#fffbeb"' : ''}>
           <td>${escapeHtml(line.item || "Unknown")}</td>
           <td>${q.toFixed(2)}</td>
           <td>${escapeHtml(line.unit || "")}</td>
-          <td>₹${r.toLocaleString("en-IN")}</td>
-          <td>₹${a.toLocaleString("en-IN")}</td>
+          ${rateCell}
+          <td>${line._priceMissing ? "—" : `₹${a.toLocaleString("en-IN")}`}</td>
         </tr>`;
     }
 

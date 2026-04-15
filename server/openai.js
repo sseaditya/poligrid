@@ -85,6 +85,61 @@ async function renderWithOpenAi(body) {
   throw httpError(502, "OpenAI response did not include b64_json or url.");
 }
 
+// Prices any placements where rateINR is missing/0 in a single gpt-4o-mini call.
+// If that call also fails, marks items with _priceMissing: true so the client can warn the user.
+async function priceMissingRates(apiKey, placements) {
+  const needsPrice = placements.filter(p => !(p.rateINR > 0));
+  if (!needsPrice.length) return placements;
+
+  const lines = needsPrice.map((p, i) => {
+    const dims = [p.wFt, p.dFt, p.hFt].filter(Boolean).map(v => `${v}ft`).join(' × ');
+    return `${i}: ${p.label} (type: ${p.type || 'unknown'}, category: ${p.category || 'unknown'})${dims ? ' — ' + dims : ''}`;
+  }).join('\n');
+
+  const prompt = [
+    'You are a Hyderabad premium interior design cost estimator (India).',
+    'Return Hyderabad premium market rates in INR, supply + installation included, for each item below.',
+    'All dimensions are in feet.',
+    'STRICT JSON only: {"items": [{"idx": 0, "rateINR": 85000, "category": "Modular furniture"}, ...]}',
+    'category must be exactly "Modular furniture" (built-in/fitted) or "Loose furniture" (free-standing).',
+    '',
+    'Items to price:',
+    lines
+  ].join('\n');
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: DEFAULT_OPENAI_TEXT_MODEL,
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
+        max_tokens: 1000
+      })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const json = safeJson(data.choices?.[0]?.message?.content || '{}');
+    const priced = placements.slice();
+    for (const item of (json?.items || [])) {
+      const src = needsPrice[item.idx];
+      if (!src) continue;
+      const idx = priced.findIndex(p => p === src);
+      if (idx !== -1) {
+        priced[idx] = { ...priced[idx], rateINR: item.rateINR, category: item.category || priced[idx].category };
+      }
+    }
+    console.log(`[priceMissingRates] filled ${needsPrice.length} items`);
+    return priced;
+  } catch (err) {
+    console.warn(`[priceMissingRates] failed: ${err.message} — items will be flagged for manual entry`);
+    return placements.map(p =>
+      !(p.rateINR > 0) ? { ...p, rateINR: 0, _priceMissing: true } : p
+    );
+  }
+}
+
 async function furnishRoomWithOpenAi(body) {
   const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
   const visionModel = String(body.visionModel || DEFAULT_OPENAI_VISION_MODEL).trim();
@@ -156,7 +211,7 @@ async function furnishRoomWithOpenAi(body) {
       "  wFt: realistic width in decimal feet (e.g. 7.0 for a 3-seater sofa, 6.5 for a queen bed, 8.0 for a full-height wardrobe)",
       "  dFt: depth in decimal feet (e.g. 3.0 for sofa, 6.5 for queen bed, 2.0 for wardrobe)",
       "  hFt: height in decimal feet (e.g. 3.0 for sofa, 4.0 for bed with headboard, 7.5 for full-height wardrobe)",
-      "  rateINR: your best estimate of the Hyderabad premium market price in INR for this specific item (one unit, supply + install). Be realistic — e.g. a full-height sliding wardrobe ₹95,000, a 3-seater sofa ₹70,000-85,000, a queen bed ₹55,000-70,000, kitchen cabinets ₹45,000-65,000 per unit.",
+      "  rateINR: REQUIRED — Hyderabad premium market rate in INR (supply + install, one unit). Never omit or set to 0. E.g. full-height wardrobe ₹90,000–₹1,10,000; 3-seater sofa ₹65,000–₹85,000; queen bed ₹55,000–₹70,000; kitchen cabinets ₹45,000–₹65,000.",
       "Return NOTHING but valid JSON."
     ].filter(Boolean).join("\n");
 
@@ -217,6 +272,8 @@ async function furnishRoomWithOpenAi(body) {
       };
     });
     console.log(`[OpenAI] furnishRoom STEP2 ✓ placements=${placements.length}`);
+    // Fill any items where AI skipped rateINR — one cheap gpt-4o-mini call
+    placements = await priceMissingRates(apiKey, placements);
   } else {
     console.log(`[OpenAI] furnishRoom STEP2 skipped (${placements?.length ?? 0} pre-provided placements)`);
   }
@@ -478,7 +535,7 @@ async function generateStructuralBoqWithOpenAi(body) {
   const prompt = [
     "You are an expert interior design project estimator specialising in Indian residential and commercial interiors.",
     "Generate a COMPREHENSIVE structural Bill of Quantities (BOQ) for the project described below.",
-    "Use HYDERABAD PREMIUM MARKET RATES (INR). Be generous and realistic — this is a premium interior project.",
+    "Use current HYDERABAD PREMIUM MARKET RATES (INR). Research-quality estimates — do not underestimate. This is a premium interior project.",
     "ALL dimensions and quantities are in feet, sqft, or rft — do NOT use meters or sqm anywhere.",
     "",
     `Project: ${ctx.propertyType || "Apartment"}, ${ctx.bhk || ""}, total area ≈ ${totalAreaSqft} sqft`,
@@ -488,20 +545,13 @@ async function generateStructuralBoqWithOpenAi(body) {
     "Return STRICT JSON only — a single object with a \"globalBoq\" array.",
     "Include ALL 7 categories with MULTIPLE line items each (be detailed, not lumped):",
     "",
-    "'Civil work'        — partition walls (rft × rate), waterproofing for bathrooms/kitchen/balcony (sqft × rate), any masonry or structural work",
-    "                      Rates: partition wall ₹900-1,400/rft, waterproofing ₹130-200/sqft",
-    "'Plumbing'          — per room: CP fittings (EWC, wash basin, shower, bathtub), supply pipes, drainage. Separate line per bathroom/kitchen.",
-    "                      Rates: per bathroom ₹50,000-75,000 lump sum, kitchen plumbing ₹35,000-55,000 lump sum, balcony point ₹8,000-12,000",
-    "'Electrical'        — DB/MCB panel, wiring (light + power points per room), earthing, switches+sockets. Separate line per room.",
-    "                      Rates: DB + MCBs ₹25,000-40,000, per room wiring+points ₹8,000-18,000 depending on room size",
-    "'Faux ceiling'      — gypsum board false ceiling with cove lighting per room (living, dining, master bed, kitchen). Separate line per room.",
-    "                      Rates: ₹100-145 per SQFT (e.g. 12×10 ft room at 70% = 84 sqft × ₹120 = ₹10,080). NEVER use per-sqm rates — sqm rates like ₹1,076/sqm would be 10× wrong.",
-    "'Flooring'          — vitrified tiles or wood finish per room. Separate line per room.",
-    "                      Rates: living/dining ₹160-220/sqft, bedrooms ₹135-185/sqft, kitchen/bath ₹115-165/sqft",
+    "'Civil work'        — partition walls (qty in rft), waterproofing for bathrooms/kitchen/balcony (qty in sqft), any masonry or structural work",
+    "'Plumbing'          — CP fittings, supply pipes, drainage. Separate line per bathroom/kitchen/balcony.",
+    "'Electrical'        — DB/MCB panel, wiring + light and power points per room, earthing, switches+sockets. Separate line per room.",
+    "'Faux ceiling'      — gypsum board false ceiling with cove lighting per room (living, dining, master bed, kitchen). qty = sqft of ceiling (floor area × 0.7). UNIT MUST BE sqft — NEVER sqm.",
+    "'Flooring'          — vitrified tiles or wood finish per room. Separate line per room. UNIT MUST BE sqft.",
     "'Doors and windows' — count from room data. Main entrance door, internal flush doors, bathroom doors, UPVC windows per room.",
-    "                      Rates: main door ₹60,000-95,000, internal flush door ₹24,000-34,000, bathroom door ₹18,000-26,000, UPVC window ₹950-1,450/sqft",
-    "'Painting'          — premium emulsion for walls + ceiling per room. Wall area ≈ 2.5× floor area per room + ceiling area.",
-    "                      Rates: ₹38-58/sqft (walls+ceiling combined)",
+    "'Painting'          — premium emulsion for walls + ceiling per room. Wall area ≈ 2.5× floor area per room + ceiling area. UNIT MUST BE sqft.",
     "",
     "For each item: { \"category\": string, \"item\": string, \"qty\": number, \"unit\": string, \"rate\": number, \"amount\": number }",
     "unit must be one of: 'sqft', 'pcs', 'rft', 'points', 'lump sum'  — NEVER use sqm",

@@ -152,18 +152,16 @@ async function onGenerate() {
         const key = `${result.room.label}:${(p.label || '').toLowerCase()}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        // AI provides rateINR and category; pricePlacement is the fallback
-        const aiRate = p.rateINR && p.rateINR > 0 ? p.rateINR : null;
-        const { cat, rate: fallbackRate } = pricePlacement(p);
-        const cat_ = p.category || cat;
-        const rate = aiRate || fallbackRate;
+        // rateINR and category are set by OpenAI server-side
+        const rate = p.rateINR > 0 ? p.rateINR : 0;
         finalBoq.push({
-          category: cat_,
+          category: p.category || 'Loose furniture',
           item: `${p.label || 'Item'} — ${result.room.label}`,
           qty: 1,
           unit: 'pcs',
           rate,
-          amount: rate
+          amount: rate,
+          _priceMissing: p._priceMissing || false
         });
       }
     }

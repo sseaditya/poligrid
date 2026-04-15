@@ -269,17 +269,6 @@ const MODULE_LIBRARY = [
   }
 ];
 
-const COST_RATES = {
-  plywood18: 115,
-  edgeBandPerM: 14,
-  hinge: 180,
-  channelPair: 420,
-  handle: 120,
-  cuttingPerCut: 35,
-  groovePerM: 28,
-  transportInstall: 8500
-};
-
 const ROOM_DOT_COLORS = {
   bedroom: "#8a4db5", living: "#2e8b57", kitchen: "#c97820",
   bathroom: "#2080c0", dining: "#c04040", study: "#3070a0",
@@ -293,23 +282,6 @@ const FURN_COLORS = [
   "#3a6a5a", "#b86d35", "#5a6a9a", "#9a5a6a",
   "#6a9a5a", "#9a8a3a", "#5a8a9a", "#9a6a9a", "#6a5a8a", "#8a6a3a"
 ];
-
-// ─── Init ──────────────────────────────────────────────────────────────────────
-
-// ─── HYD furniture rates (Hyderabad premium market, INR) ──────────────────────
-// Granular label-based pricing; falls back to type-level rates
-const HYD_FURNITURE_RATES = {
-  // Modular (built-in / fitted)
-  cabinet: 65000,   // generic built-in cabinet
-  study:   55000,   // study unit
-  // Loose (free-standing)
-  bed:     58000,
-  seating: 65000,
-  table:   32000,
-  decor:   10000,
-  custom:  32000
-};
-
 
 const _STEP_LABELS = {
   '/api/analyze/floorplan':             'Floor Plan Analysis',
