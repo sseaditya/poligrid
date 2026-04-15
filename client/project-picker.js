@@ -137,6 +137,9 @@ async function loadProject(id) {
 
     // Reset app state for this project — wipe ALL stale data before loading new project
     appState.projectId = id;
+    // Update back-to-project button href
+    const backBtn = document.getElementById("backToProjectBtn");
+    if (backBtn) backBtn.href = `/project?id=${id}`;
     appState.floorFile = null;
     appState.inspirationFiles = [];
     appState.storedInspirationUrls = [];

@@ -7,7 +7,7 @@
     <meta name="description" content="AI-powered interior fitout planner — floor plan analysis, interactive room editing, AI furniture placement, and furnished renders." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -40,17 +40,10 @@
     <!-- ── TOP BAR ──────────────────────────────────────────────────────────── -->
     <header class="top-bar">
       <div class="top-bar-left">
-        <a href="/homepage" class="logo-link"><span class="logo-text">Poligrid</span></a>
-        <input id="projectNameInput" class="project-name-input" type="text" placeholder="Untitled project" maxlength="80" spellcheck="false" />
+        <a href="/homepage" class="logo-link"><span class="logo-text">Poligrid</span><span class="logo-studio"> Studio</span></a>
+        <a href="/projects" id="backToProjectBtn" class="ghost-sm back-to-project-btn">← Project</a>
+        <button id="sidebarToggle" class="ghost-sm sidebar-toggle-btn" title="Toggle sidebar">&#8644;</button>
       </div>
-      <nav class="dash-nav" id="dashNav"></nav>
-      <div class="top-bar-right" id="userChipWrap"></div>
-    </header>
-
-    <!-- ── STEP SUB-HEADER ────────────────────────────────────────────────── -->
-    <div class="step-sub-header">
-      <span class="step-sub-header-label">Renders &amp; BOQ</span>
-      <div class="step-sub-header-divider"></div>
       <nav class="phase-bar" id="phaseBar">
         <button class="phase-pill active" data-phase="1" id="pill1">
           <span class="pill-num">1</span><span class="pill-label">Context</span>
@@ -73,20 +66,27 @@
         </button>
       </nav>
       <!-- Results actions — shown only when results view is open -->
-      <div class="subheader-results-actions" id="subheaderResultsActions" hidden>
-        <div class="step-sub-header-divider"></div>
-        <button class="ghost-sm results-back-btn" id="closeOutput">← Back to Edit</button>
+      <div class="topbar-results-actions" id="subheaderResultsActions" hidden>
+        <button class="ghost-sm results-back-btn" id="closeOutput">← Edit</button>
         <button id="downloadScene" class="ghost-sm" disabled>↓ Scene JSON</button>
         <button id="downloadBoq"   class="ghost-sm" disabled>↓ BOQ CSV</button>
         <button id="downloadDeckBtn" class="ghost-sm deck-btn" disabled>✦ Client Deck PDF</button>
         <span id="deckProgressMsg" class="deck-progress-msg"></span>
       </div>
-    </div>
+    </header>
 
     <div class="workspace">
 
       <!-- ── LEFT SIDEBAR ────────────────────────────────────────────────────── -->
-      <aside class="sidebar">
+      <aside class="sidebar" id="sidebar">
+
+        <!-- ── Sidebar nav strip ───────────────────────────────────────────── -->
+        <div class="sidebar-nav-strip">
+          <div class="sidebar-nav-item active">
+            <span class="sidebar-nav-icon">&#9638;</span>
+            <span class="sidebar-nav-label">Fitout Planner</span>
+          </div>
+        </div>
 
         <!-- ── PHASE 1: Context + Upload ──────────────────────────────────── -->
         <div class="phase-panel" id="panel1">
@@ -425,34 +425,17 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     <script src="client/auth.js"></script>
     <script>
-      // Gate fitout planner to sales, lead_designer, admin
+      // Gate fitout planner to sales, lead_designer, admin, ceo
       AuthClient.requireAuth(["sales", "lead_designer", "admin", "ceo"]).then(({ profile }) => {
-        AuthClient.renderUserChip(profile, document.getElementById("userChipWrap"));
-        // Expose session for project picker API calls
         window._authProfile = profile;
-        // Render standard nav
-        const nav = document.getElementById("dashNav");
-        if (nav) {
-          const links = [
-            { href: "/homepage", label: "Home" },
-            { href: "/projects", label: "Projects" },
-            { href: "/projects", label: "Fitout Planner", active: true },
-          ];
-          if (["designer", "lead_designer", "admin"].includes(profile.role)) {
-            links.push({ href: "/designer", label: "Drawings" });
-          }
-          if (profile.role === "admin") {
-            links.push({ href: "/admin", label: "Admin" });
-            links.push({ href: "/ceo", label: "Dashboard" });
-          }
-          if (profile.role === "ceo") {
-            links.push({ href: "/ceo", label: "Dashboard" });
-          }
-          nav.innerHTML = links.map(l =>
-            `<a class="dash-nav-link${l.active ? " active" : ""}" href="${l.href}">${l.label}</a>`
-          ).join("");
-        }
       }).catch(() => {});
+
+      // Sidebar collapse toggle
+      document.getElementById("sidebarToggle").addEventListener("click", function() {
+        const sidebar = document.getElementById("sidebar");
+        sidebar.classList.toggle("collapsed");
+        this.title = sidebar.classList.contains("collapsed") ? "Expand sidebar" : "Collapse sidebar";
+      });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
     <script src="analysis.js"></script>
