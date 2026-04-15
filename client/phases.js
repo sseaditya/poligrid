@@ -265,7 +265,8 @@ function init() {
     _inspirationDataUrls = [];
 
     // Reset UI
-    el("projectNameInput").value = "";
+    const nameEl = el("projectNameInput");
+    if (nameEl) nameEl.value = "";
     el("floorPlanName").textContent = "Click or drag floor plan PDF / image";
     el("floorPlan").value = "";
     el("inspirationNames").textContent = "Add inspiration images (optional)";

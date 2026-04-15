@@ -174,7 +174,8 @@ async function loadProject(id) {
       notes: proj.notes || ""
     };
     restoreContextForm(appState.context);
-    el("projectNameInput").value = proj.name || "";
+    const nameEl = el("projectNameInput");
+    if (nameEl) nameEl.value = proj.name || "";
     hideProjectPicker();
 
     if (!data.floorPlan?.url) {
