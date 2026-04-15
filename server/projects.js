@@ -264,7 +264,8 @@ async function projectSaveInspiration(body) {
       project_id: projectId,
       file_name: img.fileName || `${i}.${ext}`,
       storage_path: storagePath,
-      sort_order: offset + i
+      sort_order: offset + i,
+      prompt: img.prompt || null
     });
   }
 

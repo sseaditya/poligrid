@@ -1067,6 +1067,7 @@ async function extractFurnishStyleGuidance(body) {
   const apiKey = resolveApiKey("", process.env.OPENAI_API_KEY, "OPENAI_API_KEY");
   const visionModel = String(body.visionModel || DEFAULT_OPENAI_VISION_MODEL).trim();
   const inspirationImages = Array.isArray(body.inspirationBase64) ? body.inspirationBase64 : [];
+  const imagePrompts = Array.isArray(body.imagePrompts) ? body.imagePrompts : [];
 
   if (inspirationImages.length === 0) return { styleGuidance: "" };
 
@@ -1085,7 +1086,12 @@ async function extractFurnishStyleGuidance(body) {
   ].join("\n");
 
   const styleContent = [{ type: "input_text", text: stylePrompt }];
-  for (const inspBase64 of inspirationImages.slice(0, 4)) {
+  for (let i = 0; i < Math.min(inspirationImages.length, 20); i++) {
+    const inspBase64 = inspirationImages[i];
+    const imgPrompt = imagePrompts[i];
+    if (imgPrompt && imgPrompt.trim()) {
+      styleContent.push({ type: "input_text", text: `Image ${i + 1} focus: ${imgPrompt.trim()}` });
+    }
     styleContent.push({
       type: "input_image",
       image_url: inspBase64.startsWith("data:") ? inspBase64 : `data:image/jpeg;base64,${inspBase64}`
@@ -1098,8 +1104,8 @@ async function extractFurnishStyleGuidance(body) {
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: visionModel,
-        reasoning: { effort: "medium" },
-        max_output_tokens: 1800,
+        reasoning: { effort: "low" },
+        max_output_tokens: 10000,
         input: [{ role: "user", content: styleContent }]
       })
     });

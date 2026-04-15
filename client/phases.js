@@ -246,63 +246,40 @@ function init() {
   // Back to projects
   el("backToProjects")?.addEventListener("click", () => { window.location.href = "/projects"; });
 
-  // New project button
+  // New project button → show setup screen instead of going straight to Phase 1
   el("newProjectBtn")?.addEventListener("click", () => {
-    // Reset all state
-    appState.projectId = generateUUID();
-    appState.floorFile = null;
-    appState.inspirationFiles = [];
-    appState.storedInspirationUrls = [];
-    appState.inspirationStoragePaths = [];
-    appState.context = { propertyType: "Apartment", bhk: "2BHK", totalAreaM2: null, notes: "" };
-    appState.detectedRooms = null;
-    appState.confirmedRooms = null;
-    appState.globalBoq = [];
-    appState.currentVersionId = null;
-    _allVersions = [];
-    _activeCameraPins = [];
-    _projectBoqItems = [];
-    _inspirationDataUrls = [];
-
-    // Reset UI
-    const nameEl = el("projectNameInput");
-    if (nameEl) nameEl.value = "";
-    el("floorPlanName").textContent = "Click or drag floor plan PDF / image";
-    el("floorPlan").value = "";
-    el("inspirationNames").textContent = "Add inspiration images (optional)";
-    el("inspirationImages").value = "";
-    el("inspirationPreviews").innerHTML = "";
-    restoreContextForm(appState.context);
-    el("globalBrief").value = "";
-    el("analyzeBtn").disabled = true;
-    el("analysisChip").hidden = true;
-    el("analysisSummaryWrap").hidden = true;
-    el("roomChipList").innerHTML = "";
-    el("pinsList").innerHTML = "";
-    el("noPinsHint").hidden = false;
-
-    // Reset canvas
-    dom.canvasWrap.hidden = true;
-    dom.canvasPlaceholder.hidden = false;
-    if (roomEditor) roomEditor.setRooms([], 0, 0);
-    if (planner) { planner.furniturePlacements = []; planner.cameraPins = []; planner.detectedRooms = []; planner.render?.(); }
-    planner = null;
-    const bgCtx = dom.floorBgCanvas?.getContext("2d");
-    if (bgCtx) bgCtx.clearRect(0, 0, dom.floorBgCanvas.width, dom.floorBgCanvas.height);
-
-    // Reset results
-    hideResultsView();
-    el("roomResults").innerHTML = "";
-    el("statusBox").textContent = "";
-    el("versionTabsBar").hidden = true;
-    el("versionTabs").innerHTML = "";
-    drawBoq([]);
-    el("resultsInspirationStrip") && (el("resultsInspirationStrip").innerHTML = "");
-    el("resultsInspiration") && (el("resultsInspiration").hidden = true);
-    el("resultsBriefSection") && (el("resultsBriefSection").hidden = true);
-
+    _resetNewProjectState();
     hideProjectPicker();
-    advancePhase(1);
+    showSetupScreen();
+  });
+
+  // Setup screen bindings
+  el("setupFloorPlan")?.addEventListener("change", onSetupFloorPlanPicked);
+  el("setupInspirationInput")?.addEventListener("change", onSetupInspirationPicked);
+  el("setupAnalyseBtn")?.addEventListener("click", onSetupAnalyse);
+  el("setupCancelBtn")?.addEventListener("click", () => { hideSetupScreen(); showProjectPicker(); });
+
+  // Setup screen: property type segmented control
+  el("setupPropTypeCtrl")?.addEventListener("click", e => {
+    const btn = e.target.closest(".seg-btn");
+    if (!btn) return;
+    el("setupPropTypeCtrl").querySelectorAll(".seg-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const isComm = btn.dataset.val === "Commercial";
+    el("setupConfigRowResidential").style.display = isComm ? "none" : "";
+    el("setupConfigRowCommercial").style.display = isComm ? "" : "none";
+  });
+  el("setupBhkCtrl")?.addEventListener("click", e => {
+    const btn = e.target.closest(".seg-btn");
+    if (!btn) return;
+    el("setupBhkCtrl").querySelectorAll(".seg-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+  });
+  el("setupCommCtrl")?.addEventListener("click", e => {
+    const btn = e.target.closest(".seg-btn");
+    if (!btn) return;
+    el("setupCommCtrl").querySelectorAll(".seg-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
   });
 
   // Auto-load project from URL param (?id=), otherwise show picker
@@ -313,6 +290,287 @@ function init() {
     showProjectPicker();
   }
 }
+
+// ─── Setup Screen ─────────────────────────────────────────────────────────────
+
+let _setupInspirationItems = []; // [{file, prompt}] tracked while on setup screen
+let _setupFloorFile = null;
+
+function showSetupScreen() {
+  el("setupScreen").hidden = false;
+  // Reset setup form
+  _setupInspirationItems = [];
+  _setupFloorFile = null;
+  el("setupInspirationGrid").innerHTML = "";
+  el("setupInspCounter").textContent = "0 / 20";
+  el("setupFloorPlanName").textContent = "Click or drag floor plan PDF / image";
+  el("setupFloorPlan").value = "";
+  el("setupInspirationInput").value = "";
+  el("setupProjectName").value = "";
+  el("setupAreaInput").value = "";
+  el("setupCtxNotes").value = "";
+  el("setupStatus").textContent = "";
+  el("setupAnalyseBtn").disabled = true;
+  el("setupFloorPlan").closest("label")?.classList.remove("has-file");
+  // Reset seg controls to defaults
+  el("setupPropTypeCtrl")?.querySelectorAll(".seg-btn").forEach(b => b.classList.toggle("active", b.dataset.val === "Apartment"));
+  el("setupBhkCtrl")?.querySelectorAll(".seg-btn").forEach(b => b.classList.toggle("active", b.dataset.val === "2BHK"));
+  el("setupCommCtrl")?.querySelectorAll(".seg-btn").forEach(b => b.classList.toggle("active", b.dataset.val === "Office"));
+  el("setupConfigRowResidential").style.display = "";
+  el("setupConfigRowCommercial").style.display = "none";
+}
+
+function hideSetupScreen() {
+  el("setupScreen").hidden = true;
+}
+
+function onSetupFloorPlanPicked() {
+  const file = el("setupFloorPlan").files?.[0];
+  if (!file) return;
+  _setupFloorFile = file;
+  el("setupFloorPlanName").textContent = file.name;
+  el("setupFloorPlan").closest("label")?.classList.add("has-file");
+  _updateSetupAnalyseBtn();
+}
+
+function _updateSetupAnalyseBtn() {
+  el("setupAnalyseBtn").disabled = !_setupFloorFile;
+}
+
+function _updateSetupInspirationCounter() {
+  el("setupInspCounter").textContent = `${_setupInspirationItems.length} / 20`;
+  // Show/hide add button based on limit
+  const addLabel = el("setupInspirationAddLabel");
+  if (addLabel) addLabel.style.display = _setupInspirationItems.length >= 20 ? "none" : "";
+}
+
+function _buildSetupInspirationCard(file, index) {
+  const card = document.createElement("div");
+  card.className = "setup-insp-card";
+  card.dataset.idx = index;
+
+  const img = document.createElement("img");
+  img.className = "setup-insp-thumb";
+  img.alt = file.name;
+  const reader = new FileReader();
+  reader.onload = e => { img.src = e.target.result; };
+  reader.readAsDataURL(file);
+
+  const prompt = document.createElement("textarea");
+  prompt.className = "setup-insp-prompt";
+  prompt.placeholder = "What to extract? e.g. sofa style, color palette, lighting…";
+  prompt.addEventListener("input", () => {
+    const idx = parseInt(card.dataset.idx, 10);
+    if (_setupInspirationItems[idx]) _setupInspirationItems[idx].prompt = prompt.value;
+  });
+
+  const removeBtn = document.createElement("button");
+  removeBtn.className = "setup-insp-remove";
+  removeBtn.type = "button";
+  removeBtn.title = "Remove";
+  removeBtn.textContent = "✕";
+  removeBtn.addEventListener("click", () => {
+    const idx = parseInt(card.dataset.idx, 10);
+    _setupInspirationItems.splice(idx, 1);
+    _rebuildSetupInspirationGrid();
+  });
+
+  card.appendChild(img);
+  card.appendChild(prompt);
+  card.appendChild(removeBtn);
+  return card;
+}
+
+function _rebuildSetupInspirationGrid() {
+  const grid = el("setupInspirationGrid");
+  grid.innerHTML = "";
+  _setupInspirationItems.forEach((item, i) => {
+    const card = _buildSetupInspirationCard(item.file, i);
+    grid.appendChild(card);
+  });
+  _updateSetupInspirationCounter();
+}
+
+function onSetupInspirationPicked() {
+  const input = el("setupInspirationInput");
+  const files = Array.from(input.files || []);
+  input.value = ""; // allow re-selecting same files
+  const remaining = 20 - _setupInspirationItems.length;
+  const toAdd = files.slice(0, remaining);
+  toAdd.forEach(f => _setupInspirationItems.push({ file: f, prompt: "" }));
+  _rebuildSetupInspirationGrid();
+}
+
+async function onSetupAnalyse() {
+  if (!_setupFloorFile) { alert("Upload a floor plan first."); return; }
+
+  const PA = window.PoligridAnalysis;
+  if (!PA) { alert("Analysis module not loaded."); return; }
+
+  const analyseBtn = el("setupAnalyseBtn");
+  const statusEl = el("setupStatus");
+  analyseBtn.disabled = true;
+  analyseBtn.textContent = "Analysing…";
+
+  // Read context from setup form
+  const propType = el("setupPropTypeCtrl").querySelector(".seg-btn.active")?.dataset.val || "Apartment";
+  const isComm = propType === "Commercial";
+  const bhk = isComm
+    ? (el("setupCommCtrl").querySelector(".seg-btn.active")?.dataset.val || "Office")
+    : (el("setupBhkCtrl").querySelector(".seg-btn.active")?.dataset.val || "2BHK");
+  const totalAreaM2 = parseFloat(el("setupAreaInput").value) || null;
+  const notes = el("setupCtxNotes").value.trim();
+
+  appState.context = { propertyType: propType, bhk, totalAreaM2, notes };
+
+  // Store inspiration files + prompts
+  appState.inspirationFiles = _setupInspirationItems.map(i => i.file);
+  appState.inspirationPrompts = _setupInspirationItems.map(i => i.prompt || "");
+
+  // Persist inspiration images (with prompts) to Supabase
+  if (_setupInspirationItems.length > 0) {
+    Promise.all(_setupInspirationItems.map(async (item) => ({
+      base64: await readDataUrl(item.file),
+      mimeType: item.file.type || "image/jpeg",
+      fileName: item.file.name,
+      prompt: item.prompt || null
+    }))).then(images => {
+      saveToDb("/api/project/save-inspiration", { projectId: appState.projectId, images });
+    }).catch(e => console.warn("[DB] Setup inspiration upload failed:", e.message));
+  }
+
+  // Sync project name
+  const nameVal = el("setupProjectName").value.trim();
+  if (nameVal) {
+    const nameEl = el("projectNameInput");
+    if (nameEl) nameEl.value = nameVal;
+    saveToDb("/api/project/rename", { projectId: appState.projectId, name: nameVal });
+  }
+
+  // Also sync context form in Phase 1 sidebar
+  restoreContextForm(appState.context);
+
+  try {
+    statusEl.textContent = "Rendering floor plan…";
+    const bgCanvas = dom.floorBgCanvas;
+    await renderFloorPlanToCanvas(_setupFloorFile, bgCanvas);
+    appState.floorFile = _setupFloorFile;
+    el("floorPlanName").textContent = _setupFloorFile.name;
+    el("analyzeBtn").disabled = false;
+
+    statusEl.textContent = "Analysing with AI…";
+    const analysis = await PA.analyzeFloorPlan(bgCanvas, appState.context);
+    appState.detectedRooms = analysis.rooms || [];
+
+    statusEl.textContent = "Generating structural pricing…";
+    let globalBoq = analysis.globalBoq || [];
+    try {
+      const boqResult = await postJson("/api/project/generate-boq", {
+        floorPlanBase64: bgCanvas.toDataURL("image/png"),
+        rooms: appState.detectedRooms,
+        context: { ...appState.context, totalAreaM2: analysis.totalAreaM2 }
+      });
+      if (boqResult.globalBoq?.length > 0) globalBoq = boqResult.globalBoq;
+    } catch (e) {
+      console.warn("[Poligrid] Structural BOQ generation failed:", e.message);
+    }
+    appState.globalBoq = globalBoq;
+    _projectBoqItems = globalBoq;
+
+    // Persist floor plan + analysis
+    saveToDb("/api/project/save-analysis", {
+      projectId: appState.projectId,
+      floorPlanBase64: bgCanvas.toDataURL("image/png"),
+      fileName: _setupFloorFile.name,
+      analysis: { ...analysis, globalBoq },
+      context: appState.context
+    });
+
+    // Size overlay canvases
+    dom.roomEditorCanvas.width = bgCanvas.width;
+    dom.roomEditorCanvas.height = bgCanvas.height;
+    dom.canvasPlaceholder.hidden = true;
+    dom.canvasWrap.hidden = false;
+
+    // Init RoomEditor
+    roomEditor = new RoomEditor(dom.roomEditorCanvas, bgCanvas, {
+      onRoomsChange: onRoomsChange,
+      onSelect: onRoomSelected
+    });
+    roomEditor.setRooms(analysis.rooms, bgCanvas.width, bgCanvas.height);
+    buildRoomChips(analysis.rooms);
+
+    // Show analysis summary in Phase 2 sidebar
+    el("analysisSummaryText").textContent = analysis.summary || "";
+    el("analysisSummaryWrap").hidden = false;
+
+    hideSetupScreen();
+    advancePhase(2);
+
+  } catch (err) {
+    statusEl.textContent = `⚠ ${err.message}`;
+    analyseBtn.disabled = false;
+    analyseBtn.textContent = "Analyse & Start →";
+    console.error(err);
+  }
+}
+
+function _resetNewProjectState() {
+  appState.projectId = generateUUID();
+  appState.floorFile = null;
+  appState.inspirationFiles = [];
+  appState.inspirationPrompts = [];
+  appState.storedInspirationUrls = [];
+  appState.storedInspirationPrompts = [];
+  appState.inspirationStoragePaths = [];
+  appState.context = { propertyType: "Apartment", bhk: "2BHK", totalAreaM2: null, notes: "" };
+  appState.detectedRooms = null;
+  appState.confirmedRooms = null;
+  appState.globalBoq = [];
+  appState.currentVersionId = null;
+  _allVersions = [];
+  _activeCameraPins = [];
+  _projectBoqItems = [];
+  _inspirationDataUrls = [];
+
+  // Reset Phase 1 sidebar UI
+  const nameEl = el("projectNameInput");
+  if (nameEl) nameEl.value = "";
+  el("floorPlanName").textContent = "Click or drag floor plan PDF / image";
+  el("floorPlan").value = "";
+  el("inspirationNames").textContent = "Add inspiration images (optional)";
+  el("inspirationImages").value = "";
+  el("inspirationPreviews").innerHTML = "";
+  restoreContextForm(appState.context);
+  el("globalBrief").value = "";
+  el("analyzeBtn").disabled = true;
+  el("analysisChip").hidden = true;
+  el("analysisSummaryWrap").hidden = true;
+  el("roomChipList").innerHTML = "";
+  el("pinsList").innerHTML = "";
+  el("noPinsHint").hidden = false;
+
+  // Reset canvas
+  dom.canvasWrap.hidden = true;
+  dom.canvasPlaceholder.hidden = false;
+  if (roomEditor) roomEditor.setRooms([], 0, 0);
+  if (planner) { planner.furniturePlacements = []; planner.cameraPins = []; planner.detectedRooms = []; planner.render?.(); }
+  planner = null;
+  const bgCtx = dom.floorBgCanvas?.getContext("2d");
+  if (bgCtx) bgCtx.clearRect(0, 0, dom.floorBgCanvas.width, dom.floorBgCanvas.height);
+
+  // Reset results
+  hideResultsView();
+  el("roomResults").innerHTML = "";
+  el("statusBox").textContent = "";
+  el("versionTabsBar").hidden = true;
+  el("versionTabs").innerHTML = "";
+  drawBoq([]);
+  el("resultsInspirationStrip") && (el("resultsInspirationStrip").innerHTML = "");
+  el("resultsInspiration") && (el("resultsInspiration").hidden = true);
+  el("resultsBriefSection") && (el("resultsBriefSection").hidden = true);
+}
+
 
 // ─── Phase 1: Upload + Analyse ─────────────────────────────────────────────────
 

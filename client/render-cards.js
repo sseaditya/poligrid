@@ -208,18 +208,25 @@ function drawVersionRenders(renders, cameraPins) {
   }
 }
 
-// Returns inspiration data URLs: from uploaded files, stored public URLs (fetched), or [].
-async function getInspirationDataUrls() {
+// Returns { urls, prompts } — inspiration data URLs and per-image prompts.
+async function getInspirationData() {
+  let urls = [], prompts = [];
   if (appState.inspirationFiles.length > 0) {
-    return Promise.all(appState.inspirationFiles.map(f => readDataUrl(f)));
-  }
-  if (appState.storedInspirationUrls.length > 0) {
+    urls = await Promise.all(appState.inspirationFiles.map(f => readDataUrl(f)));
+    prompts = appState.inspirationPrompts || [];
+  } else if (appState.storedInspirationUrls.length > 0) {
     const results = await Promise.allSettled(
       appState.storedInspirationUrls.map(url => loadUrlToDataUrl(url))
     );
-    return results.filter(r => r.status === "fulfilled" && r.value).map(r => r.value);
+    urls = results.filter(r => r.status === "fulfilled" && r.value).map(r => r.value);
+    prompts = appState.storedInspirationPrompts || [];
   }
-  return [];
+  return { urls, prompts };
+}
+
+// Backward-compat wrapper.
+async function getInspirationDataUrls() {
+  return (await getInspirationData()).urls;
 }
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────

@@ -142,7 +142,9 @@ async function loadProject(id) {
     if (backBtn) backBtn.href = `/project?id=${id}`;
     appState.floorFile = null;
     appState.inspirationFiles = [];
+    appState.inspirationPrompts = [];
     appState.storedInspirationUrls = [];
+    appState.storedInspirationPrompts = [];
     appState.inspirationStoragePaths = [];
     appState.detectedRooms = null;
     appState.confirmedRooms = null;
@@ -216,8 +218,9 @@ async function loadProject(id) {
     );
     _projectBoqItems = appState.globalBoq;
 
-    // Store project-level inspiration URLs and storage paths (for reuse when regenerating)
+    // Store project-level inspiration URLs, prompts, and storage paths (for reuse when regenerating)
     appState.storedInspirationUrls = (data.inspirationImages || []).map(i => i.url).filter(Boolean);
+    appState.storedInspirationPrompts = (data.inspirationImages || []).map(i => i.prompt || "");
     appState.inspirationStoragePaths = (data.inspirationImages || []).map(i => i.storage_path).filter(Boolean);
 
     // Restore inspiration thumbnails in the phase 1 UI

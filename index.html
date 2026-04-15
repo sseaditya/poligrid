@@ -37,6 +37,99 @@
       </div>
     </div>
 
+    <!-- ── SETUP SCREEN (New Project onboarding) ─────────────────────────── -->
+    <div class="setup-screen" id="setupScreen" hidden>
+      <div class="setup-inner">
+
+        <!-- Header -->
+        <div class="setup-header">
+          <span class="logo-text">Poligrid</span>
+          <span class="setup-header-sub">New Project Setup</span>
+        </div>
+
+        <!-- Two-column body -->
+        <div class="setup-cols">
+
+          <!-- Left: Project details + Floor plan -->
+          <div class="setup-col setup-col-left">
+            <h2 class="setup-col-heading">Project Details</h2>
+
+            <label class="setup-field-label">Project name
+              <input type="text" id="setupProjectName" class="setup-input" placeholder="e.g. Sharma Residence, 3BHK" />
+            </label>
+
+            <div class="setup-ctx-row">
+              <span class="ctx-label">Property type</span>
+              <div class="seg-control" id="setupPropTypeCtrl">
+                <button class="seg-btn active" data-val="Apartment">Flat</button>
+                <button class="seg-btn" data-val="Villa">Villa</button>
+                <button class="seg-btn" data-val="Commercial">Commercial</button>
+              </div>
+            </div>
+            <div class="setup-ctx-row" id="setupConfigRowResidential">
+              <span class="ctx-label">Configuration</span>
+              <div class="seg-control" id="setupBhkCtrl">
+                <button class="seg-btn" data-val="1BHK">1BHK</button>
+                <button class="seg-btn active" data-val="2BHK">2BHK</button>
+                <button class="seg-btn" data-val="3BHK">3BHK</button>
+                <button class="seg-btn" data-val="4BHK+">4BHK+</button>
+              </div>
+            </div>
+            <div class="setup-ctx-row" id="setupConfigRowCommercial" style="display:none">
+              <span class="ctx-label">Space type</span>
+              <div class="seg-control" id="setupCommCtrl">
+                <button class="seg-btn active" data-val="Office">Office</button>
+                <button class="seg-btn" data-val="Retail">Retail</button>
+                <button class="seg-btn" data-val="Restaurant">Restaurant</button>
+                <button class="seg-btn" data-val="Other">Other</button>
+              </div>
+            </div>
+            <div class="setup-ctx-row">
+              <span class="ctx-label">Carpet area (m²)</span>
+              <input type="number" id="setupAreaInput" class="ctx-input" placeholder="e.g. 85" min="20" step="1" style="max-width:120px" />
+            </div>
+            <label class="setup-field-label" style="margin-top:4px">Additional notes
+              <textarea id="setupCtxNotes" class="ctx-textarea" rows="2" placeholder="e.g. Master bedroom faces east, prefer minimal handles…"></textarea>
+            </label>
+
+            <h2 class="setup-col-heading" style="margin-top:20px">Floor Plan</h2>
+            <label class="setup-floor-drop" for="setupFloorPlan">
+              <span class="setup-floor-icon">🗺</span>
+              <span id="setupFloorPlanName" class="setup-floor-prompt">Click or drag floor plan PDF / image</span>
+              <input type="file" id="setupFloorPlan" accept="application/pdf,image/*" />
+            </label>
+          </div>
+
+          <!-- Right: Inspiration images -->
+          <div class="setup-col setup-col-right">
+            <div class="setup-insp-header">
+              <h2 class="setup-col-heading">Inspiration Images</h2>
+              <span class="setup-insp-counter" id="setupInspCounter">0 / 20</span>
+            </div>
+            <p class="hint-text" style="margin-bottom:10px">Add up to 20 images. For each, describe what to extract (sofa style, color palette, lighting, etc.)</p>
+
+            <div id="setupInspirationGrid" class="setup-insp-grid"></div>
+
+            <label class="setup-insp-add" id="setupInspirationAddLabel" for="setupInspirationInput">
+              <span class="setup-insp-add-icon">＋</span>
+              <span>Add images</span>
+              <input type="file" id="setupInspirationInput" accept="image/*" multiple />
+            </label>
+          </div>
+        </div><!-- /setup-cols -->
+
+        <!-- Footer -->
+        <div class="setup-footer">
+          <span id="setupStatus" class="setup-status"></span>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="ghost-btn" id="setupCancelBtn">← Back to projects</button>
+            <button class="primary-btn setup-analyse-btn" id="setupAnalyseBtn" disabled>Analyse &amp; Start →</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
     <!-- ── TOP BAR ──────────────────────────────────────────────────────────── -->
     <header class="top-bar">
       <div class="top-bar-left">

@@ -98,7 +98,9 @@ const appState = {
   floorFile: null,
   inspirationFiles: [],
   storedInspirationUrls: [], // Public URLs of inspiration images from DB (loaded project)
+  storedInspirationPrompts: [], // Per-image prompts from DB (parallel to storedInspirationUrls)
   inspirationStoragePaths: [], // Storage paths of inspiration images (for version creation reference)
+  inspirationPrompts: [], // Per-image prompts from upload (parallel to inspirationFiles)
   context: {
     propertyType: "Apartment",
     bhk: "2BHK",

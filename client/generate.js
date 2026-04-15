@@ -78,7 +78,7 @@ async function onGenerate() {
 
   try {
     // Resolve inspiration: from uploaded files or stored public URLs (for loaded projects)
-    const inspirationDataUrls = await getInspirationDataUrls();
+    const { urls: inspirationDataUrls, prompts: inspirationPrompts } = await getInspirationData();
     _inspirationDataUrls = inspirationDataUrls;
 
     // Create a new project version before generation starts
@@ -113,7 +113,7 @@ async function onGenerate() {
     // Extract inspiration style AFTER results panel opens so it's visible in the logger
     dom.statusBox.textContent = "Analysing inspiration style…";
     console.log(`[Poligrid] extractInspirationStyle → POST /api/inspire/extract-furnish-style (${inspirationDataUrls.length} images)`);
-    const precomputedStyleGuidance = await extractInspirationStyle(inspirationDataUrls);
+    const precomputedStyleGuidance = await extractInspirationStyle(inspirationDataUrls, inspirationPrompts);
     console.log(`[Poligrid] extractInspirationStyle ✓ ${precomputedStyleGuidance.length} chars`);
 
     const roomGroups = {};
@@ -311,11 +311,12 @@ function buildFloorPlanSnippetForCard(roomLabel) {
 }
 
 // Extracts inspiration style guidance once (before the per-room loop) to avoid redundant API calls.
-async function extractInspirationStyle(inspirationDataUrls) {
+async function extractInspirationStyle(inspirationDataUrls, imagePrompts) {
   if (!inspirationDataUrls || inspirationDataUrls.length === 0) return "";
   try {
     const res = await postJson("/api/inspire/extract-furnish-style", {
       inspirationBase64: inspirationDataUrls,
+      imagePrompts: imagePrompts || [],
       visionModel: "gpt-5.4"
     });
     return res.styleGuidance || "";
