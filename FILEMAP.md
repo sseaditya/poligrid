@@ -21,6 +21,8 @@
 | `project.html` | all roles | `client/project-detail.js` |
 | `projects.html` | all roles | `client/projects.js` |
 | `profile.html` | all roles | `client/profile.js` |
+| `supervisor_home.html` | site_supervisor, admin | `client/supervisor-home.js` |
+| `material_request.html` | site_supervisor, lead_designer, admin, procurement | `client/material-request.js` |
 
 ## Client-side JS (`client/`)
 | File | Purpose |
@@ -39,6 +41,8 @@
 | `projects.js` | Projects list page |
 | `homepage.js` | Homepage: tasks, project list, review queue |
 | `designer.js` | Drawing upload + review UI (683 lines) |
+| `supervisor-home.js` | Site supervisor home dashboard |
+| `material-request.js` | Material request form (edit / review / procurement / PDF modes) |
 | `sales.js` | Sales-specific project list view |
 | `admin.js` | Admin user/role management UI |
 | `ceo.js` | CEO dashboard charts/stats |
@@ -54,6 +58,7 @@
 | `projects.js` | Project CRUD + Supabase queries (745 lines) |
 | `openai.js` | OpenAI API wrappers — renders, analysis, BOQ (1244 lines) |
 | `drawings.js` | Drawing upload to Supabase Storage + lead-designer review flow (555 lines) |
+| `material_requests.js` | Material request CRUD + approval + procurement workflow |
 | `tasks.js` | Task CRUD (auto-created on drawing events) |
 | `admin.js` | User list, role update, project assignments, CEO dashboard |
 | `notifications.js` | **Stub** — WhatsApp/Twilio hooks for drawing upload/review/task events |

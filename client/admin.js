@@ -13,23 +13,25 @@ let _pendingAssignAdd    = []; // [{projectId, userId}]
 let _pendingAssignRemove = []; // [{projectId, userId}]
 let _originalProjectTeams = {};
 
-const ROLES = ["sales", "designer", "lead_designer", "admin", "ceo"];
+const ROLES = ["sales", "designer", "lead_designer", "admin", "ceo", "site_supervisor", "procurement"];
 const ROLE_LABELS = {
   sales: "Sales", designer: "Designer",
   lead_designer: "Lead Designer", admin: "Admin", ceo: "CEO",
+  site_supervisor: "Site Supervisor", procurement: "Procurement",
 };
 const DEPT_LABELS = {
   sales: "Sales", designer: "Design Studio",
   lead_designer: "Design Studio", admin: "Admin", ceo: "Executive",
+  site_supervisor: "Site Operations", procurement: "Procurement",
 };
 
 // Role columns for the assignments matrix
 const ASSIGN_ROLES = [
-  { key: "sales",         label: "Sales",         accent: "#1d4ed8", bg: "#dbeafe", tagColor: "#1e3a8a" },
-  { key: "lead_designer", label: "Lead Designer",  accent: "#92400e", bg: "#fef3c7", tagColor: "#78350f" },
-  { key: "designer",      label: "Designer",       accent: "#526258", bg: "#d5e7da", tagColor: "#33433a" },
-  { key: "procurement",   label: "Procurement",    accent: "#5b21b6", bg: "#ede9fe", tagColor: "#4c1d95", future: true },
-  { key: "supervisor",    label: "Supervisor",     accent: "#065f46", bg: "#d1fae5", tagColor: "#064e3b", future: true },
+  { key: "sales",            label: "Sales",            accent: "#1d4ed8", bg: "#dbeafe", tagColor: "#1e3a8a" },
+  { key: "lead_designer",    label: "Lead Designer",     accent: "#92400e", bg: "#fef3c7", tagColor: "#78350f" },
+  { key: "designer",         label: "Designer",          accent: "#526258", bg: "#d5e7da", tagColor: "#33433a" },
+  { key: "site_supervisor",  label: "Site Supervisor",   accent: "#065f46", bg: "#d1fae5", tagColor: "#064e3b" },
+  { key: "procurement",      label: "Procurement",       accent: "#5b21b6", bg: "#ede9fe", tagColor: "#4c1d95" },
 ];
 
 (async () => {

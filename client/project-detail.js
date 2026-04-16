@@ -44,6 +44,7 @@ const PHASE_CRITERIA = {
 const ROLE_LABELS = {
   admin: "Admin", sales: "Sales", designer: "Designer",
   lead_designer: "Lead Designer", ceo: "CEO",
+  site_supervisor: "Site Supervisor", procurement: "Procurement",
 };
 
 const DRAWING_TYPE_LABELS = {
@@ -81,6 +82,11 @@ const can = {
   seeTasks:             () => is("designer"),
   fitoutPlanner:        () => is("admin", "lead_designer", "sales"),
   shareClient:          () => is("admin", "sales"),
+  // ── Material Requests (site_supervisor, procurement) ────────────────────────
+  seeMatReqs:           () => is("admin", "lead_designer", "site_supervisor", "procurement"),
+  createMatReq:         () => is("admin", "site_supervisor"),
+  approveMatReq:        () => is("admin", "lead_designer"),
+  markProcured:         () => is("admin", "procurement"),
 };
 
 // Map flagKey → can checker
@@ -384,6 +390,11 @@ function buildMainSections(project) {
   if (can.seeAIResults()) parts.push(buildAISection(project));
   if (can.seeConcepts())  parts.push(buildConceptsSection(project));
   if (can.seeDrawings())  parts.push(buildDrawingsSection(_drawings, project));
+  // Material Requests: shown in prep / production / execution phases
+  const MAT_REQ_PHASES = ["prep", "production", "execution", "completed"];
+  if (can.seeMatReqs() && MAT_REQ_PHASES.includes(project.phase)) {
+    parts.push(buildMaterialRequestsSection(project));
+  }
   if (!parts.length)
     parts.push(`<div class="dash-section"><p class="loading-hint">No content available for your role.</p></div>`);
   return parts.join("");
@@ -655,6 +666,117 @@ function buildDrawingsSection(drawings, project) {
                 </a>` : ""}
          </div>`}
     </div>`;
+}
+
+// ─── Material Requests Section ────────────────────────────────────────────────
+let _matRequests = null; // cached after first load
+
+function buildMaterialRequestsSection(project) {
+  // Trigger async load; show skeleton first, then re-inject
+  if (_matRequests === null) {
+    _matRequests = undefined; // loading sentinel
+    apiFetch(`/api/material-requests/list?projectId=${project.id}`)
+      .then(r => r.json())
+      .then(d => {
+        _matRequests = d.requests || [];
+        const el = document.getElementById("matReqSectionBody");
+        if (el) el.innerHTML = renderMatReqBody(project, _matRequests);
+        wireMatReqActions(project);
+      })
+      .catch(() => {
+        _matRequests = [];
+        const el = document.getElementById("matReqSectionBody");
+        if (el) el.innerHTML = `<p class="loading-hint">Failed to load material requests.</p>`;
+      });
+  }
+
+  return `
+    <div class="dash-section" id="matReqSection">
+      <div class="dash-section-head" style="margin-bottom:16px">
+        <div>
+          <div class="dash-section-icon">
+            <span class="material-symbols-outlined" style="color:#526258">inventory_2</span>
+            <h2 class="dash-section-title">Material Requests</h2>
+          </div>
+          <p class="dash-section-hint">Site supervisor raises procurement requests per phase</p>
+        </div>
+        ${can.createMatReq() ? `
+        <button class="ghost-sm" id="newMatReqBtn">
+          <span class="material-symbols-outlined" style="font-size:14px">add</span> New Request
+        </button>` : ""}
+      </div>
+      <div id="matReqSectionBody">
+        <div style="display:flex;gap:12px;flex-direction:column">
+          <div class="skeleton" style="height:56px"></div>
+          <div class="skeleton" style="height:56px"></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderMatReqBody(project, requests) {
+  if (!requests.length) {
+    return `
+      <div style="text-align:center;padding:24px;color:var(--color-on-surface-variant)">
+        <span class="material-symbols-outlined" style="font-size:36px;opacity:.35">inventory_2</span>
+        <p style="font-size:13px;margin-top:8px">No material requests yet.</p>
+        ${can.createMatReq()
+          ? `<p style="font-size:12px;margin-top:4px">Click "New Request" to raise the first one.</p>`
+          : ""}
+      </div>`;
+  }
+
+  const STATUS_LABELS = { draft:"Draft", pending_approval:"Pending Approval", approved:"Approved", revision_requested:"Revision Needed" };
+  const STATUS_STYLES = {
+    draft:              "background:#f2f4f4;color:#5a6061",
+    pending_approval:   "background:#fffbeb;color:#92400e",
+    approved:           "background:#d5e7da;color:#33433a",
+    revision_requested: "background:#fff0f0;color:#9f403d",
+  };
+
+  const rows = requests.map(r => {
+    const badgeStyle = STATUS_STYLES[r.status] || "";
+    const badge = `<span style="${badgeStyle};padding:2px 8px;border-radius:100px;font-size:10px;font-weight:700">${STATUS_LABELS[r.status]||r.status}</span>`;
+
+    const actions = [];
+    if (can.approveMatReq() && r.status === "pending_approval") {
+      actions.push(`<a href="/material_request?id=${r.id}" style="font-size:12px;font-weight:700;color:#526258">Review →</a>`);
+    } else if ((can.createMatReq() && (r.status === "draft" || r.status === "revision_requested"))) {
+      actions.push(`<a href="/material_request?id=${r.id}" style="font-size:12px;font-weight:700;color:#526258">Edit →</a>`);
+    } else {
+      actions.push(`<a href="/material_request?id=${r.id}" style="font-size:12px;font-weight:700;color:#526258">View →</a>`);
+    }
+
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--color-outline-variant)">
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:13px;font-weight:600">v${r.version_number} — ${escHtml(r.title)}</span>
+            ${badge}
+          </div>
+          <span style="font-size:11px;color:var(--color-on-surface-variant)">${r.item_count || 0} items · ${r.submitter?.full_name || "—"}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">${actions.join("")}</div>
+      </div>`;
+  }).join("");
+
+  return `<div style="margin-bottom:4px">${rows}</div>`;
+}
+
+function wireMatReqActions(project) {
+  document.getElementById("newMatReqBtn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("newMatReqBtn");
+    btn.disabled = true; btn.textContent = "Creating…";
+    try {
+      const res = await apiFetch("/api/material-requests/create", {
+        method: "POST",
+        body: JSON.stringify({ projectId: project.id }),
+      });
+      const d = await res.json();
+      if (!res.ok) { alert(d.error || "Failed to create request."); btn.disabled=false; return; }
+      window.location.href = `/material_request?id=${d.request.id}`;
+    } catch { btn.disabled=false; btn.textContent="New Request"; }
+  });
 }
 
 // ─── Right sidebar ────────────────────────────────────────────────────────────

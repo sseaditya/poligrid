@@ -56,6 +56,19 @@ const {
 const { tasksList, taskCreate, taskUpdate } = require("../server/tasks");
 
 const {
+  materialRequestsList,
+  materialRequestGet,
+  materialRequestCreate,
+  materialRequestItemUpsert,
+  materialRequestItemDelete,
+  materialRequestSubmit,
+  materialRequestReview,
+  materialRequestItemMarkProcured,
+  materialRequestCategories,
+  materialRequestSummary,
+} = require("../server/material_requests");
+
+const {
   userInvite,
   usersList,
   userUpdateRole,
@@ -306,6 +319,39 @@ module.exports = async (req, res) => {
         projectId: url.searchParams.get("projectId"),
         limit: url.searchParams.get("limit"),
       }));
+    }
+
+    // ── Material Requests ────────────────────────────────────────────────────
+    if (req.method === "GET" && pathname === "/api/material-requests/categories") {
+      return sendJson(res, 200, materialRequestCategories());
+    }
+    if (req.method === "GET" && pathname === "/api/material-requests/list") {
+      return sendJson(res, 200, await materialRequestsList(req, url.searchParams.get("projectId")));
+    }
+    if (req.method === "GET" && pathname === "/api/material-requests/get") {
+      return sendJson(res, 200, await materialRequestGet(req, url.searchParams.get("id")));
+    }
+    if (req.method === "GET" && pathname === "/api/material-requests/summary") {
+      const ids = (url.searchParams.get("projectIds") || "").split(",").filter(Boolean);
+      return sendJson(res, 200, await materialRequestSummary(req, ids));
+    }
+    if (req.method === "POST" && pathname === "/api/material-requests/create") {
+      return sendJson(res, 200, await materialRequestCreate(req, await readJson(req)));
+    }
+    if (req.method === "POST" && pathname === "/api/material-requests/items/upsert") {
+      return sendJson(res, 200, await materialRequestItemUpsert(req, await readJson(req)));
+    }
+    if (req.method === "POST" && pathname === "/api/material-requests/items/delete") {
+      return sendJson(res, 200, await materialRequestItemDelete(req, await readJson(req)));
+    }
+    if (req.method === "POST" && pathname === "/api/material-requests/submit") {
+      return sendJson(res, 200, await materialRequestSubmit(req, await readJson(req)));
+    }
+    if (req.method === "POST" && pathname === "/api/material-requests/review") {
+      return sendJson(res, 200, await materialRequestReview(req, await readJson(req)));
+    }
+    if (req.method === "POST" && pathname === "/api/material-requests/items/mark-procured") {
+      return sendJson(res, 200, await materialRequestItemMarkProcured(req, await readJson(req)));
     }
 
     return sendJson(res, 404, { error: "Not found." });

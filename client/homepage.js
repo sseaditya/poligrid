@@ -25,6 +25,15 @@ let _session, _profile;
     window.location.href = "/admin_home";
     return;
   }
+  if (_profile.role === "site_supervisor") {
+    window.location.href = "/supervisor_home";
+    return;
+  }
+  if (_profile.role === "procurement") {
+    // Procurement home page coming soon; route to projects list for now
+    window.location.href = "/projects";
+    return;
+  }
 
   AuthClient.renderUserChip(_profile, document.getElementById("userChipWrap"));
   renderNav(_profile);

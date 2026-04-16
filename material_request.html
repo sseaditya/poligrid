@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Poligrid — Material Request</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "outline-variant": "#adb3b4", "surface-container-low": "#f2f4f4",
+          "primary": "#526258", "primary-container": "#d5e7da", "on-primary": "#eafcef",
+          "background": "#f9f9f9", "on-surface-variant": "#5a6061",
+          "on-background": "#2d3435", "error": "#9f403d",
+          "surface": "#f9f9f9", "surface-container-highest": "#dde4e5",
+          "surface-container-high": "#e4e9ea", "surface-container": "#ebeeef",
+          "surface-container-lowest": "#ffffff", "on-surface": "#2d3435",
+          "outline": "#757c7d",
+        },
+        fontFamily: { "headline": ["Manrope"], "body": ["Inter"], "label": ["Inter"] },
+        borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+      },
+    },
+  }
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; }
+  h1,h2,h3,.headline { font-family: 'Manrope', sans-serif; }
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+  .skeleton { background: linear-gradient(90deg,#e4e9ea 25%,#f2f4f4 50%,#e4e9ea 75%); background-size:200% 100%; animation:shimmer 1.4s infinite; border-radius:8px; }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+  .item-row input, .item-row textarea, .item-row select {
+    background:#f9f9f9; border:1px solid #dde4e5; border-radius:4px;
+    padding:6px 10px; font-size:13px; font-family:Inter,sans-serif;
+    outline:none; transition:border-color 0.15s;
+  }
+  .item-row input:focus, .item-row textarea:focus { border-color:#526258; background:#fff; }
+  .item-row input[type="number"] { text-align:right; }
+
+  .save-indicator { font-size:11px; color:#5a6061; min-width:60px; text-align:right; }
+  .save-indicator.saving { color:#f59e0b; }
+  .save-indicator.saved  { color:#526258; }
+  .save-indicator.error  { color:#9f403d; }
+
+  .status-badge {
+    display:inline-flex; align-items:center; gap:4px;
+    padding:3px 12px; border-radius:100px; font-size:11px; font-weight:700;
+  }
+  .status-draft             { background:#f2f4f4; color:#5a6061; }
+  .status-pending_approval  { background:#fffbeb; color:#92400e; }
+  .status-approved          { background:#d5e7da; color:#33433a; }
+  .status-revision_requested{ background:#fff0f0; color:#9f403d; }
+
+  .category-section { border:1px solid #dde4e5; border-radius:8px; overflow:hidden; margin-bottom:16px; }
+  .category-header  { background:#f2f4f4; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; }
+  .category-body    { padding:0; }
+
+  .items-table { width:100%; border-collapse:collapse; }
+  .items-table th { background:#f9f9f9; padding:8px 12px; text-align:left; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#5a6061; border-bottom:1px solid #dde4e5; }
+  .items-table td { padding:8px 12px; border-bottom:1px solid #f2f4f4; vertical-align:middle; }
+  .items-table tr:last-child td { border-bottom:none; }
+
+  @media print {
+    #sidebarMain { margin-left:0!important; }
+    #appSidebar, .no-print { display:none!important; }
+    .print-only { display:block!important; }
+    body { background:#fff; }
+    .category-section { border:1px solid #ccc; }
+    .items-table th, .items-table td { padding:6px 8px; font-size:12px; }
+  }
+  .print-only { display:none; }
+</style>
+</head>
+<body class="bg-surface text-on-surface antialiased">
+
+<!-- Main Content -->
+<main id="sidebarMain" class="md:ml-64 min-h-screen">
+
+  <!-- Top Navigation -->
+  <header class="flex items-center justify-between px-8 h-16 w-full bg-surface/80 backdrop-blur-md sticky top-0 z-10 border-b border-outline-variant/10 no-print">
+    <div id="topBarTitle" class="flex items-center gap-2 text-sm font-medium text-on-surface-variant"></div>
+    <div class="flex items-center gap-3">
+      <span id="globalSaveIndicator" class="save-indicator"></span>
+      <button id="pdfBtn" class="hidden items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-surface-container-low hover:bg-surface-container transition-colors" style="display:none">
+        <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span> Export PDF
+      </button>
+    </div>
+  </header>
+
+  <div class="p-8 max-w-5xl mx-auto space-y-8" id="pageContent">
+    <div class="space-y-3">
+      <div class="skeleton h-8 w-64"></div>
+      <div class="skeleton h-4 w-48"></div>
+    </div>
+    <div class="skeleton h-96"></div>
+  </div>
+
+</main>
+
+<!-- Submit Confirmation Modal -->
+<div id="submitModal" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6" style="display:none!important">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 flex flex-col gap-5">
+    <h3 class="font-headline font-extrabold text-xl">Submit for Approval?</h3>
+    <p class="text-sm text-on-surface-variant">Once submitted, you cannot add or edit items until the lead designer reviews it.</p>
+    <div id="submitSummary" class="bg-surface-container-low rounded-xl p-4 text-sm space-y-1"></div>
+    <div class="flex gap-3 justify-end">
+      <button id="submitCancel" class="px-5 py-2.5 rounded-lg bg-surface-container text-sm font-semibold">Cancel</button>
+      <button id="submitConfirm" class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white" style="background:linear-gradient(135deg,#526258,#46564c)">Submit →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Review Modal (for lead designers / admin) -->
+<div id="reviewModal" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6" style="display:none!important">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 flex flex-col gap-5">
+    <h3 class="font-headline font-extrabold text-xl">Review Material Request</h3>
+    <div class="flex flex-col gap-2">
+      <label class="text-sm font-semibold">Decision</label>
+      <div class="flex gap-3">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="reviewStatus" value="approved" class="accent-primary"> Approve
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="reviewStatus" value="revision_requested" class="accent-error"> Request Revision
+        </label>
+      </div>
+    </div>
+    <div class="flex flex-col gap-2">
+      <label class="text-sm font-semibold" for="reviewComments">Comments <span class="font-normal text-on-surface-variant">(optional for approval, recommended for revision)</span></label>
+      <textarea id="reviewComments" rows="3" placeholder="Add feedback for the supervisor…" class="border border-outline-variant rounded-lg p-3 text-sm outline-none focus:border-primary resize-none"></textarea>
+    </div>
+    <div id="reviewErr" class="hidden text-error text-sm bg-red-50 rounded-lg px-3 py-2"></div>
+    <div class="flex gap-3 justify-end">
+      <button id="reviewCancel" class="px-5 py-2.5 rounded-lg bg-surface-container text-sm font-semibold">Cancel</button>
+      <button id="reviewSubmit" class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white" style="background:linear-gradient(135deg,#526258,#46564c)">Submit Review</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Item Modal -->
+<div id="addItemModal" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6" style="display:none!important">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 flex flex-col gap-5">
+    <div class="flex items-start justify-between">
+      <h3 class="font-headline font-extrabold text-xl">Add Item</h3>
+      <button id="addItemClose" class="text-on-surface-variant hover:text-on-surface text-xl leading-none">✕</button>
+    </div>
+    <input type="hidden" id="addItemCategory"/>
+    <div class="grid grid-cols-1 gap-4">
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold">Item Name <span class="text-error">*</span></label>
+        <input id="aiItemName" type="text" placeholder="e.g. Cement 53 grade" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold">Description</label>
+        <input id="aiDescription" type="text" placeholder="Brand, spec, grade…" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-semibold">Qty</label>
+          <input id="aiQty" type="number" min="0" step="any" placeholder="0" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary text-right"/>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-semibold">Unit</label>
+          <input id="aiUnit" type="text" placeholder="bags, sqft, nos…" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-semibold">Rate (₹)</label>
+          <input id="aiRate" type="number" min="0" step="any" placeholder="0.00" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary text-right"/>
+        </div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold">Notes</label>
+        <input id="aiNotes" type="text" placeholder="Any additional notes…" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+      </div>
+    </div>
+    <div id="addItemErr" class="hidden text-error text-sm bg-red-50 rounded-lg px-3 py-2"></div>
+    <div class="flex gap-3 justify-end">
+      <button id="addItemCancel" class="px-5 py-2.5 rounded-lg bg-surface-container text-sm font-semibold">Cancel</button>
+      <button id="addItemSave" class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white" style="background:linear-gradient(135deg,#526258,#46564c)">Add Item</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/client/auth.js"></script>
+<script src="/client/nav.js"></script>
+<script src="/client/studio-utils.js"></script>
+<script src="/client/material-request.js"></script>
+</body>
+</html>

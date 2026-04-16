@@ -25,6 +25,8 @@ The app now has Supabase Auth and role-based access control.
 - designer — uploads drawings per project (designer.html)
 - lead_designer — approves/rejects designer drawings, sees assigned projects + fitout planner
 - ceo — read-only CEO dashboard (ceo.html)
+- site_supervisor — raises material requests for prep/production phase projects (supervisor_home.html)
+- procurement — marks approved material request items as procured (projects.html, material_request.html)
 
 ### Pages
 - login.html — Supabase Auth sign-in (all users)
@@ -34,33 +36,37 @@ The app now has Supabase Auth and role-based access control.
 - admin.html — user role management + project assignments (admin only)
 - ceo.html — aggregated project drill-down dashboard (ceo, admin)
 - project.html — unified role-based project detail page (all roles, sections gated by role)
+- supervisor_home.html — site supervisor dashboard: assigned projects + pending/revision material requests (site_supervisor, admin)
+- material_request.html — material request form/review/procurement view (site_supervisor, lead_designer, procurement, admin)
 
 ### project.html — Role Permission Matrix
 Each section of the project detail page is shown/hidden based on role:
 
-| Section                              | sales | designer | lead_designer | admin | ceo |
-|--------------------------------------|:-----:|:--------:|:-------------:|:-----:|:---:|
-| Project hero (name, client, status)  |  ✓    |    ✓     |      ✓        |   ✓   |  —  |
-| Edit project details                 |  ✓    |    ✓     |      ✓        |   ✓   |  —  |
-| Change project status                |  —    |    —     |      ✓        |   ✓   |  —  |
-| Mark advance payment done            |  ✓    |    —     |      —        |   ✓   |  —  |
-| AI Results & Estimate (renders+BOQ)  |  ✓    |    —     |      —        |   ✓   |  —  |
-| Stage 1 Reference Concepts           |  —    |    ✓     |      ✓        |   ✓   |  —  |
-| Technical Drawings table             |  —    |    ✓     |      ✓        |   ✓   |  —  |
-| Verify / Review drawing buttons      |  —    |    —     |      ✓        |   ✓   |  —  |
-| Upload drawing shortcut              |  —    |    ✓     |      ✓        |   ✓   |  —  |
-| Approval pipeline sidebar            |  —    |    ✓     |      ✓        |   ✓   |  —  |
-| Quick link: Fitout Planner           |  ✓    |    —     |      ✓        |   ✓   |  —  |
-| Quick link: Drawings Manager         |  —    |    ✓     |      ✓        |   ✓   |  —  |
-| Quick link: Share with Client        |  ✓    |    —     |      —        |   ✓   |  —  |
-| Property Details                     |  ✓    |    ✓     |      ✓        |   ✓   |  —  |
-| Floor Plan thumbnail                 |  ✓    |    ✓     |      ✓        |   ✓   |  —  |
-| Team (assign / unassign members)     |  —    |    —     |      ✓        |   ✓   |  —  |
-| My Tasks (pending for this project)  |  —    |    ✓     |      —        |   —   |  —  |
+| Section                              | sales | designer | lead_designer | admin | ceo | site_supervisor | procurement |
+|--------------------------------------|:-----:|:--------:|:-------------:|:-----:|:---:|:---------------:|:-----------:|
+| Project hero (name, client, status)  |  ✓    |    ✓     |      ✓        |   ✓   |  —  |       ✓         |      ✓      |
+| Edit project details                 |  ✓    |    ✓     |      ✓        |   ✓   |  —  |       —         |      —      |
+| Change project status                |  —    |    —     |      ✓        |   ✓   |  —  |       —         |      —      |
+| Mark advance payment done            |  ✓    |    —     |      —        |   ✓   |  —  |       —         |      —      |
+| AI Results & Estimate (renders+BOQ)  |  ✓    |    —     |      —        |   ✓   |  —  |       —         |      —      |
+| Stage 1 Reference Concepts           |  —    |    ✓     |      ✓        |   ✓   |  —  |       —         |      —      |
+| Technical Drawings table             |  —    |    ✓     |      ✓        |   ✓   |  —  |       —         |      —      |
+| Verify / Review drawing buttons      |  —    |    —     |      ✓        |   ✓   |  —  |       —         |      —      |
+| Upload drawing shortcut              |  —    |    ✓     |      ✓        |   ✓   |  —  |       —         |      —      |
+| Approval pipeline sidebar            |  —    |    ✓     |      ✓        |   ✓   |  —  |       —         |      —      |
+| Quick link: Fitout Planner           |  ✓    |    —     |      ✓        |   ✓   |  —  |       —         |      —      |
+| Quick link: Drawings Manager         |  —    |    ✓     |      ✓        |   ✓   |  —  |       —         |      —      |
+| Quick link: Share with Client        |  ✓    |    —     |      —        |   ✓   |  —  |       —         |      —      |
+| Property Details                     |  ✓    |    ✓     |      ✓        |   ✓   |  —  |       ✓         |      ✓      |
+| Floor Plan thumbnail                 |  ✓    |    ✓     |      ✓        |   ✓   |  —  |       ✓         |      ✓      |
+| Team (assign / unassign members)     |  —    |    —     |      ✓        |   ✓   |  —  |       —         |      —      |
+| My Tasks (pending for this project)  |  —    |    ✓     |      —        |   —   |  —  |       —         |      —      |
+| Material Requests section            |  —    |    —     |      ✓        |   ✓   |  —  |       ✓         |      ✓      |
 
 Notes:
 - ceo role does not have access to project.html (they use ceo.html dashboard only)
 - admin sees every section — effectively the union of all roles
+- Material Requests section only visible in phases: prep, production, execution, completed
 - The `can.*` helpers in client/project-detail.js are the single source of truth for this table
 
 ### New server files
@@ -68,6 +74,7 @@ Notes:
 - server/drawings.js — drawing upload + lead designer review flow
 - server/tasks.js — task CRUD (auto-created on drawing upload/review)
 - server/admin.js — user list, role update, project assignments, CEO dashboard
+- server/material_requests.js — material request CRUD + approval workflow + procurement tracking
 
 ### Key env vars to set in .env.local
 - SUPABASE_ANON_KEY — anon/public key, exposed to client via GET /api/config

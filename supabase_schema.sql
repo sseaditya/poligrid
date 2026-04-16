@@ -19,7 +19,7 @@ $$ LANGUAGE plpgsql;
 -- ─── Enums ────────────────────────────────────────────────────────────────────
 
 DO $$ BEGIN
-  CREATE TYPE user_role AS ENUM ('admin', 'sales', 'designer', 'lead_designer', 'ceo');
+  CREATE TYPE user_role AS ENUM ('admin', 'sales', 'designer', 'lead_designer', 'ceo', 'site_supervisor', 'procurement');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
@@ -440,7 +440,87 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_subcategory ON audit_logs(subcategory)
 CREATE INDEX IF NOT EXISTS idx_audit_logs_actioned_by ON audit_logs(actioned_by);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_actioned_on ON audit_logs(actioned_on DESC);
 
--- ─── 19. CEO Dashboard View ──────────────────────────────────────────────────
+-- ─── 19. Material Request Status Enum ───────────────────────────────────────
+
+DO $$ BEGIN
+  CREATE TYPE material_request_status AS ENUM (
+    'draft', 'pending_approval', 'approved', 'revision_requested'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ─── 20. Material Requests ───────────────────────────────────────────────────
+-- Site supervisor raises a material request per project phase.
+-- Multiple versions/supplements supported; each goes through approval.
+
+CREATE TABLE IF NOT EXISTS material_requests (
+  id              UUID                    PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id      UUID                    NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  submitted_by    UUID                    NOT NULL REFERENCES profiles(id),
+  version_number  INTEGER                 NOT NULL,
+  title           TEXT                    NOT NULL DEFAULT 'Material Request',
+  status          material_request_status NOT NULL DEFAULT 'draft',
+  notes           TEXT,
+  submitted_at    TIMESTAMPTZ,
+  approved_at     TIMESTAMPTZ,
+  approved_by     UUID                    REFERENCES profiles(id),
+  created_at      TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
+  UNIQUE(project_id, version_number)
+);
+
+DO $$ BEGIN
+  CREATE TRIGGER material_requests_updated_at BEFORE UPDATE ON material_requests
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE INDEX IF NOT EXISTS idx_material_requests_project_id   ON material_requests(project_id);
+CREATE INDEX IF NOT EXISTS idx_material_requests_submitted_by ON material_requests(submitted_by);
+CREATE INDEX IF NOT EXISTS idx_material_requests_status       ON material_requests(status);
+
+-- ─── 21. Material Request Items ──────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS material_request_items (
+  id               UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  request_id       UUID        NOT NULL REFERENCES material_requests(id) ON DELETE CASCADE,
+  project_id       UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  category         TEXT        NOT NULL,
+  item_name        TEXT        NOT NULL,
+  description      TEXT,
+  quantity         NUMERIC,
+  unit             TEXT,
+  estimated_rate   NUMERIC,
+  sort_order       INTEGER     NOT NULL DEFAULT 0,
+  procured         BOOLEAN     NOT NULL DEFAULT FALSE,
+  procured_at      TIMESTAMPTZ,
+  procured_by      UUID        REFERENCES profiles(id),
+  notes            TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$ BEGIN
+  CREATE TRIGGER material_request_items_updated_at BEFORE UPDATE ON material_request_items
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE INDEX IF NOT EXISTS idx_mri_request_id ON material_request_items(request_id);
+CREATE INDEX IF NOT EXISTS idx_mri_project_id ON material_request_items(project_id);
+CREATE INDEX IF NOT EXISTS idx_mri_category   ON material_request_items(category);
+
+-- ─── 22. Material Request Reviews ────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS material_request_reviews (
+  id           UUID                    PRIMARY KEY DEFAULT uuid_generate_v4(),
+  request_id   UUID                    NOT NULL REFERENCES material_requests(id) ON DELETE CASCADE,
+  reviewed_by  UUID                    NOT NULL REFERENCES profiles(id),
+  status       material_request_status NOT NULL,
+  comments     TEXT,
+  reviewed_at  TIMESTAMPTZ             NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mrr_request_id ON material_request_reviews(request_id);
+
+-- ─── 23. CEO Dashboard View ──────────────────────────────────────────────────
 
 -- Note: use DROP + CREATE (not CREATE OR REPLACE) when adding columns to a view
 CREATE VIEW ceo_project_dashboard AS
