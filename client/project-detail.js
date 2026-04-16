@@ -87,6 +87,9 @@ const can = {
   createMatReq:         () => is("admin", "site_supervisor"),
   approveMatReq:        () => is("admin", "lead_designer"),
   markProcured:         () => is("admin", "procurement"),
+  approvePricing:       () => is("admin"),
+  editRate:             () => is("admin", "procurement"),
+  procure:              () => is("admin", "procurement"),
 };
 
 // Map flagKey → can checker
@@ -726,13 +729,40 @@ function renderMatReqBody(project, requests) {
       </div>`;
   }
 
-  const STATUS_LABELS = { draft:"Draft", pending_approval:"Pending Approval", approved:"Approved", revision_requested:"Revision Needed" };
-  const STATUS_STYLES = {
-    draft:              "background:#f2f4f4;color:#5a6061",
-    pending_approval:   "background:#fffbeb;color:#92400e",
-    approved:           "background:#d5e7da;color:#33433a",
-    revision_requested: "background:#fff0f0;color:#9f403d",
+  const STATUS_LABELS = {
+    draft:               "Draft",
+    pending_approval:    "Pending Approval",
+    approved:            "Approved",
+    revision_requested:  "Revision Needed",
+    pricing_review:      "Pricing Review",
+    procurement_active:  "Ordering Active",
   };
+  const STATUS_STYLES = {
+    draft:               "background:#f2f4f4;color:#5a6061",
+    pending_approval:    "background:#fffbeb;color:#92400e",
+    approved:            "background:#d5e7da;color:#33433a",
+    revision_requested:  "background:#fff0f0;color:#9f403d",
+    pricing_review:      "background:#f3e8ff;color:#6d28d9",
+    procurement_active:  "background:#e0f2fe;color:#0369a1",
+  };
+
+  // Urgent alert cards for admin: pricing_review requests need approval
+  const urgentAlerts = can.approvePricing()
+    ? requests
+        .filter(r => r.status === "pricing_review")
+        .map(r => `
+          <div style="background:#fef9c3;border:2px solid #fde68a;border-radius:8px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="material-symbols-outlined" style="color:#92400e;font-size:20px">admin_panel_settings</span>
+              <div>
+                <p style="font-size:13px;font-weight:700;color:#92400e">Procurement Pricing Awaiting Your Approval</p>
+                <p style="font-size:11px;color:#78350f;margin-top:2px">v${r.version_number} — ${escHtml(r.title)} · ${r.item_count || 0} items</p>
+              </div>
+            </div>
+            <a href="/material_request?id=${r.id}" style="font-size:12px;font-weight:700;color:#92400e;white-space:nowrap;text-decoration:none">Review & Approve →</a>
+          </div>`)
+        .join("")
+    : "";
 
   const rows = requests.map(r => {
     const badgeStyle = STATUS_STYLES[r.status] || "";
@@ -741,8 +771,14 @@ function renderMatReqBody(project, requests) {
     const actions = [];
     if (can.approveMatReq() && r.status === "pending_approval") {
       actions.push(`<a href="/material_request?id=${r.id}" style="font-size:12px;font-weight:700;color:#526258">Review →</a>`);
-    } else if ((can.createMatReq() && (r.status === "draft" || r.status === "revision_requested"))) {
+    } else if (can.approvePricing() && r.status === "pricing_review") {
+      actions.push(`<a href="/material_request?id=${r.id}" style="font-size:12px;font-weight:700;color:#92400e">Approve Pricing →</a>`);
+    } else if (can.editRate() && r.status === "approved") {
+      actions.push(`<a href="/material_request?id=${r.id}" style="font-size:12px;font-weight:700;color:#526258">Add Pricing →</a>`);
+    } else if (can.createMatReq() && (r.status === "draft" || r.status === "revision_requested")) {
       actions.push(`<a href="/material_request?id=${r.id}" style="font-size:12px;font-weight:700;color:#526258">Edit →</a>`);
+    } else if (can.procure() && r.status === "procurement_active") {
+      actions.push(`<a href="/material_request?id=${r.id}" style="font-size:12px;font-weight:700;color:#0369a1">Update Orders →</a>`);
     } else {
       actions.push(`<a href="/material_request?id=${r.id}" style="font-size:12px;font-weight:700;color:#526258">View →</a>`);
     }
@@ -760,7 +796,7 @@ function renderMatReqBody(project, requests) {
       </div>`;
   }).join("");
 
-  return `<div style="margin-bottom:4px">${rows}</div>`;
+  return `<div style="margin-bottom:4px">${urgentAlerts}${rows}</div>`;
 }
 
 function wireMatReqActions(project) {

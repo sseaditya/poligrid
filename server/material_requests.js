@@ -5,10 +5,13 @@ const { requireAuth } = require("./auth");
 const { httpError } = require("./utils");
 const { logAuditEvent } = require("./audit");
 
-const SUPERVISOR_ROLES  = ["site_supervisor", "admin"];
-const APPROVER_ROLES    = ["lead_designer", "admin"];
-const PROCUREMENT_ROLES = ["procurement", "admin"];
-const READ_ROLES        = ["site_supervisor", "lead_designer", "admin", "procurement"];
+const SUPERVISOR_ROLES       = ["site_supervisor", "admin"];
+const APPROVER_ROLES         = ["lead_designer", "admin"];
+const PROCUREMENT_ROLES      = ["procurement", "admin"];
+const PRICING_APPROVER_ROLES = ["admin"];
+const READ_ROLES             = ["site_supervisor", "lead_designer", "admin", "procurement"];
+
+const VALID_ORDER_STATUSES = ["pending", "ordered", "in_transit", "delivered"];
 
 const VALID_CATEGORIES = [
   "Civil",
@@ -101,11 +104,12 @@ async function materialRequestCreate(req, body) {
     .order("version_number", { ascending: false })
     .limit(1);
 
-  // Prevent creating a new request if the last one is still in draft or pending
+  // Prevent creating a new request if the last one is still active
+  const ACTIVE_STATUSES = ["draft", "pending_approval", "pricing_review", "procurement_active"];
   if (existing?.length) {
     const last = existing[0];
-    if (last.status === "draft" || last.status === "pending_approval") {
-      throw httpError(409, "There is already an active (draft or pending) material request for this project. Complete or get it approved before creating a supplement.");
+    if (ACTIVE_STATUSES.includes(last.status)) {
+      throw httpError(409, "There is already an active material request for this project. Complete it before creating a supplement.");
     }
   }
 
@@ -141,17 +145,16 @@ async function materialRequestCreate(req, body) {
 }
 
 // ─── Upsert (create or update) a single item — live-save while drafting ───────
+// Supervisors can edit all fields on draft/revision_requested.
+// Procurement/admin can edit estimatedRate on approved/pricing_review requests.
 async function materialRequestItemUpsert(req, body) {
-  const { profile } = await requireAuth(req, SUPERVISOR_ROLES);
+  const { profile } = await requireAuth(req, [...SUPERVISOR_ROLES, ...PROCUREMENT_ROLES]);
   const { requestId, itemId, category, itemName, description, quantity, unit, estimatedRate, sortOrder, notes } = body;
 
   if (!requestId) throw httpError(400, "requestId required.");
-  if (!category)  throw httpError(400, "category required.");
-  if (!itemName?.trim()) throw httpError(400, "itemName required.");
 
   const sb = db.getClient();
 
-  // Verify request is still editable
   const { data: request, error: reqErr } = await sb
     .from("material_requests")
     .select("id, project_id, status")
@@ -159,6 +162,32 @@ async function materialRequestItemUpsert(req, body) {
     .single();
 
   if (reqErr || !request) throw httpError(404, "Material request not found.");
+
+  const isSupervisorEdit = SUPERVISOR_ROLES.includes(profile.role);
+  const isProcurementEdit = PROCUREMENT_ROLES.includes(profile.role);
+
+  // Procurement: can only update rate on approved or pricing_review requests
+  if (!isSupervisorEdit && isProcurementEdit) {
+    if (request.status !== "approved" && request.status !== "pricing_review") {
+      throw httpError(409, "Procurement can only add pricing on approved requests.");
+    }
+    if (!itemId) throw httpError(400, "itemId required for rate update.");
+    const nowIso = new Date().toISOString();
+    const { data, error } = await sb
+      .from("material_request_items")
+      .update({ estimated_rate: estimatedRate != null ? Number(estimatedRate) : null, updated_at: nowIso })
+      .eq("id", itemId)
+      .eq("request_id", requestId)
+      .select()
+      .single();
+    if (error) throw httpError(500, error.message);
+    return { item: data };
+  }
+
+  // Supervisor / admin: full edit on draft or revision_requested
+  if (!category)  throw httpError(400, "category required.");
+  if (!itemName?.trim()) throw httpError(400, "itemName required.");
+
   if (request.status !== "draft" && request.status !== "revision_requested") {
     throw httpError(409, "This material request is locked and cannot be edited.");
   }
@@ -186,18 +215,16 @@ async function materialRequestItemUpsert(req, body) {
 
   let savedItem;
   if (itemId) {
-    // Update existing
     const { data, error } = await sb
       .from("material_request_items")
       .update(payload)
       .eq("id", itemId)
-      .eq("request_id", requestId)   // safety: can't edit another request's items
+      .eq("request_id", requestId)
       .select()
       .single();
     if (error) throw httpError(500, error.message);
     savedItem = data;
   } else {
-    // Insert new
     const { data, error } = await sb
       .from("material_request_items")
       .insert(payload)
@@ -393,7 +420,6 @@ async function materialRequestItemMarkProcured(req, body) {
 
   const sb = db.getClient();
 
-  // Verify parent request is approved
   const { data: item } = await sb
     .from("material_request_items")
     .select("request_id, material_requests(status)")
@@ -401,8 +427,9 @@ async function materialRequestItemMarkProcured(req, body) {
     .single();
 
   if (!item) throw httpError(404, "Item not found.");
-  if (item.material_requests?.status !== "approved") {
-    throw httpError(409, "Items can only be marked procured on approved requests.");
+  const reqStatus = item.material_requests?.status;
+  if (reqStatus !== "approved" && reqStatus !== "procurement_active") {
+    throw httpError(409, "Items can only be marked procured on approved or active procurement requests.");
   }
 
   const nowIso = new Date().toISOString();
@@ -416,6 +443,201 @@ async function materialRequestItemMarkProcured(req, body) {
     .eq("id", itemId);
 
   if (error) throw httpError(500, error.message);
+  return { ok: true };
+}
+
+// ─── Procurement submits pricing for admin approval ───────────────────────────
+async function materialRequestSubmitPricing(req, body) {
+  const { profile } = await requireAuth(req, PROCUREMENT_ROLES);
+  const { requestId } = body;
+  if (!requestId) throw httpError(400, "requestId required.");
+
+  const sb = db.getClient();
+
+  const { data: request, error: reqErr } = await sb
+    .from("material_requests")
+    .select("*, project:projects(id, name)")
+    .eq("id", requestId)
+    .single();
+
+  if (reqErr || !request) throw httpError(404, "Material request not found.");
+  if (request.status !== "approved") {
+    throw httpError(409, "Pricing can only be submitted on approved requests.");
+  }
+
+  // Validate all items have a rate
+  const { data: items } = await sb
+    .from("material_request_items")
+    .select("id, item_name, estimated_rate")
+    .eq("request_id", requestId);
+
+  const unpriced = (items || []).filter(i => i.estimated_rate == null);
+  if (unpriced.length) {
+    throw httpError(400, `${unpriced.length} item(s) still need a rate before submitting for approval.`);
+  }
+
+  const nowIso = new Date().toISOString();
+  await sb.from("material_requests")
+    .update({ status: "pricing_review", updated_at: nowIso })
+    .eq("id", requestId);
+
+  // Create task for all admin users
+  const { data: admins } = await sb
+    .from("profiles")
+    .select("id, full_name")
+    .eq("role", "admin")
+    .eq("is_active", true);
+
+  if (admins?.length) {
+    const tasks = admins.map(a => ({
+      assigned_to:  a.id,
+      assigned_by:  profile.id,
+      project_id:   request.project_id,
+      title:        `Approve procurement pricing: ${request.title}`,
+      description:  `${profile.full_name} has submitted pricing for ${items.length} item(s) in "${request.title}". Please review and approve.`,
+      priority:     "high",
+    }));
+    await sb.from("tasks").insert(tasks);
+  }
+
+  await logAuditEvent({
+    category:       "procurement",
+    subcategory:    "pricing_submitted",
+    projectId:      request.project_id,
+    actionedBy:     profile.id,
+    actionedByName: profile.full_name,
+    logMessage:     `${profile.full_name} submitted pricing for ${request.title} (${items.length} items) for admin approval.`,
+    metadata:       { requestId, itemCount: items.length },
+  });
+
+  return { ok: true };
+}
+
+// ─── Admin approves or rejects procurement pricing ────────────────────────────
+async function materialRequestApprovePricing(req, body) {
+  const { profile } = await requireAuth(req, PRICING_APPROVER_ROLES);
+  const { requestId, status, comments } = body;
+
+  if (!requestId || !status) throw httpError(400, "requestId and status required.");
+  const validStatuses = ["procurement_active", "approved"]; // approved = send back for revision
+  if (!validStatuses.includes(status)) {
+    throw httpError(400, "status must be 'procurement_active' (approve) or 'approved' (send back).");
+  }
+
+  const sb = db.getClient();
+
+  const { data: request, error: reqErr } = await sb
+    .from("material_requests")
+    .select("*, project:projects(id, name), submitter:profiles!submitted_by(id, full_name)")
+    .eq("id", requestId)
+    .single();
+
+  if (reqErr || !request) throw httpError(404, "Material request not found.");
+  if (request.status !== "pricing_review") {
+    throw httpError(409, "Only pricing_review requests can be approved.");
+  }
+
+  const nowIso = new Date().toISOString();
+  const patch = {
+    status,
+    updated_at: nowIso,
+    ...(status === "procurement_active"
+      ? { pricing_approved_by: profile.id, pricing_approved_at: nowIso }
+      : {}),
+  };
+  await sb.from("material_requests").update(patch).eq("id", requestId);
+
+  // Find procurement users assigned to project
+  const { data: assignments } = await sb
+    .from("project_assignments")
+    .select("user:profiles!user_id(id, full_name, role)")
+    .eq("project_id", request.project_id);
+
+  const procurers = (assignments || [])
+    .map(a => a.user)
+    .filter(u => u && u.role === "procurement");
+
+  if (!procurers.length) {
+    const { data: globalProcure } = await sb
+      .from("profiles")
+      .select("id, full_name")
+      .eq("role", "procurement")
+      .eq("is_active", true);
+    procurers.push(...(globalProcure || []));
+  }
+
+  if (procurers.length) {
+    const taskTitle = status === "procurement_active"
+      ? `Pricing approved — begin ordering: ${request.title}`
+      : `Pricing needs revision: ${request.title}`;
+    const taskDesc = status === "procurement_active"
+      ? `Admin has approved your pricing. You can now start placing orders.`
+      : `Admin sent back pricing for revision. ${comments || "Please review and resubmit."}`;
+
+    const tasks = procurers.map(u => ({
+      assigned_to:  u.id,
+      assigned_by:  profile.id,
+      project_id:   request.project_id,
+      title:        taskTitle,
+      description:  taskDesc,
+      priority:     "high",
+    }));
+    await sb.from("tasks").insert(tasks);
+  }
+
+  const actionLabel = status === "procurement_active" ? "approved pricing for" : "sent back pricing for revision on";
+  await logAuditEvent({
+    category:       "procurement",
+    subcategory:    status === "procurement_active" ? "pricing_approved" : "pricing_revision",
+    projectId:      request.project_id,
+    actionedBy:     profile.id,
+    actionedByName: profile.full_name,
+    logMessage:     `${profile.full_name} ${actionLabel} "${request.title}".${comments ? ` Comments: ${comments}` : ""}`,
+    metadata:       { requestId, status, comments: comments || null },
+  });
+
+  return { ok: true };
+}
+
+// ─── Procurement updates order status for item(s) ─────────────────────────────
+async function materialRequestItemUpdateOrderStatus(req, body) {
+  const { profile } = await requireAuth(req, PROCUREMENT_ROLES);
+  const { itemId, category, requestId, orderStatus } = body;
+
+  if (!requestId) throw httpError(400, "requestId required.");
+  if (!orderStatus || !VALID_ORDER_STATUSES.includes(orderStatus)) {
+    throw httpError(400, `orderStatus must be one of: ${VALID_ORDER_STATUSES.join(", ")}`);
+  }
+  if (!itemId && !category) throw httpError(400, "Either itemId or category is required.");
+
+  const sb = db.getClient();
+
+  // Verify request is procurement_active
+  const { data: request } = await sb
+    .from("material_requests")
+    .select("status")
+    .eq("id", requestId)
+    .single();
+
+  if (!request) throw httpError(404, "Material request not found.");
+  if (request.status !== "procurement_active") {
+    throw httpError(409, "Order status can only be updated on procurement-active requests.");
+  }
+
+  const nowIso = new Date().toISOString();
+  let query = sb.from("material_request_items")
+    .update({ order_status: orderStatus, updated_at: nowIso })
+    .eq("request_id", requestId);
+
+  if (itemId) {
+    query = query.eq("id", itemId);
+  } else {
+    query = query.eq("category", category);
+  }
+
+  const { error } = await query;
+  if (error) throw httpError(500, error.message);
+
   return { ok: true };
 }
 
@@ -440,7 +662,10 @@ async function materialRequestSummary(req, projectIds) {
   const summary = {};
   for (const row of data || []) {
     if (!summary[row.project_id]) {
-      summary[row.project_id] = { total: 0, draft: 0, pending_approval: 0, approved: 0, revision_requested: 0 };
+      summary[row.project_id] = {
+        total: 0, draft: 0, pending_approval: 0, approved: 0,
+        revision_requested: 0, pricing_review: 0, procurement_active: 0,
+      };
     }
     summary[row.project_id].total++;
     summary[row.project_id][row.status] = (summary[row.project_id][row.status] || 0) + 1;
@@ -457,6 +682,9 @@ module.exports = {
   materialRequestSubmit,
   materialRequestReview,
   materialRequestItemMarkProcured,
+  materialRequestSubmitPricing,
+  materialRequestApprovePricing,
+  materialRequestItemUpdateOrderStatus,
   materialRequestCategories,
   materialRequestSummary,
 };

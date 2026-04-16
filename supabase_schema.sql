@@ -444,29 +444,41 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_actioned_on ON audit_logs(actioned_on 
 
 DO $$ BEGIN
   CREATE TYPE material_request_status AS ENUM (
-    'draft', 'pending_approval', 'approved', 'revision_requested'
+    'draft', 'pending_approval', 'approved', 'revision_requested',
+    'pricing_review', 'procurement_active'
   );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Add new enum values if type already exists (safe to re-run)
+DO $$ BEGIN ALTER TYPE material_request_status ADD VALUE IF NOT EXISTS 'pricing_review';     EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE material_request_status ADD VALUE IF NOT EXISTS 'procurement_active'; EXCEPTION WHEN others THEN NULL; END $$;
 
 -- ─── 20. Material Requests ───────────────────────────────────────────────────
 -- Site supervisor raises a material request per project phase.
 -- Multiple versions/supplements supported; each goes through approval.
+-- Workflow: draft → pending_approval → approved → pricing_review → procurement_active
 
 CREATE TABLE IF NOT EXISTS material_requests (
-  id              UUID                    PRIMARY KEY DEFAULT uuid_generate_v4(),
-  project_id      UUID                    NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  submitted_by    UUID                    NOT NULL REFERENCES profiles(id),
-  version_number  INTEGER                 NOT NULL,
-  title           TEXT                    NOT NULL DEFAULT 'Material Request',
-  status          material_request_status NOT NULL DEFAULT 'draft',
-  notes           TEXT,
-  submitted_at    TIMESTAMPTZ,
-  approved_at     TIMESTAMPTZ,
-  approved_by     UUID                    REFERENCES profiles(id),
-  created_at      TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
+  id                   UUID                    PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id           UUID                    NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  submitted_by         UUID                    NOT NULL REFERENCES profiles(id),
+  version_number       INTEGER                 NOT NULL,
+  title                TEXT                    NOT NULL DEFAULT 'Material Request',
+  status               material_request_status NOT NULL DEFAULT 'draft',
+  notes                TEXT,
+  submitted_at         TIMESTAMPTZ,
+  approved_at          TIMESTAMPTZ,
+  approved_by          UUID                    REFERENCES profiles(id),
+  pricing_approved_by  UUID                    REFERENCES profiles(id),
+  pricing_approved_at  TIMESTAMPTZ,
+  created_at           TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ             NOT NULL DEFAULT NOW(),
   UNIQUE(project_id, version_number)
 );
+
+-- Add pricing approval columns if missing (safe to re-run)
+ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS pricing_approved_by UUID REFERENCES profiles(id);
+ALTER TABLE material_requests ADD COLUMN IF NOT EXISTS pricing_approved_at TIMESTAMPTZ;
 
 DO $$ BEGIN
   CREATE TRIGGER material_requests_updated_at BEFORE UPDATE ON material_requests
@@ -488,15 +500,19 @@ CREATE TABLE IF NOT EXISTS material_request_items (
   description      TEXT,
   quantity         NUMERIC,
   unit             TEXT,
-  estimated_rate   NUMERIC,
+  estimated_rate   NUMERIC,    -- set by procurement after lead_designer approval
   sort_order       INTEGER     NOT NULL DEFAULT 0,
   procured         BOOLEAN     NOT NULL DEFAULT FALSE,
   procured_at      TIMESTAMPTZ,
   procured_by      UUID        REFERENCES profiles(id),
+  order_status     TEXT        CHECK (order_status IN ('pending','ordered','in_transit','delivered')) DEFAULT 'pending',
   notes            TEXT,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Add order_status column if missing (safe to re-run)
+ALTER TABLE material_request_items ADD COLUMN IF NOT EXISTS order_status TEXT CHECK (order_status IN ('pending','ordered','in_transit','delivered')) DEFAULT 'pending';
 
 DO $$ BEGIN
   CREATE TRIGGER material_request_items_updated_at BEFORE UPDATE ON material_request_items

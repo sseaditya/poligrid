@@ -64,6 +64,9 @@ const {
   materialRequestSubmit,
   materialRequestReview,
   materialRequestItemMarkProcured,
+  materialRequestSubmitPricing,
+  materialRequestApprovePricing,
+  materialRequestItemUpdateOrderStatus,
   materialRequestCategories,
   materialRequestSummary,
 } = require("../server/material_requests");
@@ -352,6 +355,15 @@ module.exports = async (req, res) => {
     }
     if (req.method === "POST" && pathname === "/api/material-requests/items/mark-procured") {
       return sendJson(res, 200, await materialRequestItemMarkProcured(req, await readJson(req)));
+    }
+    if (req.method === "POST" && pathname === "/api/material-requests/submit-pricing") {
+      return sendJson(res, 200, await materialRequestSubmitPricing(req, await readJson(req)));
+    }
+    if (req.method === "POST" && pathname === "/api/material-requests/approve-pricing") {
+      return sendJson(res, 200, await materialRequestApprovePricing(req, await readJson(req)));
+    }
+    if (req.method === "POST" && pathname === "/api/material-requests/items/update-order-status") {
+      return sendJson(res, 200, await materialRequestItemUpdateOrderStatus(req, await readJson(req)));
     }
 
     return sendJson(res, 404, { error: "Not found." });

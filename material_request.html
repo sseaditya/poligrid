@@ -52,10 +52,12 @@
     display:inline-flex; align-items:center; gap:4px;
     padding:3px 12px; border-radius:100px; font-size:11px; font-weight:700;
   }
-  .status-draft             { background:#f2f4f4; color:#5a6061; }
-  .status-pending_approval  { background:#fffbeb; color:#92400e; }
-  .status-approved          { background:#d5e7da; color:#33433a; }
-  .status-revision_requested{ background:#fff0f0; color:#9f403d; }
+  .status-draft              { background:#f2f4f4; color:#5a6061; }
+  .status-pending_approval   { background:#fffbeb; color:#92400e; }
+  .status-approved           { background:#d5e7da; color:#33433a; }
+  .status-revision_requested { background:#fff0f0; color:#9f403d; }
+  .status-pricing_review     { background:#f3e8ff; color:#6d28d9; }
+  .status-procurement_active { background:#e0f2fe; color:#0369a1; }
 
   .category-section { border:1px solid #dde4e5; border-radius:8px; overflow:hidden; margin-bottom:16px; }
   .category-header  { background:#f2f4f4; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; }
@@ -169,7 +171,7 @@
           <label class="text-sm font-semibold">Unit</label>
           <input id="aiUnit" type="text" placeholder="bags, sqft, nos…" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
         </div>
-        <div class="flex flex-col gap-1">
+        <div class="flex flex-col gap-1" id="aiRateRow">
           <label class="text-sm font-semibold">Rate (₹)</label>
           <input id="aiRate" type="number" min="0" step="any" placeholder="0.00" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary text-right"/>
         </div>
