@@ -24,7 +24,7 @@ The app now has Supabase Auth and role-based access control.
 - sales — fitout planner only (index.html), sees own/assigned projects
 - designer — uploads drawings per project (designer.html)
 - lead_designer — approves/rejects designer drawings, sees assigned projects + fitout planner
-- ceo — read-only CEO dashboard (ceo.html)
+- ceo — read-only CEO dashboard (admin_home.html)
 - site_supervisor — raises material requests for prep/production phase projects (supervisor_home.html)
 - procurement — marks approved material request items as procured (projects.html, material_request.html)
 
@@ -34,7 +34,7 @@ The app now has Supabase Auth and role-based access control.
 - index.html — fitout planner (sales, lead_designer, admin)
 - designer.html — drawing upload & review (designer, lead_designer, admin)
 - admin.html — user role management + project assignments (admin only)
-- ceo.html — aggregated project drill-down dashboard (ceo, admin)
+- admin_home.html — aggregated command center dashboard (admin + ceo, served at /admin_home and /ceo)
 - project.html — unified role-based project detail page (all roles, sections gated by role)
 - supervisor_home.html — site supervisor dashboard: assigned projects + pending/revision material requests (site_supervisor, admin)
 - material_request.html — material request form/review/procurement view (site_supervisor, lead_designer, procurement, admin)
@@ -64,7 +64,7 @@ Each section of the project detail page is shown/hidden based on role:
 | Material Requests section            |  —    |    —     |      ✓        |   ✓   |  —  |       ✓         |      ✓      |
 
 Notes:
-- ceo role does not have access to project.html (they use ceo.html dashboard only)
+- ceo role does not have access to project.html (they use admin_home.html dashboard only)
 - admin sees every section — effectively the union of all roles
 - Material Requests section only visible in phases: prep, production, execution, completed
 - The `can.*` helpers in client/project-detail.js are the single source of truth for this table

@@ -13,11 +13,15 @@
 |------|-------------|-----------|
 | `login.html` | All | `client/auth.js` |
 | `homepage.html` | All (post-login) | `client/homepage.js` |
-| `index.html` | sales, lead_designer, admin | `app.js`, `client/phases.js`, etc. |
-| `sales.html` | sales | `client/sales.js` |
+| `index.html` | sales, lead_designer, admin | `client/phases.js`, `client/generate.js`, etc. |
+| `sales.html` | sales | inline script |
 | `designer.html` | designer, lead_designer, admin | `client/designer.js` |
 | `admin.html` | admin | `client/admin.js` |
-| `ceo.html` | ceo, admin | `client/ceo.js` |
+| `admin_home.html` | admin, ceo (served at `/admin_home` + `/ceo`) | `client/admin-home.js` |
+| `designer_home.html` | designer (served at `/designer_home`) | `client/designer-home.js` |
+| `lead_designer_home.html` | lead_designer (served at `/lead_designer_home`) | `client/lead-designer-home.js` |
+| `procurement_home.html` | procurement | `client/procurement-home.js` |
+| `audit.html` | admin | `client/audit.js` |
 | `project.html` | all roles | `client/project-detail.js` |
 | `projects.html` | all roles | `client/projects.js` |
 | `profile.html` | all roles | `client/profile.js` |
@@ -65,15 +69,13 @@
 | `png.js` | PNG encode helpers (camera annotation overlay) |
 | `utils.js` | Server-side shared helpers |
 
-## Root-level JS (legacy/canvas)
+## Root-level JS (canvas/planner)
 | File | Purpose |
 |------|---------|
-| `app.js` | Main fitout planner app — canvas, state, orchestration (3205 lines, monolith) |
 | `analysis.js` | Floor plan analysis helpers |
 | `planner-canvas.js` | Canvas rendering for planner |
 | `room-editor.js` | Room polygon editor |
 | `deck-generator.js` | PDF/deck export |
-| `test-openai-vision.js` | Dev test script |
 
 ## DB / Config
 | File | Purpose |
