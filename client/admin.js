@@ -429,7 +429,7 @@ function renderAssignmentsTable() {
       }).join("");
 
       const addWrap = _assignEditMode ? (() => {
-        const available = _allUsers.filter(u => u.role === role.key && !members.find(m => m.user_id === u.id));
+        const available = _allUsers.filter(u => u.role === role.key && u.is_active && !members.find(m => m.user_id === u.id));
         const dropdownItems = available.length
           ? available.map(u => `
               <div class="pa-dropdown-item" data-pid="${p.id}" data-uid="${u.id}">

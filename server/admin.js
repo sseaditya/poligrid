@@ -44,7 +44,7 @@ async function usersList(req) {
   const { profile } = await requireAuth(req, ["admin", "ceo", "lead_designer"]);
   const sb = db.getClient();
   // Lead designers only need to see designers (for drawing/team assignment)
-  let query = sb.from("profiles").select("*").eq("is_active", true).order("created_at", { ascending: true });
+  let query = sb.from("profiles").select("*").order("created_at", { ascending: true });
   if (profile.role === "lead_designer") query = query.eq("role", "designer");
   const { data, error } = await query;
   if (error) throw httpError(500, error.message);

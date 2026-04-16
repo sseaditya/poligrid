@@ -22,6 +22,7 @@
     { "src": "^/admin$",        "dest": "/admin.html" },
     { "src": "^/ceo$",          "dest": "/admin_home.html" },
     { "src": "^/admin_home$",   "dest": "/admin_home.html" },
+    { "src": "^/supervisor_home$", "dest": "/supervisor_home.html" },
     { "src": "^/$",             "dest": "/login.html" }
   ]
 }

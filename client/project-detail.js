@@ -1355,7 +1355,7 @@ async function openAssignDesignerModal() {
     const { users } = await res.json();
     const teamIds = new Set(_team.map(t => t.user_id));
     const eligible = (users || []).filter(u =>
-      ["designer", "lead_designer", "admin"].includes(u.role));
+      ["designer", "lead_designer", "admin"].includes(u.role) && u.is_active);
     sel.innerHTML = `<option value="">Select a designer…</option>` +
       eligible.map(u => {
         const inTeam = teamIds.has(u.id);
@@ -1587,7 +1587,7 @@ async function openReassignDrawingModal(assignmentId, drawingType) {
   try {
     const res = await apiFetch("/api/users/list");
     const { users } = await res.json();
-    const eligible = (users || []).filter(u => ["designer", "lead_designer", "admin"].includes(u.role));
+    const eligible = (users || []).filter(u => ["designer", "lead_designer", "admin"].includes(u.role) && u.is_active);
     sel.innerHTML = `<option value="">Select designer…</option>` +
       eligible.map(u =>
         `<option value="${u.id}" ${u.id === currentUid ? "selected" : ""}>${escHtml(u.full_name)} — ${ROLE_LABELS[u.role] || u.role}</option>`
