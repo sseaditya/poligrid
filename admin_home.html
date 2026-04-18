@@ -1,245 +1,288 @@
 <!DOCTYPE html>
 <html class="light" lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Poligrid — Command Center</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;400;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-<script id="tailwind-config">
-  tailwind.config = {
-    darkMode: "class",
-    theme: {
-      extend: {
-        "colors": {
-          "on-error": "#fff7f6",
-          "on-secondary": "#f3fbf3",
-          "primary-fixed-dim": "#c7d9cc",
-          "outline-variant": "#adb3b4",
-          "surface-container-low": "#f2f4f4",
-          "primary-dim": "#46564c",
-          "primary": "#526258",
-          "primary-container": "#d5e7da",
-          "on-primary": "#eafcef",
-          "tertiary-container": "#edf8d9",
-          "background": "#f9f9f9",
-          "on-surface-variant": "#5a6061",
-          "on-primary-fixed": "#33433a",
-          "surface-variant": "#dde4e5",
-          "on-primary-fixed-variant": "#4f5f55",
-          "on-tertiary-fixed": "#434d36",
-          "on-background": "#2d3435",
-          "error-container": "#fe8983",
-          "surface": "#f9f9f9",
-          "inverse-primary": "#ecfef0",
-          "surface-bright": "#f9f9f9",
-          "on-error-container": "#752121",
-          "tertiary-fixed": "#edf8d9",
-          "on-tertiary-fixed-variant": "#5f6a51",
-          "inverse-on-surface": "#9c9d9d",
-          "surface-dim": "#d4dbdd",
-          "inverse-surface": "#0c0f0f",
-          "surface-container-high": "#e4e9ea",
-          "surface-container": "#ebeeef",
-          "secondary-container": "#dde5dd",
-          "surface-container-lowest": "#ffffff",
-          "primary-fixed": "#d5e7da",
-          "surface-tint": "#526258",
-          "on-tertiary-container": "#555f47",
-          "on-secondary-fixed-variant": "#555d58",
-          "error": "#9f403d",
-          "secondary-dim": "#4d554f",
-          "secondary": "#59615b",
-          "error-dim": "#4e0309",
-          "on-secondary-fixed": "#39413c",
-          "tertiary": "#58634b",
-          "tertiary-dim": "#4c563f",
-          "tertiary-fixed-dim": "#deeacb",
-          "surface-container-highest": "#dde4e5",
-          "on-surface": "#2d3435",
-          "secondary-fixed": "#dde5dd",
-          "on-secondary-container": "#4c544e",
-          "outline": "#757c7d",
-          "on-tertiary": "#f2fdde",
-          "secondary-fixed-dim": "#ced6cf",
-          "on-primary-container": "#46554c"
-        },
-        "borderRadius": {
-          "DEFAULT": "0.125rem",
-          "lg": "0.25rem",
-          "xl": "0.5rem",
-          "full": "0.75rem"
-        },
-        "fontFamily": {
-          "headline": ["Manrope"],
-          "body": ["Inter"],
-          "label": ["Inter"]
-        }
-      },
-    },
-  }
-</script>
-<style>
-  .blueprint-grid {
-    background-image: linear-gradient(rgba(82, 98, 88, 0.05) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(82, 98, 88, 0.05) 1px, transparent 1px);
-    background-size: 40px 40px;
-  }
-  .signature-cta {
-    background: linear-gradient(135deg, #526258 0%, #46564c 100%);
-  }
-  .skeleton {
-    background: linear-gradient(90deg, #e4e9ea 25%, #f2f4f4 50%, #e4e9ea 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.4s infinite;
-    border-radius: 4px;
-  }
-  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
 
-  /* Drawing progress bar (matches lead_designer_home style) */
-  .drawing-bar-track {
-    height: 3px; background: #e4e9ea; border-radius: 2px; overflow: hidden; display: flex;
-  }
-  .drawing-bar-approved { background: #526258; }
-  .drawing-bar-review   { background: #a8c5b0; }
-</style>
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>Poligrid — Command Center</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;400;700;800&family=Inter:wght@300;400;500;600&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet" />
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "on-error": "#fff7f6",
+            "on-secondary": "#f3fbf3",
+            "primary-fixed-dim": "#c7d9cc",
+            "outline-variant": "#adb3b4",
+            "surface-container-low": "#f2f4f4",
+            "primary-dim": "#46564c",
+            "primary": "#526258",
+            "primary-container": "#d5e7da",
+            "on-primary": "#eafcef",
+            "tertiary-container": "#edf8d9",
+            "background": "#f9f9f9",
+            "on-surface-variant": "#5a6061",
+            "on-primary-fixed": "#33433a",
+            "surface-variant": "#dde4e5",
+            "on-primary-fixed-variant": "#4f5f55",
+            "on-tertiary-fixed": "#434d36",
+            "on-background": "#2d3435",
+            "error-container": "#fe8983",
+            "surface": "#f9f9f9",
+            "inverse-primary": "#ecfef0",
+            "surface-bright": "#f9f9f9",
+            "on-error-container": "#752121",
+            "tertiary-fixed": "#edf8d9",
+            "on-tertiary-fixed-variant": "#5f6a51",
+            "inverse-on-surface": "#9c9d9d",
+            "surface-dim": "#d4dbdd",
+            "inverse-surface": "#0c0f0f",
+            "surface-container-high": "#e4e9ea",
+            "surface-container": "#ebeeef",
+            "secondary-container": "#dde5dd",
+            "surface-container-lowest": "#ffffff",
+            "primary-fixed": "#d5e7da",
+            "surface-tint": "#526258",
+            "on-tertiary-container": "#555f47",
+            "on-secondary-fixed-variant": "#555d58",
+            "error": "#9f403d",
+            "secondary-dim": "#4d554f",
+            "secondary": "#59615b",
+            "error-dim": "#4e0309",
+            "on-secondary-fixed": "#39413c",
+            "tertiary": "#58634b",
+            "tertiary-dim": "#4c563f",
+            "tertiary-fixed-dim": "#deeacb",
+            "surface-container-highest": "#dde4e5",
+            "on-surface": "#2d3435",
+            "secondary-fixed": "#dde5dd",
+            "on-secondary-container": "#4c544e",
+            "outline": "#757c7d",
+            "on-tertiary": "#f2fdde",
+            "secondary-fixed-dim": "#ced6cf",
+            "on-primary-container": "#46554c"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.125rem",
+            "lg": "0.25rem",
+            "xl": "0.5rem",
+            "full": "0.75rem"
+          },
+          "fontFamily": {
+            "headline": ["Manrope"],
+            "body": ["Inter"],
+            "label": ["Inter"]
+          }
+        },
+      },
+    }
+  </script>
+  <style>
+    .blueprint-grid {
+      background-image: linear-gradient(rgba(82, 98, 88, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(82, 98, 88, 0.05) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    .signature-cta {
+      background: linear-gradient(135deg, #526258 0%, #46564c 100%);
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, #e4e9ea 25%, #f2f4f4 50%, #e4e9ea 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 4px;
+    }
+
+    @keyframes shimmer {
+      0% {
+        background-position: 200% 0
+      }
+
+      100% {
+        background-position: -200% 0
+      }
+    }
+
+    /* Drawing progress bar (matches lead_designer_home style) */
+    .drawing-bar-track {
+      height: 3px;
+      background: #e4e9ea;
+      border-radius: 2px;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .drawing-bar-approved {
+      background: #526258;
+    }
+
+    .drawing-bar-review {
+      background: #a8c5b0;
+    }
+  </style>
 </head>
+
 <body class="bg-background text-on-background font-body antialiased min-h-screen">
 
-<!-- Main content -->
-<main id="sidebarMain" class="md:ml-64 min-h-screen blueprint-grid">
+  <!-- Main content -->
+  <main id="sidebarMain" class="md:ml-64 min-h-screen blueprint-grid">
 
-  <!-- Sticky top bar -->
-  <header class="h-16 bg-surface/80 backdrop-blur-md sticky top-0 z-20 border-b border-outline-variant/10"></header>
+    <!-- Sticky top bar -->
+    <header class="h-16 bg-surface/80 backdrop-blur-md sticky top-0 z-20 border-b border-outline-variant/10"></header>
 
-  <div class="pb-12 px-8 lg:px-12">
-  <div class="max-w-7xl mx-auto">
+    <div class="pb-12 px-8 lg:px-12">
+      <div class="max-w-7xl mx-auto">
 
-    <!-- Page header -->
-    <div class="flex items-start justify-between mb-10 pt-10">
-      <div>
-        <h1 class="font-headline font-extrabold text-4xl lg:text-5xl text-on-background leading-tight tracking-tighter">
-          Command Center, <span class="text-primary" id="greetName">—</span>
-        </h1>
-        <p class="font-body text-sm text-on-surface-variant mt-2" id="greetLine">Loading…</p>
-      </div>
-      <button id="newProjectBtn" class="hidden md:flex items-center gap-2 px-5 py-2.5 rounded-lg signature-cta text-on-primary text-sm font-bold hover:opacity-90 transition-all mt-1">
-        <span class="material-symbols-outlined text-[18px]">add</span>
-        New Project
-      </button>
-    </div>
-
-    <!-- ─── NEEDS YOUR APPROVAL ─────────────────────────────────── -->
-    <section class="mb-8" id="approvalQueueSection">
-      <div class="flex items-center gap-2 mb-4">
-        <span class="material-symbols-outlined text-error text-[18px]">pending_actions</span>
-        <h2 class="font-headline font-bold text-lg text-on-background">Needs Your Approval</h2>
-        <span id="approvalBadge" class="hidden ml-1 px-2 py-0.5 rounded-full bg-error text-on-error text-xs font-bold"></span>
-      </div>
-      <div id="approvalQueueList">
-        <div class="skeleton h-16 rounded-xl mb-2"></div>
-        <div class="skeleton h-16 rounded-xl mb-2"></div>
-      </div>
-    </section>
-
-    <!-- ─── ACTIVE DELIVERIES ─────────────────────────────────── -->
-    <section class="mb-10" id="deliveriesSection">
-      <div class="flex items-center gap-2 mb-4">
-        <span class="material-symbols-outlined text-primary text-[18px]">local_shipping</span>
-        <h2 class="font-headline font-bold text-lg text-on-background">Active Deliveries</h2>
-      </div>
-      <div id="deliveriesList">
-        <div class="skeleton h-16 rounded-xl mb-2"></div>
-        <div class="skeleton h-16 rounded-xl"></div>
-      </div>
-    </section>
-
-    <!-- ─── KPI STATS ROW ───────────────────────────────────────── -->
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10" id="kpiRow">
-      <!-- Filled by JS -->
-      <div class="skeleton h-24 rounded-xl col-span-1"></div>
-      <div class="skeleton h-24 rounded-xl col-span-1"></div>
-      <div class="skeleton h-24 rounded-xl col-span-1"></div>
-      <div class="skeleton h-24 rounded-xl col-span-1"></div>
-      <div class="skeleton h-24 rounded-xl col-span-1"></div>
-    </div>
-
-
-    <!-- ─── PROJECTS LIST ─────────────────────────────────────── -->
-    <section class="mb-10">
-      <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <div>
-          <h2 class="font-headline font-bold text-lg text-on-background">All Projects</h2>
-          <p class="font-body text-xs text-on-surface-variant mt-0.5">Full company view — click a project to open</p>
+        <!-- Page header -->
+        <div class="flex items-start justify-between mb-10 pt-10">
+          <div>
+            <h1
+              class="font-headline font-extrabold text-4xl lg:text-5xl text-on-background leading-tight tracking-tighter">
+              Command Center, <span class="text-primary" id="greetName">—</span>
+            </h1>
+            <p class="font-body text-sm text-on-surface-variant mt-2" id="greetLine">Loading…</p>
+          </div>
+          <button id="newProjectBtn"
+            class="hidden md:flex items-center gap-2 px-5 py-2.5 rounded-lg signature-cta text-on-primary text-sm font-bold hover:opacity-90 transition-all mt-1">
+            <span class="material-symbols-outlined text-[18px]">add</span>
+            New Project
+          </button>
         </div>
-        <div class="flex items-center gap-3 flex-wrap">
-          <input id="searchInput" type="search" placeholder="Search projects…"
-            class="px-3 py-2 text-sm bg-surface-container-lowest border border-outline-variant/30 rounded-lg outline-none focus:border-primary transition-colors w-52"/>
-          <select id="statusFilter"
-            class="px-3 py-2 text-sm bg-surface-container-lowest border border-outline-variant/30 rounded-lg outline-none focus:border-primary transition-colors">
-            <option value="">All phases</option>
-            <option value="prospect">Prospect</option>
-            <option value="design">Design</option>
-            <option value="prep">Site Prep</option>
-            <option value="production">Production</option>
-            <option value="execution">Execution</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+
+        <!-- ─── NEEDS YOUR APPROVAL ─────────────────────────────────── -->
+        <section class="mb-8" id="approvalQueueSection">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-error text-[18px]">pending_actions</span>
+            <h2 class="font-headline font-bold text-lg text-on-background">Needs Your Approval</h2>
+            <span id="approvalBadge"
+              class="hidden ml-1 px-2 py-0.5 rounded-full bg-error text-on-error text-xs font-bold"></span>
+          </div>
+          <div id="approvalQueueList">
+            <div class="skeleton h-16 rounded-xl mb-2"></div>
+            <div class="skeleton h-16 rounded-xl mb-2"></div>
+          </div>
+        </section>
+
+        <!-- ─── ACTIVE DELIVERIES ─────────────────────────────────── -->
+        <section class="mb-10" id="deliveriesSection">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-primary text-[18px]">local_shipping</span>
+            <h2 class="font-headline font-bold text-lg text-on-background">Active Deliveries</h2>
+          </div>
+          <div id="deliveriesList">
+            <div class="skeleton h-16 rounded-xl mb-2"></div>
+            <div class="skeleton h-16 rounded-xl"></div>
+          </div>
+        </section>
+
+        <!-- ─── KPI STATS ROW ───────────────────────────────────────── -->
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10" id="kpiRow">
+          <!-- Filled by JS -->
+          <div class="skeleton h-24 rounded-xl col-span-1"></div>
+          <div class="skeleton h-24 rounded-xl col-span-1"></div>
+          <div class="skeleton h-24 rounded-xl col-span-1"></div>
+          <div class="skeleton h-24 rounded-xl col-span-1"></div>
+          <div class="skeleton h-24 rounded-xl col-span-1"></div>
+        </div>
+
+
+        <!-- ─── PROJECTS LIST ─────────────────────────────────────── -->
+        <section class="mb-10">
+          <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+            <div>
+              <h2 class="font-headline font-bold text-lg text-on-background">All Projects</h2>
+              <p class="font-body text-xs text-on-surface-variant mt-0.5">Full company view — click a project to open
+              </p>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap">
+              <input id="searchInput" type="search" placeholder="Search projects…"
+                class="px-3 py-2 text-sm bg-surface-container-lowest border border-outline-variant/30 rounded-lg outline-none focus:border-primary transition-colors w-52" />
+              <select id="statusFilter"
+                class="px-3 py-2 text-sm bg-surface-container-lowest border border-outline-variant/30 rounded-lg outline-none focus:border-primary transition-colors">
+                <option value="">All phases</option>
+                <option value="prospect">Prospect</option>
+                <option value="design">Design</option>
+                <option value="prep">Site Prep</option>
+                <option value="production">Production</option>
+                <option value="execution">Execution</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+          <div id="projectListContainer">
+            <div class="skeleton h-20 rounded-xl mb-3"></div>
+            <div class="skeleton h-20 rounded-xl mb-3"></div>
+            <div class="skeleton h-20 rounded-xl"></div>
+          </div>
+        </section>
+
+        <!-- Footer -->
+        <footer
+          class="mt-16 pt-12 pb-8 border-t border-outline-variant/10 flex justify-between items-center opacity-40">
+          <p class="text-xs font-body font-medium">POLIGRID INTERIOR DESIGN SYSTEMS © 2026</p>
+          <div class="flex gap-6">
+            <span
+              class="text-xs font-label font-bold cursor-pointer hover:text-primary transition-colors">PRIVACY</span>
+            <span
+              class="text-xs font-label font-bold cursor-pointer hover:text-primary transition-colors">SUPPORT</span>
+          </div>
+        </footer>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- Mobile Navigation -->
+
+  <!-- Create project modal -->
+  <div id="createModal"
+    style="display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.35);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px">
+    <div style="background:#fff;border-radius:12px;max-width:480px;width:100%;box-shadow:0 24px 48px rgba(0,0,0,0.12)">
+      <div style="padding:24px 24px 0;display:flex;justify-content:space-between;align-items:center">
+        <h2 style="font-family:Manrope;font-weight:800;font-size:20px;color:#2d3435;margin:0">New Project</h2>
+        <button id="createModalClose"
+          style="background:none;border:none;cursor:pointer;font-size:20px;color:#5a6061;padding:4px">✕</button>
+      </div>
+      <div style="padding:20px 24px 24px;display:flex;flex-direction:column;gap:14px">
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#2d3435">
+          Project name *
+          <input id="cpName" type="text" placeholder="e.g. Sharma Residence"
+            style="padding:10px 14px;border:none;background:#f2f4f4;border-radius:6px;font-size:14px;outline:none;font-family:Inter" />
+        </label>
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#2d3435">
+          Client name (optional)
+          <input id="cpClient" type="text" placeholder="e.g. Rajesh Sharma"
+            style="padding:10px 14px;border:none;background:#f2f4f4;border-radius:6px;font-size:14px;outline:none;font-family:Inter" />
+        </label>
+        <div id="cpError"
+          style="display:none;color:#9f403d;font-size:13px;padding:10px 14px;background:#fff0f0;border-radius:6px">
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+          <button id="createModalCancel"
+            style="padding:10px 20px;background:#f2f4f4;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;font-family:Inter">Cancel</button>
+          <button id="cpSubmit"
+            style="padding:10px 20px;background:linear-gradient(135deg,#526258,#46564c);color:#eafcef;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:Inter">Create
+            &amp; Open</button>
         </div>
       </div>
-      <div id="projectListContainer">
-        <div class="skeleton h-20 rounded-xl mb-3"></div>
-        <div class="skeleton h-20 rounded-xl mb-3"></div>
-        <div class="skeleton h-20 rounded-xl"></div>
-      </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="mt-16 pt-12 pb-8 border-t border-outline-variant/10 flex justify-between items-center opacity-40">
-      <p class="text-xs font-body font-medium">POLIGRID INTERIOR DESIGN SYSTEMS © 2024</p>
-      <div class="flex gap-6">
-        <span class="text-xs font-label font-bold cursor-pointer hover:text-primary transition-colors">PRIVACY</span>
-        <span class="text-xs font-label font-bold cursor-pointer hover:text-primary transition-colors">SUPPORT</span>
-      </div>
-    </footer>
-
-  </div>
-  </div>
-</main>
-
-<!-- Mobile Navigation -->
-
-<!-- Create project modal -->
-<div id="createModal" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.35);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px">
-  <div style="background:#fff;border-radius:12px;max-width:480px;width:100%;box-shadow:0 24px 48px rgba(0,0,0,0.12)">
-    <div style="padding:24px 24px 0;display:flex;justify-content:space-between;align-items:center">
-      <h2 style="font-family:Manrope;font-weight:800;font-size:20px;color:#2d3435;margin:0">New Project</h2>
-      <button id="createModalClose" style="background:none;border:none;cursor:pointer;font-size:20px;color:#5a6061;padding:4px">✕</button>
-    </div>
-    <div style="padding:20px 24px 24px;display:flex;flex-direction:column;gap:14px">
-      <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#2d3435">
-        Project name *
-        <input id="cpName" type="text" placeholder="e.g. Sharma Residence" style="padding:10px 14px;border:none;background:#f2f4f4;border-radius:6px;font-size:14px;outline:none;font-family:Inter"/>
-      </label>
-      <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:#2d3435">
-        Client name (optional)
-        <input id="cpClient" type="text" placeholder="e.g. Rajesh Sharma" style="padding:10px 14px;border:none;background:#f2f4f4;border-radius:6px;font-size:14px;outline:none;font-family:Inter"/>
-      </label>
-      <div id="cpError" style="display:none;color:#9f403d;font-size:13px;padding:10px 14px;background:#fff0f0;border-radius:6px"></div>
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
-        <button id="createModalCancel" style="padding:10px 20px;background:#f2f4f4;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;font-family:Inter">Cancel</button>
-        <button id="cpSubmit" style="padding:10px 20px;background:linear-gradient(135deg,#526258,#46564c);color:#eafcef;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:Inter">Create &amp; Open</button>
-      </div>
     </div>
   </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="/client/auth.js"></script>
-<script src="/client/nav.js"></script>
-<script src="/client/studio-utils.js"></script>
-<script src="/client/admin-home.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="/client/auth.js"></script>
+  <script src="/client/nav.js"></script>
+  <script src="/client/studio-utils.js"></script>
+  <script src="/client/admin-home.js"></script>
 </body>
+
 </html>

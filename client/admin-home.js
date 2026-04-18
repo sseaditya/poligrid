@@ -165,29 +165,49 @@ async function fetchAllAssignments(ids) {
 function renderKPIs() {
   if (!_projectsLoaded) return;
 
-  const total    = _projects.length;
-  const inDesign = _projects.filter(p => p.phase === 'design').length;
-  const onHold   = _projects.filter(p => p.on_hold).length;
-  const completed       = _projects.filter(p => p.phase === 'completed').length;
-  const pendingDrawings = _teamStats?.pendingDrawingsTotal ?? '—';
-
-  const kpis = [
-    { label: 'Total Projects', value: total,     icon: 'architecture', accent: false },
-    { label: 'In Design',      value: inDesign,  icon: 'draw',         accent: false },
-    { label: 'On Hold',        value: onHold,    icon: 'pause_circle', accent: onHold > 0 },
-    { label: 'Completed',      value: completed, icon: 'check_circle', accent: completed > 0 },
-    { label: 'Total Team',     value: _teamStats?.roleCount ? Object.values(_teamStats.roleCount).reduce((s, n) => s + n, 0) : '—', icon: 'group', accent: false },
+  const phases = [
+    { id: 'prospect', label: 'Prospect', icon: 'person_search' },
+    { id: 'design', label: 'Design', icon: 'draw' },
+    { id: 'prep', label: 'Site Prep', icon: 'foundation' },
+    { id: 'production', label: 'Production', icon: 'precision_manufacturing' },
+    { id: 'execution', label: 'Execution', icon: 'engineering' },
+    { id: 'completed', label: 'Completed', icon: 'check_circle' },
   ];
 
-  document.getElementById('kpiRow').innerHTML = kpis.map(k => `
-    <div class="bg-surface-container-lowest rounded-xl p-5 flex flex-col gap-1 ${k.accent ? 'ring-1 ring-primary/20' : ''}">
-      <div class="flex items-center gap-2 mb-1">
-        <span class="material-symbols-outlined text-[18px] ${k.accent ? 'text-primary' : 'text-on-surface-variant'}">${k.icon}</span>
-        <span class="font-label text-[10px] uppercase tracking-widest ${k.accent ? 'text-primary font-bold' : 'text-on-surface-variant font-bold'}">${k.label}</span>
+  const counts = {};
+  phases.forEach(p => counts[p.id] = 0);
+  _projects.forEach(p => {
+    if (counts[p.phase] !== undefined) counts[p.phase]++;
+  });
+
+  const kpiRow = document.getElementById('kpiRow');
+  kpiRow.className = "mb-10 w-full overflow-x-auto pb-4";
+  
+  kpiRow.innerHTML = `
+    <div class="bg-surface-container-lowest rounded-xl p-6 min-w-[900px]">
+      <div class="flex items-center gap-2 mb-6">
+        <span class="material-symbols-outlined text-primary text-[18px]">account_tree</span>
+        <h2 class="font-headline font-bold text-lg text-on-background">Project Pipeline</h2>
       </div>
-      <span class="font-headline font-extrabold text-4xl text-on-background">${k.value}</span>
+      <div class="flex items-stretch w-full justify-between gap-4">
+        ${phases.map((ph, idx) => `
+          <div class="flex-1 relative flex flex-col">
+            <div class="bg-surface-container-low rounded-xl px-5 py-5 border border-outline-variant/10 hover:border-primary/50 transition-colors flex flex-col relative z-10 flex-1 justify-center shadow-sm">
+              <div class="flex items-center justify-between mb-3">
+                 <span class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">${ph.label}</span>
+                 <span class="material-symbols-outlined text-lg text-primary/60">${ph.icon}</span>
+               </div>
+               <div class="font-headline font-extrabold text-4xl text-on-background">${counts[ph.id]}</div>
+            </div>
+            ${idx < phases.length - 1 ? `
+              <div class="absolute top-1/2 -right-4 w-4 h-[2px] bg-outline-variant/40 z-0"></div>
+              <div class="absolute top-1/2 -right-4 w-2 h-2 border-t-2 border-r-2 border-outline-variant/40 transform rotate-45 -translate-y-1/2 translate-x-1.5 z-0"></div>
+            ` : ''}
+          </div>
+        `).join('')}
+      </div>
     </div>
-  `).join('');
+  `;
 }
 
 
@@ -321,6 +341,25 @@ function renderProjectList(summaryOrEvent, assignmentsArg) {
     const meta        = [p.bhk, p.property_type, p.total_area_m2 ? p.total_area_m2 + ' m²' : null].filter(Boolean).join(' · ');
     const salesPerson = d.sales_person ? `<span class="font-label text-[10px] text-on-surface-variant">by ${esc(d.sales_person)}</span>` : '';
 
+    const noActivityHours = (Date.now() - new Date(p.updated_at).getTime()) / (1000 * 60 * 60);
+    const isStuck = p.phase !== 'completed' && p.phase !== 'cancelled' && !p.on_hold && noActivityHours > 24;
+
+    const overdueAssignments = pa.filter(a => {
+      if (!a.deadline) return false;
+      const dt = new Date(a.deadline);
+      dt.setHours(23, 59, 59, 999);
+      return dt.getTime() < Date.now() && a.status !== 'approved';
+    });
+    const isPastDeadline = overdueAssignments.length > 0;
+
+    let alertsHtml = '';
+    if (isPastDeadline) {
+      alertsHtml += `<span class="inline-flex items-center mt-1 mr-1 px-2 py-0.5 rounded text-[9px] font-bold bg-[#fff0f0] text-error border border-error/20"><span class="material-symbols-outlined text-[10px] mr-0.5" style="font-variation-settings:'FILL' 1">error</span>Past Deadline</span>`;
+    }
+    if (isStuck) {
+      alertsHtml += `<span class="inline-flex items-center mt-1 mr-1 px-2 py-0.5 rounded text-[9px] font-bold bg-surface-container-highest text-on-surface-variant border border-outline-variant/30" title="No activity for ${Math.floor(noActivityHours)} hours" ><span class="material-symbols-outlined text-[10px] mr-0.5">schedule</span>Stuck &gt; 24h</span>`;
+    }
+
     // Group assignments by designer
     const byDesigner = {};
     for (const a of pa) {
@@ -351,8 +390,9 @@ function renderProjectList(summaryOrEvent, assignmentsArg) {
     return `
       <tr class="border-b border-outline-variant/10 hover:bg-surface-container-low transition-colors">
         <td class="px-5 py-4">
-          <p class="font-headline font-bold text-sm text-on-background leading-tight">${esc(p.name || 'Untitled')}</p>
-          <div class="flex items-center gap-2 mt-0.5">${salesPerson ? salesPerson : ''}<span class="font-body text-xs text-on-surface-variant">${esc(p.client_name || '—')}</span></div>
+          <p class="font-headline font-bold text-sm text-on-background leading-tight flex items-center flex-wrap">${esc(p.name || 'Untitled')}</p>
+          <div class="flex items-center gap-2 mt-0.5 mb-1">${salesPerson ? salesPerson : ''}<span class="font-body text-xs text-on-surface-variant">${esc(p.client_name || '—')}</span></div>
+          ${alertsHtml}
         </td>
         <td class="px-5 py-4 hidden sm:table-cell">
           <p class="font-body text-xs text-on-surface-variant">${esc(meta || '—')}</p>

@@ -1,200 +1,246 @@
 <!DOCTYPE html>
 <html class="light" lang="en">
+
 <head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Poligrid — Site Supervisor</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-<script id="tailwind-config">
-  tailwind.config = {
-    darkMode: "class",
-    theme: {
-      extend: {
-        colors: {
-          "on-error": "#fff7f6",
-          "on-secondary": "#f3fbf3",
-          "primary-fixed-dim": "#c7d9cc",
-          "outline-variant": "#adb3b4",
-          "surface-container-low": "#f2f4f4",
-          "primary-dim": "#46564c",
-          "primary": "#526258",
-          "primary-container": "#d5e7da",
-          "on-primary": "#eafcef",
-          "tertiary-container": "#edf8d9",
-          "background": "#f9f9f9",
-          "on-surface-variant": "#5a6061",
-          "on-primary-fixed": "#33433a",
-          "surface-variant": "#dde4e5",
-          "on-primary-fixed-variant": "#4f5f55",
-          "on-tertiary-fixed": "#434d36",
-          "on-background": "#2d3435",
-          "error-container": "#fe8983",
-          "surface": "#f9f9f9",
-          "inverse-primary": "#ecfef0",
-          "surface-bright": "#f9f9f9",
-          "on-error-container": "#752121",
-          "tertiary-fixed": "#edf8d9",
-          "on-tertiary-fixed-variant": "#5f6a51",
-          "inverse-on-surface": "#9c9d9d",
-          "surface-dim": "#d4dbdd",
-          "inverse-surface": "#0c0f0f",
-          "surface-container-high": "#e4e9ea",
-          "surface-container": "#ebeeef",
-          "secondary-container": "#dde5dd",
-          "surface-container-lowest": "#ffffff",
-          "primary-fixed": "#d5e7da",
-          "surface-tint": "#526258",
-          "on-tertiary-container": "#555f47",
-          "on-secondary-fixed-variant": "#555d58",
-          "error": "#9f403d",
-          "secondary-dim": "#4d554f",
-          "secondary": "#59615b",
-          "error-dim": "#4e0309",
-          "on-secondary-fixed": "#39413c",
-          "tertiary": "#58634b",
-          "tertiary-dim": "#4c563f",
-          "tertiary-fixed-dim": "#deeacb",
-          "surface-container-highest": "#dde4e5",
-          "on-surface": "#2d3435",
-          "secondary-fixed": "#dde5dd",
-          "on-secondary-container": "#4c544e",
-          "outline": "#757c7d",
-          "on-tertiary": "#f2fdde",
-          "secondary-fixed-dim": "#ced6cf",
-          "on-primary-container": "#46554c"
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>Poligrid — Site Supervisor</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet" />
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "on-error": "#fff7f6",
+            "on-secondary": "#f3fbf3",
+            "primary-fixed-dim": "#c7d9cc",
+            "outline-variant": "#adb3b4",
+            "surface-container-low": "#f2f4f4",
+            "primary-dim": "#46564c",
+            "primary": "#526258",
+            "primary-container": "#d5e7da",
+            "on-primary": "#eafcef",
+            "tertiary-container": "#edf8d9",
+            "background": "#f9f9f9",
+            "on-surface-variant": "#5a6061",
+            "on-primary-fixed": "#33433a",
+            "surface-variant": "#dde4e5",
+            "on-primary-fixed-variant": "#4f5f55",
+            "on-tertiary-fixed": "#434d36",
+            "on-background": "#2d3435",
+            "error-container": "#fe8983",
+            "surface": "#f9f9f9",
+            "inverse-primary": "#ecfef0",
+            "surface-bright": "#f9f9f9",
+            "on-error-container": "#752121",
+            "tertiary-fixed": "#edf8d9",
+            "on-tertiary-fixed-variant": "#5f6a51",
+            "inverse-on-surface": "#9c9d9d",
+            "surface-dim": "#d4dbdd",
+            "inverse-surface": "#0c0f0f",
+            "surface-container-high": "#e4e9ea",
+            "surface-container": "#ebeeef",
+            "secondary-container": "#dde5dd",
+            "surface-container-lowest": "#ffffff",
+            "primary-fixed": "#d5e7da",
+            "surface-tint": "#526258",
+            "on-tertiary-container": "#555f47",
+            "on-secondary-fixed-variant": "#555d58",
+            "error": "#9f403d",
+            "secondary-dim": "#4d554f",
+            "secondary": "#59615b",
+            "error-dim": "#4e0309",
+            "on-secondary-fixed": "#39413c",
+            "tertiary": "#58634b",
+            "tertiary-dim": "#4c563f",
+            "tertiary-fixed-dim": "#deeacb",
+            "surface-container-highest": "#dde4e5",
+            "on-surface": "#2d3435",
+            "secondary-fixed": "#dde5dd",
+            "on-secondary-container": "#4c544e",
+            "outline": "#757c7d",
+            "on-tertiary": "#f2fdde",
+            "secondary-fixed-dim": "#ced6cf",
+            "on-primary-container": "#46554c"
+          },
+          fontFamily: {
+            "headline": ["Manrope"],
+            "body": ["Inter"],
+            "label": ["Inter"]
+          },
+          borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
         },
-        fontFamily: {
-          "headline": ["Manrope"],
-          "body": ["Inter"],
-          "label": ["Inter"]
-        },
-        borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
       },
-    },
-  }
-</script>
-<style>
-  body { font-family: 'Inter', sans-serif; }
-  h1, h2, h3, .headline { font-family: 'Manrope', sans-serif; }
-  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-  .primary-gradient { background: linear-gradient(135deg, #526258 0%, #46564c 100%); }
-  .skeleton { background: linear-gradient(90deg, #e4e9ea 25%, #f2f4f4 50%, #e4e9ea 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: 8px; }
-  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-</style>
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+
+    h1,
+    h2,
+    h3,
+    .headline {
+      font-family: 'Manrope', sans-serif;
+    }
+
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+
+    .primary-gradient {
+      background: linear-gradient(135deg, #526258 0%, #46564c 100%);
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, #e4e9ea 25%, #f2f4f4 50%, #e4e9ea 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 8px;
+    }
+
+    @keyframes shimmer {
+      0% {
+        background-position: 200% 0
+      }
+
+      100% {
+        background-position: -200% 0
+      }
+    }
+  </style>
 </head>
+
 <body class="bg-surface text-on-surface antialiased">
 
-<!-- Main Content -->
-<main id="sidebarMain" class="md:ml-64 min-h-screen">
+  <!-- Main Content -->
+  <main id="sidebarMain" class="md:ml-64 min-h-screen">
 
-  <!-- Top Navigation -->
-  <header class="flex justify-end items-center px-8 h-16 w-full bg-surface/80 backdrop-blur-md sticky top-0 z-10 border-b border-outline-variant/10">
-    <div class="flex items-center gap-5">
-      <div class="relative hidden sm:block">
-        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg">search</span>
-        <input class="bg-surface-container-low border-none rounded-full py-1.5 pl-10 pr-4 text-sm w-56 focus:ring-1 focus:ring-primary outline-none" id="searchInput" placeholder="Search projects..." type="text"/>
-      </div>
-      <span class="material-symbols-outlined cursor-pointer hover:text-on-surface text-on-surface-variant">notifications</span>
-    </div>
-  </header>
-
-  <div class="p-8 max-w-7xl mx-auto space-y-10">
-
-    <!-- 1. Welcome Section -->
-    <section class="flex flex-col md:flex-row md:items-end justify-between gap-6">
-      <div>
-        <h2 class="text-4xl font-extrabold tracking-tight text-on-surface" id="welcomeHeading">Good Morning</h2>
-        <p class="text-on-surface-variant mt-2 text-lg" id="welcomeSubtext">Loading your workspace…</p>
-      </div>
-      <div class="flex gap-3">
-        <div class="bg-surface-container-lowest p-4 rounded-xl border-l-4 border-primary min-w-[140px]">
-          <p class="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Active Projects</p>
-          <p class="text-2xl font-bold mt-1 font-headline" id="statProjects">—</p>
+    <!-- Top Navigation -->
+    <header
+      class="flex justify-end items-center px-8 h-16 w-full bg-surface/80 backdrop-blur-md sticky top-0 z-10 border-b border-outline-variant/10">
+      <div class="flex items-center gap-5">
+        <div class="relative hidden sm:block">
+          <span
+            class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg">search</span>
+          <input
+            class="bg-surface-container-low border-none rounded-full py-1.5 pl-10 pr-4 text-sm w-56 focus:ring-1 focus:ring-primary outline-none"
+            id="searchInput" placeholder="Search projects..." type="text" />
         </div>
-        <div class="bg-surface-container-lowest p-4 rounded-xl border-l-4 border-[#f59e0b] min-w-[140px]">
-          <p class="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Pending Approval</p>
-          <p class="text-2xl font-bold mt-1 font-headline" id="statPending">—</p>
-        </div>
-        <div class="bg-surface-container-lowest p-4 rounded-xl border-l-4 border-[#a855f7] min-w-[140px]">
-          <p class="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Revisions</p>
-          <p class="text-2xl font-bold mt-1 font-headline" id="statRevisions">—</p>
-        </div>
+        <span
+          class="material-symbols-outlined cursor-pointer hover:text-on-surface text-on-surface-variant">notifications</span>
       </div>
-    </section>
+    </header>
 
-    <!-- 2. Action Cards (revision notices) -->
-    <section id="revisionCardsSection" class="grid grid-cols-1 lg:grid-cols-2 gap-6" style="display:none!important">
-      <!-- Injected by JS -->
-    </section>
+    <div class="p-8 max-w-7xl mx-auto space-y-10">
 
-    <!-- 3. My Tasks -->
-    <section class="space-y-4">
-      <div class="flex items-center justify-between">
+      <!-- 1. Welcome Section -->
+      <section class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <h2 class="text-4xl font-extrabold tracking-tight text-on-surface" id="welcomeHeading">Good Morning</h2>
+          <p class="text-on-surface-variant mt-2 text-lg" id="welcomeSubtext">Loading your workspace…</p>
+        </div>
+        <div class="flex gap-3">
+          <div class="bg-surface-container-lowest p-4 rounded-xl border-l-4 border-primary min-w-[140px]">
+            <p class="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Active Projects</p>
+            <p class="text-2xl font-bold mt-1 font-headline" id="statProjects">—</p>
+          </div>
+          <div class="bg-surface-container-lowest p-4 rounded-xl border-l-4 border-[#f59e0b] min-w-[140px]">
+            <p class="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Pending Approval</p>
+            <p class="text-2xl font-bold mt-1 font-headline" id="statPending">—</p>
+          </div>
+          <div class="bg-surface-container-lowest p-4 rounded-xl border-l-4 border-[#a855f7] min-w-[140px]">
+            <p class="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Revisions</p>
+            <p class="text-2xl font-bold mt-1 font-headline" id="statRevisions">—</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. Action Cards (revision notices) -->
+      <section id="revisionCardsSection" class="grid grid-cols-1 lg:grid-cols-2 gap-6" style="display:none!important">
+        <!-- Injected by JS -->
+      </section>
+
+      <!-- 3. My Tasks -->
+      <section class="space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xl font-bold flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary"
+              style="font-variation-settings:'FILL' 1">list_alt</span>
+            My Tasks
+          </h3>
+        </div>
+        <div id="tasksSkeleton" class="space-y-3">
+          <div class="skeleton h-14"></div>
+          <div class="skeleton h-14"></div>
+        </div>
+        <div id="tasksTable" class="bg-surface-container-lowest rounded-xl overflow-x-auto shadow-sm"
+          style="display:none">
+          <table class="w-full text-left border-collapse min-w-[600px]">
+            <thead>
+              <tr class="bg-surface-container-low">
+                <th class="px-5 py-3 text-[10px] font-bold uppercase text-on-surface-variant tracking-wider">Task /
+                  Project</th>
+                <th class="px-5 py-3 text-[10px] font-bold uppercase text-on-surface-variant tracking-wider">Priority
+                </th>
+                <th class="px-5 py-3 text-[10px] font-bold uppercase text-on-surface-variant tracking-wider">Due</th>
+                <th class="px-5 py-3 text-[10px] font-bold uppercase text-on-surface-variant tracking-wider text-right">
+                  Action</th>
+              </tr>
+            </thead>
+            <tbody id="tasksBody" class="divide-y divide-surface-container"></tbody>
+          </table>
+        </div>
+        <div id="tasksEmpty" style="display:none"
+          class="bg-surface-container-lowest rounded-xl p-8 flex flex-col items-center gap-3 text-center">
+          <span class="material-symbols-outlined text-4xl text-primary">task_alt</span>
+          <p class="font-headline font-bold text-on-background">No pending tasks</p>
+          <p class="font-body text-sm text-on-surface-variant">All clear — you're up to date.</p>
+        </div>
+      </section>
+
+      <!-- 4. My Projects -->
+      <section class="space-y-4">
         <h3 class="text-xl font-bold flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary" style="font-variation-settings:'FILL' 1">list_alt</span>
-          My Tasks
+          <span class="material-symbols-outlined text-primary" style="font-variation-settings:'FILL' 1">home_work</span>
+          My Projects
         </h3>
-      </div>
-      <div id="tasksSkeleton" class="space-y-3">
-        <div class="skeleton h-14"></div>
-        <div class="skeleton h-14"></div>
-      </div>
-      <div id="tasksTable" class="bg-surface-container-lowest rounded-xl overflow-x-auto shadow-sm" style="display:none">
-        <table class="w-full text-left border-collapse min-w-[600px]">
-          <thead>
-            <tr class="bg-surface-container-low">
-              <th class="px-5 py-3 text-[10px] font-bold uppercase text-on-surface-variant tracking-wider">Task / Project</th>
-              <th class="px-5 py-3 text-[10px] font-bold uppercase text-on-surface-variant tracking-wider">Priority</th>
-              <th class="px-5 py-3 text-[10px] font-bold uppercase text-on-surface-variant tracking-wider">Due</th>
-              <th class="px-5 py-3 text-[10px] font-bold uppercase text-on-surface-variant tracking-wider text-right">Action</th>
-            </tr>
-          </thead>
-          <tbody id="tasksBody" class="divide-y divide-surface-container"></tbody>
-        </table>
-      </div>
-      <div id="tasksEmpty" style="display:none" class="bg-surface-container-lowest rounded-xl p-8 flex flex-col items-center gap-3 text-center">
-        <span class="material-symbols-outlined text-4xl text-primary">task_alt</span>
-        <p class="font-headline font-bold text-on-background">No pending tasks</p>
-        <p class="font-body text-sm text-on-surface-variant">All clear — you're up to date.</p>
-      </div>
-    </section>
+        <div id="projectSkeleton" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="skeleton h-40"></div>
+          <div class="skeleton h-40"></div>
+          <div class="skeleton h-40"></div>
+        </div>
+        <div id="projectCards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" style="display:none"></div>
+        <div id="projectsEmpty" style="display:none" class="bg-surface-container-lowest rounded-xl p-6 text-center">
+          <p class="font-body text-sm text-on-surface-variant">No projects assigned yet. Contact your lead designer.</p>
+        </div>
+      </section>
 
-    <!-- 4. My Projects -->
-    <section class="space-y-4">
-      <h3 class="text-xl font-bold flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary" style="font-variation-settings:'FILL' 1">home_work</span>
-        My Projects
-      </h3>
-      <div id="projectSkeleton" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div class="skeleton h-40"></div>
-        <div class="skeleton h-40"></div>
-        <div class="skeleton h-40"></div>
-      </div>
-      <div id="projectCards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" style="display:none"></div>
-      <div id="projectsEmpty" style="display:none" class="bg-surface-container-lowest rounded-xl p-6 text-center">
-        <p class="font-body text-sm text-on-surface-variant">No projects assigned yet. Contact your lead designer.</p>
-      </div>
-    </section>
+      <!-- Footer -->
+      <footer class="pt-12 pb-8 border-t border-outline-variant/10 flex justify-between items-center opacity-40">
+        <p class="text-xs font-body font-medium">POLIGRID INTERIOR DESIGN SYSTEMS © 2026</p>
+        <div class="flex gap-6">
+          <span class="text-xs font-label font-bold">PRIVACY</span>
+          <span class="text-xs font-label font-bold">SECURITY</span>
+          <span class="text-xs font-label font-bold">SUPPORT</span>
+        </div>
+      </footer>
 
-    <!-- Footer -->
-    <footer class="pt-12 pb-8 border-t border-outline-variant/10 flex justify-between items-center opacity-40">
-      <p class="text-xs font-body font-medium">POLIGRID INTERIOR DESIGN SYSTEMS © 2024</p>
-      <div class="flex gap-6">
-        <span class="text-xs font-label font-bold">PRIVACY</span>
-        <span class="text-xs font-label font-bold">SECURITY</span>
-        <span class="text-xs font-label font-bold">SUPPORT</span>
-      </div>
-    </footer>
+    </div><!-- /max-w-7xl -->
+  </main>
 
-  </div><!-- /max-w-7xl -->
-</main>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="/client/auth.js"></script>
-<script src="/client/nav.js"></script>
-<script src="/client/studio-utils.js"></script>
-<script src="/client/supervisor-home.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="/client/auth.js"></script>
+  <script src="/client/nav.js"></script>
+  <script src="/client/studio-utils.js"></script>
+  <script src="/client/supervisor-home.js"></script>
 </body>
+
 </html>
