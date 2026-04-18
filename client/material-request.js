@@ -836,6 +836,21 @@ async function updateOrderStatus({ itemId, category, orderStatus }) {
         if (itemId && i.id === itemId) i.order_status = orderStatus;
         if (category && i.category === category) i.order_status = orderStatus;
       });
+      if (itemId) {
+        // Apply strikethrough on the row immediately for single-item updates
+        const row = document.querySelector(`tr[data-id="${CSS.escape(itemId)}"]`);
+        if (row) {
+          const delivered = orderStatus === 'delivered';
+          row.classList.toggle('opacity-50', delivered);
+          // Strike through name cell (second td in procure rows, first in read-only)
+          row.querySelectorAll('td').forEach(td => {
+            // Skip checkbox, vendor, and select cells
+            if (!td.querySelector('input[type="checkbox"]') && !td.querySelector('select') && !td.querySelector('input[type="text"]') && !td.dataset.vendorCell) {
+              td.classList.toggle('line-through', delivered);
+            }
+          });
+        }
+      }
       // Re-render to show updated badges (lightweight re-render)
       if (category) renderPage();
     }
@@ -929,11 +944,11 @@ function renderVendorCell(item) {
       </div>`;
   }
   return `
-    <div class="vendor-combobox-wrap relative" data-item-id="${escAttr(item.id)}">
+    <div class="vendor-combobox-wrap" data-item-id="${escAttr(item.id)}">
       <input type="text" placeholder="Search vendor…"
              class="vendor-search-input w-full border border-outline-variant rounded px-2 py-1 text-xs outline-none focus:border-primary"
              data-item-id="${escAttr(item.id)}" autocomplete="off"/>
-      <div class="vendor-dropdown hidden absolute left-0 top-full mt-1 z-30 bg-white border border-outline-variant rounded-lg shadow-lg w-56 max-h-48 overflow-y-auto"></div>
+      <div class="vendor-dropdown hidden fixed z-[200] bg-white border border-outline-variant rounded-lg shadow-lg w-56 max-h-48 overflow-y-auto"></div>
     </div>`;
 }
 
@@ -943,19 +958,28 @@ function wireVendorCombobox(inp) {
   const wrap = inp.closest('.vendor-combobox-wrap');
   const dropdown = wrap.querySelector('.vendor-dropdown');
 
+  function positionDropdown() {
+    const rect = inp.getBoundingClientRect();
+    dropdown.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.width = Math.max(rect.width, 224) + 'px';
+  }
+
   inp.addEventListener('input', () => {
     clearTimeout(_vendorDebounce);
     const q = inp.value.trim();
+    positionDropdown();
     _vendorDebounce = setTimeout(() => fetchVendorDropdown(inp, dropdown, q), 200);
   });
 
   inp.addEventListener('focus', () => {
+    positionDropdown();
     if (inp.value.trim().length === 0) fetchVendorDropdown(inp, dropdown, '');
   });
 
   // Close dropdown on outside click
   document.addEventListener('click', e => {
-    if (!wrap.contains(e.target)) dropdown.classList.add('hidden');
+    if (!wrap.contains(e.target) && !dropdown.contains(e.target)) dropdown.classList.add('hidden');
   }, { capture: true });
 }
 
