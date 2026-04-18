@@ -253,10 +253,14 @@
       </div>
 
       <!-- Stats Row -->
-      <div class="grid grid-cols-3 gap-5 mb-10">
+      <div class="grid grid-cols-4 gap-5 mb-10">
         <div class="bg-surface-container-lowest rounded-xl p-6 flex flex-col gap-1">
           <span class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Active Projects</span>
           <span class="font-headline font-extrabold text-4xl text-on-background" id="statActiveProjects">—</span>
+        </div>
+        <div class="bg-surface-container-lowest rounded-xl p-6 flex flex-col gap-1">
+          <span class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Material Requests</span>
+          <span class="font-headline font-extrabold text-4xl text-[#b45309]" id="statPendingMRApprovals">—</span>
         </div>
         <div class="bg-surface-container-lowest rounded-xl p-6 flex flex-col gap-1">
           <span class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Drawings to Review</span>
@@ -304,9 +308,9 @@
       <!-- ─── REVIEW QUEUE ──────────────────────────────────────── -->
       <section class="mb-10">
         <div class="flex items-center justify-between mb-6">
-          <h2 class="font-headline font-bold text-lg text-on-background">Drawings Awaiting Review</h2>
+          <h2 class="font-headline font-bold text-lg text-on-background">Pending Approvals</h2>
           <a href="/designer" class="text-primary font-semibold text-sm flex items-center gap-1 hover:gap-2 transition-all">
-            Open Reviewer <span class="material-symbols-outlined text-[16px]">east</span>
+            Open Drawings Reviewer <span class="material-symbols-outlined text-[16px]">east</span>
           </a>
         </div>
         <div id="reviewQueueContainer" class="space-y-2">

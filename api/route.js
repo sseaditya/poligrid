@@ -70,6 +70,7 @@ const {
   materialRequestCategories,
   materialRequestSummary,
   materialRequestAdminQueue,
+  materialRequestPendingApproval,
 } = require("../server/material_requests");
 
 const {
@@ -349,6 +350,9 @@ module.exports = async (req, res) => {
     }
     if (req.method === "GET" && pathname === "/api/material-requests/admin-queue") {
       return sendJson(res, 200, await materialRequestAdminQueue(req));
+    }
+    if (req.method === "GET" && pathname === "/api/material-requests/pending-approval") {
+      return sendJson(res, 200, await materialRequestPendingApproval(req));
     }
     if (req.method === "POST" && pathname === "/api/material-requests/create") {
       return sendJson(res, 200, await materialRequestCreate(req, await readJson(req)));

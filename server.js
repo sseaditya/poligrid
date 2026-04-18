@@ -53,7 +53,7 @@ const {
   vendorUpdate,
   vendorDelete,
 } = require("./server/vendors");
-const { materialRequestItemSetVendor } = require("./server/material_requests");
+const { materialRequestItemSetVendor, materialRequestPendingApproval } = require("./server/material_requests");
 
 loadEnvFile(path.join(ROOT, ".env.local"));
 
@@ -236,6 +236,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/material-requests/items/set-vendor") {
       return sendJson(res, 200, await materialRequestItemSetVendor(req, await readJson(req)));
+    }
+    if (req.method === "GET" && url.pathname === "/api/material-requests/pending-approval") {
+      return sendJson(res, 200, await materialRequestPendingApproval(req));
     }
 
     if (req.method === "GET" && url.pathname === "/api/audit/logs") {

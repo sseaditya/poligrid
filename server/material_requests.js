@@ -737,6 +737,33 @@ async function materialRequestAdminQueue(req) {
   return { pricingApprovals: pricing, activeDeliveries: activeItems || [] };
 }
 
+// ─── Pending approval queue for lead designer home ───────────────────────────
+async function materialRequestPendingApproval(req) {
+  await requireAuth(req, [...APPROVER_ROLES, "admin"]);
+  const sb = db.getClient();
+
+  const { data, error } = await sb
+    .from("material_requests")
+    .select(`
+      id, title, version_number, status, submitted_at,
+      project:projects(id, name, client_name),
+      submitted_by_profile:profiles!material_requests_submitted_by_fkey(full_name),
+      item_count:material_request_items(count)
+    `)
+    .eq("status", "pending_approval")
+    .order("submitted_at", { ascending: true })
+    .limit(20);
+
+  if (error) throw httpError(500, error.message);
+
+  const requests = (data || []).map(r => ({
+    ...r,
+    item_count: r.item_count?.[0]?.count ?? 0,
+  }));
+
+  return { requests };
+}
+
 module.exports = {
   materialRequestsList,
   materialRequestGet,
@@ -753,4 +780,5 @@ module.exports = {
   materialRequestCategories,
   materialRequestSummary,
   materialRequestAdminQueue,
+  materialRequestPendingApproval,
 };

@@ -76,6 +76,7 @@ function renderPage() {
   const canEdit        = ROLE_CAN.edit(_profile)    && (status === 'draft' || status === 'revision_requested');
   const canApprove     = ROLE_CAN.approve(_profile) && status === 'pending_approval';
   const canProcure     = ROLE_CAN.procure(_profile) && status === 'procurement_active'; // procure checkbox only when active
+  const canAssignVendor = ROLE_CAN.procure(_profile) && ['approved','pricing_review','procurement_active'].includes(status);
   const canEditRate    = ROLE_CAN.editRate(_profile) && (status === 'approved' || status === 'pricing_review');
   const canOrderStatus = ROLE_CAN.procure(_profile) && status === 'procurement_active';
   const canApprovePricing = ROLE_CAN.approvePricing(_profile) && status === 'pricing_review';
@@ -91,7 +92,7 @@ function renderPage() {
 
   const content = document.getElementById('pageContent');
   content.innerHTML = buildHeader(canEdit, canApprove, canEditRate, canApprovePricing, showPricing)
-    + buildBody(canEdit, canProcure, canEditRate, canOrderStatus, showPricing, isReadOnly);
+    + buildBody(canEdit, canProcure, canEditRate, canOrderStatus, showPricing, isReadOnly, canAssignVendor);
 
   wireActions(canEdit, canApprove, canEditRate, canApprovePricing, canOrderStatus);
 
@@ -131,15 +132,16 @@ function renderPage() {
     content.querySelectorAll('.procure-checkbox').forEach(cb => {
       cb.addEventListener('change', () => toggleProcured(cb));
     });
-    // Vendor comboboxes
+  }
+
+  // Vendor assignment (available from 'approved' status onwards)
+  if (canAssignVendor) {
     content.querySelectorAll('.vendor-search-input').forEach(inp => {
       wireVendorCombobox(inp);
     });
-    // Vendor chip clicks (open popup)
     content.querySelectorAll('.vendor-chip').forEach(chip => {
       chip.addEventListener('click', () => openVendorPopup(chip.dataset.vendorId));
     });
-    // Clear vendor buttons
     content.querySelectorAll('.vendor-clear-btn').forEach(btn => {
       btn.addEventListener('click', () => clearVendor(btn.dataset.itemId));
     });
@@ -309,7 +311,7 @@ function buildHeader(canEdit, canApprove, canEditRate, canApprovePricing, showPr
 }
 
 // ─── Items body ───────────────────────────────────────────────────────────────
-function buildBody(canEdit, canProcure, canEditRate, canOrderStatus, showPricing, isReadOnly) {
+function buildBody(canEdit, canProcure, canEditRate, canOrderStatus, showPricing, isReadOnly, canAssignVendor) {
   const grouped = {};
   CATEGORIES.forEach(c => { grouped[c] = []; });
   _items.forEach(item => {
@@ -333,7 +335,7 @@ function buildBody(canEdit, canProcure, canEditRate, canOrderStatus, showPricing
     const catTotal = showPricing ? catItems.reduce((s, i) => s + ((i.quantity||0)*(i.estimated_rate||0)), 0) : 0;
     const hasItems = catItems.length > 0;
 
-    const rows = catItems.map(item => buildItemRow(item, canEdit, canProcure, canEditRate, canOrderStatus, showPricing, ORDER_STATUS_OPTS)).join('');
+    const rows = catItems.map(item => buildItemRow(item, canEdit, canProcure, canEditRate, canOrderStatus, showPricing, ORDER_STATUS_OPTS, canAssignVendor)).join('');
 
     const addBtnHtml = canEdit
       ? `<button class="add-item-btn flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline px-4 py-3" data-category="${esc(cat)}">
@@ -381,7 +383,7 @@ function buildBody(canEdit, canProcure, canEditRate, canOrderStatus, showPricing
                   <th style="width:80px">Unit</th>
                   ${showPricing ? `<th style="width:100px;text-align:right">Rate (₹)</th>` : ''}
                   ${showPricing ? `<th style="width:100px;text-align:right">Amount (₹)</th>` : ''}
-                  ${canProcure ? '<th style="width:170px">Vendor</th>' : ''}
+                  ${canAssignVendor ? '<th style="width:170px">Vendor</th>' : ''}
                   ${canOrderStatus ? '<th style="width:130px">Order Status</th>' : ''}
                   ${canEdit ? '<th style="width:40px"></th>' : ''}
                 </tr>
@@ -422,7 +424,7 @@ function buildBody(canEdit, canProcure, canEditRate, canOrderStatus, showPricing
 }
 
 // ─── Single item row ──────────────────────────────────────────────────────────
-function buildItemRow(item, canEdit, canProcure, canEditRate, canOrderStatus, showPricing, orderStatusOpts) {
+function buildItemRow(item, canEdit, canProcure, canEditRate, canOrderStatus, showPricing, orderStatusOpts, canAssignVendor) {
   const amount = (item.quantity || 0) * (item.estimated_rate || 0);
   const procuredClass = item.procured ? 'opacity-50' : '';
 
@@ -486,6 +488,7 @@ function buildItemRow(item, canEdit, canProcure, canEditRate, canOrderStatus, sh
         <td style="text-align:right">
           <span class="item-amount text-sm font-semibold" data-id="${item.id}">${amount > 0 ? '₹'+fmtNum(amount) : '—'}</span>
         </td>
+        ${canAssignVendor ? renderVendorCell(item) : ''}
       </tr>`;
   }
 

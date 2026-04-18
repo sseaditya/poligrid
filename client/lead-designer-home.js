@@ -43,16 +43,17 @@
 
   // Load all data in parallel — single assignment call replaces per-project N+1
   const projectIds = projects.map(p => p.id);
-  const [summary, reviewData, allAssignments] = await Promise.all([
+  const [summary, reviewData, allAssignments, pendingMatReqs] = await Promise.all([
     fetchDrawingSummary(projectIds),
     fetchPendingReview(),
     fetchAllAssignments(projectIds),
+    fetchPendingMaterialRequests(),
   ]);
 
-  renderStats(summary, reviewData);
-  renderActionCards(projects, summary, reviewData);
+  renderStats(summary, reviewData, pendingMatReqs);
+  renderActionCards(projects, summary, reviewData, pendingMatReqs);
   renderProjects(projects, summary, allAssignments);
-  renderReviewQueue(reviewData);
+  renderReviewQueue(reviewData, pendingMatReqs);
 
   // ── Modal wiring ────────────────────────────────────────────────────────────
   document.getElementById('browseModalClose').addEventListener('click',  closeBrowseModal);
@@ -64,18 +65,29 @@
   document.getElementById('emptyCreateBtn')?.addEventListener('click', openCreateModal);
 
   // ── Stats ───────────────────────────────────────────────────────────────────
-  function renderStats(summary, reviewData) {
+  function renderStats(summary, reviewData, pendingMatReqs) {
     let totalPending   = reviewData?.drawings?.length ?? 0;
     let totalRevisions = 0;
     Object.values(summary).forEach(s => { totalRevisions += (s.revision_requested || 0); });
     document.getElementById('statPendingReview').textContent = totalPending;
     document.getElementById('statRevisions').textContent     = totalRevisions;
+    document.getElementById('statPendingMRApprovals').textContent = pendingMatReqs?.requests?.length ?? 0;
   }
 
   // ── Action Cards ─────────────────────────────────────────────────────────────
-  function renderActionCards(projects, summary, reviewData) {
+  function renderActionCards(projects, summary, reviewData, pendingMatReqs) {
     const grid = document.getElementById('actionCardsGrid');
     const cards = [];
+
+    const mrCount = pendingMatReqs?.requests?.length ?? 0;
+    if (mrCount > 0) {
+      cards.push({
+        icon: 'inventory_2', iconBg: 'bg-[#fff8e1]', iconColor: 'text-[#b45309]',
+        label: 'Material Requests to Approve', value: mrCount,
+        desc: `${mrCount} request${mrCount !== 1 ? 's' : ''} from site supervisors awaiting your approval`,
+        cta: 'Review Requests', href: '#mr-review-queue', urgent: mrCount > 2,
+      });
+    }
 
     const pendingCount   = reviewData?.drawings?.length ?? 0;
     let   revisionCount  = 0;
@@ -274,36 +286,78 @@
   }
 
   // ── Review queue ─────────────────────────────────────────────────────────────
-  function renderReviewQueue(reviewData) {
+  function renderReviewQueue(reviewData, pendingMatReqs) {
     const container = document.getElementById('reviewQueueContainer');
-    const drawings = reviewData?.drawings || [];
-    if (!drawings.length) {
-      container.innerHTML = `<div class="bg-surface-container-lowest rounded-xl p-6 flex items-center gap-4">
-        <span class="material-symbols-outlined text-primary text-2xl">check_circle</span>
-        <p class="font-body text-sm text-on-surface-variant">No drawings awaiting review. All clear!</p>
-      </div>`;
-      return;
+    const drawings  = reviewData?.drawings || [];
+    const matReqs   = pendingMatReqs?.requests || [];
+
+    let html = '';
+
+    // ── Material requests section (top) ───────────────────────────────────────
+    if (matReqs.length) {
+      html += `
+        <div id="mr-review-queue" class="mb-6">
+          <p class="font-label font-bold text-[10px] uppercase tracking-widest text-on-surface-variant mb-3">Material Requests Pending Approval</p>
+          <div class="space-y-2">
+            ${matReqs.slice(0, 10).map(r => `
+              <div class="bg-surface-container-lowest rounded-xl px-5 py-4 flex items-center gap-4">
+                <span class="material-symbols-outlined text-[#b45309] bg-[#fff8e1] rounded-lg p-1.5 text-[18px] flex-shrink-0">inventory_2</span>
+                <div class="flex-1 min-w-0">
+                  <p class="font-body text-sm font-semibold text-on-background truncate">${esc(r.title)}</p>
+                  <p class="font-body text-[11px] text-on-surface-variant mt-0.5">
+                    ${r.project?.name ? esc(r.project.name) : 'Unknown project'}
+                    ${r.project?.client_name ? '· ' + esc(r.project.client_name) : ''}
+                    ${r.submitted_by_profile?.full_name ? '· by ' + esc(r.submitted_by_profile.full_name) : ''}
+                    · ${r.item_count} item${r.item_count !== 1 ? 's' : ''}
+                  </p>
+                </div>
+                <a href="/material_request?id=${esc(r.id)}" class="text-[11px] font-bold px-4 py-2 rounded-lg flex-shrink-0" style="background:linear-gradient(135deg,#b45309,#92400e);color:#fff8e1;text-decoration:none">
+                  Review →
+                </a>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
     }
-    container.innerHTML = drawings.slice(0, 10).map(d => `
-      <div class="bg-surface-container-lowest rounded-xl px-5 py-4 flex items-center gap-4">
-        <span class="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-container px-2.5 py-1 rounded-full flex-shrink-0">${esc(d.drawing_type)}</span>
-        <div class="flex-1 min-w-0">
-          <p class="font-body text-sm font-semibold text-on-background truncate">${esc(d.title)}</p>
-          <p class="font-body text-[11px] text-on-surface-variant mt-0.5">
-            ${d.project?.name ? esc(d.project.name) : 'Unknown project'}
-            ${d.project?.client_name ? '· ' + esc(d.project.client_name) : ''}
-            · v${d.version_number}
-            ${d.uploader?.full_name ? '· ' + esc(d.uploader.full_name) : ''}
-          </p>
-        </div>
-        <div class="flex-shrink-0 flex items-center gap-2">
-          <button class="inline-review-btn text-[11px] font-bold px-4 py-2 rounded-lg cursor-pointer border-none" style="background:linear-gradient(135deg,#526258,#46564c);color:#eafcef" data-id="${esc(d.id)}" data-title="${esc(d.title)}" data-type="${esc(d.drawing_type)}" data-project="${esc(d.project?.name || '')}" data-file-path="${esc(d.file_path || '')}" data-file-name="${esc(d.file_name || '')}">
-            Review
-          </button>
-          <a href="/designer?projectId=${d.project_id}" class="text-on-surface-variant font-semibold text-xs hover:text-primary transition-colors" title="Open in Drawings Manager">Open →</a>
-        </div>
-      </div>
-    `).join('');
+
+    // ── Drawings section ──────────────────────────────────────────────────────
+    if (drawings.length) {
+      html += `
+        <div>
+          ${matReqs.length ? `<p class="font-label font-bold text-[10px] uppercase tracking-widest text-on-surface-variant mb-3">Drawings Awaiting Review</p>` : ''}
+          <div class="space-y-2">
+            ${drawings.slice(0, 10).map(d => `
+              <div class="bg-surface-container-lowest rounded-xl px-5 py-4 flex items-center gap-4">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-container px-2.5 py-1 rounded-full flex-shrink-0">${esc(d.drawing_type)}</span>
+                <div class="flex-1 min-w-0">
+                  <p class="font-body text-sm font-semibold text-on-background truncate">${esc(d.title)}</p>
+                  <p class="font-body text-[11px] text-on-surface-variant mt-0.5">
+                    ${d.project?.name ? esc(d.project.name) : 'Unknown project'}
+                    ${d.project?.client_name ? '· ' + esc(d.project.client_name) : ''}
+                    · v${d.version_number}
+                    ${d.uploader?.full_name ? '· ' + esc(d.uploader.full_name) : ''}
+                  </p>
+                </div>
+                <div class="flex-shrink-0 flex items-center gap-2">
+                  <button class="inline-review-btn text-[11px] font-bold px-4 py-2 rounded-lg cursor-pointer border-none" style="background:linear-gradient(135deg,#526258,#46564c);color:#eafcef" data-id="${esc(d.id)}" data-title="${esc(d.title)}" data-type="${esc(d.drawing_type)}" data-project="${esc(d.project?.name || '')}" data-file-path="${esc(d.file_path || '')}" data-file-name="${esc(d.file_name || '')}">
+                    Review
+                  </button>
+                  <a href="/designer?projectId=${d.project_id}" class="text-on-surface-variant font-semibold text-xs hover:text-primary transition-colors" title="Open in Drawings Manager">Open →</a>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+    }
+
+    if (!matReqs.length && !drawings.length) {
+      html = `<div class="bg-surface-container-lowest rounded-xl p-6 flex items-center gap-4">
+        <span class="material-symbols-outlined text-primary text-2xl">check_circle</span>
+        <p class="font-body text-sm text-on-surface-variant">No pending approvals. All clear!</p>
+      </div>`;
+    }
+
+    container.innerHTML = html;
     container.querySelectorAll('.inline-review-btn').forEach(btn => {
       btn.addEventListener('click', () => openInlineReview(btn.dataset.id, btn.dataset.title, btn.dataset.type, btn.dataset.project, btn.dataset.filePath, btn.dataset.fileName));
     });
@@ -339,6 +393,14 @@
   async function fetchPendingReview() {
     try {
       const r = await studioFetch('/api/drawings/pending');
+      if (!r.ok) return null;
+      return await r.json();
+    } catch { return null; }
+  }
+
+  async function fetchPendingMaterialRequests() {
+    try {
+      const r = await studioFetch('/api/material-requests/pending-approval');
       if (!r.ok) return null;
       return await r.json();
     } catch { return null; }
