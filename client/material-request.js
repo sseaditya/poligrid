@@ -13,7 +13,7 @@ const CATEGORIES = [
 
 const ROLE_CAN = {
   edit:          p => ['site_supervisor','admin'].includes(p.role),
-  approve:       p => ['lead_designer','admin'].includes(p.role),
+  approve:       p => ['lead_designer'].includes(p.role),
   procure:       p => ['procurement','admin'].includes(p.role),
   editRate:      p => ['procurement','admin'].includes(p.role),
   approvePricing: p => ['admin'].includes(p.role),

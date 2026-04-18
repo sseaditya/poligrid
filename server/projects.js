@@ -631,6 +631,19 @@ async function projectUpdatePhase(body, auth) {
     .eq("id", projectId)
     .maybeSingle();
 
+  // Gate: moving out of design phase requires at least 1 approved drawing assignment
+  const DESIGN_FORWARD = ["prep", "production", "execution", "completed"];
+  if (projectBefore?.phase === "design" && DESIGN_FORWARD.includes(phase)) {
+    const { data: approvedAssignments } = await sb
+      .from("drawing_assignments")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("status", "approved");
+    if (!approvedAssignments?.length) {
+      throw httpError(409, "At least one drawing must be assigned and approved by the lead designer before the project can leave the design phase.");
+    }
+  }
+
   const { error } = await sb.from("projects")
     .update({ phase, updated_at: new Date().toISOString() })
     .eq("id", projectId);
@@ -689,7 +702,7 @@ async function projectUpdatePhaseFlag(req, body) {
   const { profile } = await requireAuth(req, ALLOWED_FLAGS[flag]);
 
   const sb = db.getClient();
-  const { data: project } = await sb.from("projects").select("name").eq("id", projectId).maybeSingle();
+  const { data: project } = await sb.from("projects").select("name, phase, production_done, final_payment_done").eq("id", projectId).maybeSingle();
   const { error } = await sb.from("projects")
     .update({ [flag]: !!value, updated_at: new Date().toISOString() })
     .eq("id", projectId);
@@ -704,6 +717,37 @@ async function projectUpdatePhaseFlag(req, body) {
     logMessage: `${profile.full_name} marked ${flag.replace(/_/g, " ")} as ${value ? "done" : "undone"} for ${project?.name || "project"}.`,
     metadata: { flag, value: !!value },
   });
+
+  // Auto-advance phase when prerequisites are met
+  if (!!value) {
+    const phase = project?.phase;
+    let nextPhase = null;
+
+    if (flag === "prep_approved" && phase === "prep") {
+      nextPhase = "production";
+    } else if (flag === "production_done" && phase === "production" && project?.final_payment_done) {
+      nextPhase = "execution";
+    } else if (flag === "final_payment_done" && phase === "production" && project?.production_done) {
+      nextPhase = "execution";
+    } else if (flag === "execution_confirmed" && phase === "execution") {
+      nextPhase = "completed";
+    }
+
+    if (nextPhase) {
+      await sb.from("projects")
+        .update({ phase: nextPhase, updated_at: new Date().toISOString() })
+        .eq("id", projectId);
+      await logAuditEvent({
+        category: "design",
+        subcategory: "project_phase_change",
+        projectId,
+        actionedBy: profile.id,
+        actionedByName: profile.full_name,
+        logMessage: `Phase auto-advanced from ${phase} to ${nextPhase} for ${project?.name || "project"} after ${flag.replace(/_/g, " ")} was completed.`,
+        metadata: { previousPhase: phase, newPhase: nextPhase, triggeredByFlag: flag },
+      });
+    }
+  }
 
   return { ok: true };
 }

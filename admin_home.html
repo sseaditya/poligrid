@@ -130,10 +130,34 @@
       </button>
     </div>
 
+    <!-- ─── NEEDS YOUR APPROVAL ─────────────────────────────────── -->
+    <section class="mb-8" id="approvalQueueSection">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-error text-[18px]">pending_actions</span>
+        <h2 class="font-headline font-bold text-lg text-on-background">Needs Your Approval</h2>
+        <span id="approvalBadge" class="hidden ml-1 px-2 py-0.5 rounded-full bg-error text-on-error text-xs font-bold"></span>
+      </div>
+      <div id="approvalQueueList">
+        <div class="skeleton h-16 rounded-xl mb-2"></div>
+        <div class="skeleton h-16 rounded-xl mb-2"></div>
+      </div>
+    </section>
+
+    <!-- ─── ACTIVE DELIVERIES ─────────────────────────────────── -->
+    <section class="mb-10" id="deliveriesSection">
+      <div class="flex items-center gap-2 mb-4">
+        <span class="material-symbols-outlined text-primary text-[18px]">local_shipping</span>
+        <h2 class="font-headline font-bold text-lg text-on-background">Active Deliveries</h2>
+      </div>
+      <div id="deliveriesList">
+        <div class="skeleton h-16 rounded-xl mb-2"></div>
+        <div class="skeleton h-16 rounded-xl"></div>
+      </div>
+    </section>
+
     <!-- ─── KPI STATS ROW ───────────────────────────────────────── -->
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-10" id="kpiRow">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-10" id="kpiRow">
       <!-- Filled by JS -->
-      <div class="skeleton h-24 rounded-xl col-span-1"></div>
       <div class="skeleton h-24 rounded-xl col-span-1"></div>
       <div class="skeleton h-24 rounded-xl col-span-1"></div>
       <div class="skeleton h-24 rounded-xl col-span-1"></div>

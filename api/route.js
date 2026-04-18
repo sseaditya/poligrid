@@ -69,6 +69,7 @@ const {
   materialRequestItemUpdateOrderStatus,
   materialRequestCategories,
   materialRequestSummary,
+  materialRequestAdminQueue,
 } = require("../server/material_requests");
 
 const {
@@ -198,11 +199,11 @@ module.exports = async (req, res) => {
       return sendJson(res, 200, await projectUpdateStatus(await readJson(req), auth));
     }
     if (req.method === "POST" && pathname === "/api/project/update-phase") {
-      const auth = await requireAuth(req, ["admin", "lead_designer"]);
+      const auth = await requireAuth(req, ["admin"]);
       return sendJson(res, 200, await projectUpdatePhase(await readJson(req), auth));
     }
     if (req.method === "POST" && pathname === "/api/project/toggle-on-hold") {
-      const auth = await requireAuth(req, ["admin", "lead_designer"]);
+      const auth = await requireAuth(req, ["admin"]);
       return sendJson(res, 200, await projectToggleOnHold(await readJson(req), auth));
     }
     if (req.method === "POST" && pathname === "/api/project/update-phase-flag") {
@@ -337,6 +338,9 @@ module.exports = async (req, res) => {
     if (req.method === "GET" && pathname === "/api/material-requests/summary") {
       const ids = (url.searchParams.get("projectIds") || "").split(",").filter(Boolean);
       return sendJson(res, 200, await materialRequestSummary(req, ids));
+    }
+    if (req.method === "GET" && pathname === "/api/material-requests/admin-queue") {
+      return sendJson(res, 200, await materialRequestAdminQueue(req));
     }
     if (req.method === "POST" && pathname === "/api/material-requests/create") {
       return sendJson(res, 200, await materialRequestCreate(req, await readJson(req)));

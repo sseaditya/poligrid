@@ -76,7 +76,8 @@ const dotColor = s => ({ approved: '#526258', pending_review: '#d97706', revisio
   document.getElementById('statusFilter').addEventListener('change', renderProjectList);
 
   // Parallel data fetch
-  const [, , teamStats] = await Promise.all([
+  await Promise.all([
+    loadAdminQueue(),
     loadProjects(),
     loadDashboard(),
     loadTeamStats(),
@@ -84,6 +85,18 @@ const dotColor = s => ({ approved: '#526258', pending_review: '#d97706', revisio
 })();
 
 // ── Data fetchers ─────────────────────────────────────────────────────────────
+
+async function loadAdminQueue() {
+  try {
+    const res = await studioFetch('/api/material-requests/admin-queue');
+    const data = await res.json();
+    renderApprovalQueue(data.pricingApprovals || []);
+    renderDeliveries(data.activeDeliveries || []);
+  } catch {
+    renderApprovalQueue([]);
+    renderDeliveries([]);
+  }
+}
 
 async function loadProjects() {
   try {
@@ -159,11 +172,11 @@ function renderKPIs() {
   const pendingDrawings = _teamStats?.pendingDrawingsTotal ?? '—';
 
   const kpis = [
-    { label: 'Total Projects',     value: total,           icon: 'architecture',  accent: false },
-    { label: 'In Design',          value: inDesign,        icon: 'draw',          accent: false },
-    { label: 'On Hold',            value: onHold,          icon: 'pause_circle',  accent: onHold > 0 },
-    { label: 'Drawings to Review', value: pendingDrawings, icon: 'rate_review',   accent: Number(pendingDrawings) > 0 },
-    { label: 'Completed',          value: completed,       icon: 'check_circle',  accent: completed > 0 },
+    { label: 'Total Projects', value: total,     icon: 'architecture', accent: false },
+    { label: 'In Design',      value: inDesign,  icon: 'draw',         accent: false },
+    { label: 'On Hold',        value: onHold,    icon: 'pause_circle', accent: onHold > 0 },
+    { label: 'Completed',      value: completed, icon: 'check_circle', accent: completed > 0 },
+    { label: 'Total Team',     value: _teamStats?.roleCount ? Object.values(_teamStats.roleCount).reduce((s, n) => s + n, 0) : '—', icon: 'group', accent: false },
   ];
 
   document.getElementById('kpiRow').innerHTML = kpis.map(k => `
@@ -177,6 +190,79 @@ function renderKPIs() {
   `).join('');
 }
 
+
+// ── Render: Pricing Approval Queue ───────────────────────────────────────────
+
+function renderApprovalQueue(items) {
+  const el = document.getElementById('approvalQueueList');
+  const badge = document.getElementById('approvalBadge');
+  if (!el) return;
+
+  if (badge) {
+    if (items.length > 0) {
+      badge.textContent = items.length;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+
+  if (!items.length) {
+    el.innerHTML = `<div class="bg-surface-container-lowest rounded-xl p-5 text-sm text-on-surface-variant">No pricing approvals pending. All clear.</div>`;
+    return;
+  }
+
+  el.innerHTML = items.map(r => `
+    <a href="/material_request?id=${r.id}" class="flex items-center justify-between bg-surface-container-lowest rounded-xl px-5 py-4 mb-2 hover:ring-1 hover:ring-primary/30 transition-all group no-underline">
+      <div class="flex items-center gap-4">
+        <span class="material-symbols-outlined text-error text-[20px]" style="font-variation-settings:'FILL' 1">receipt_long</span>
+        <div>
+          <p class="font-label font-bold text-sm text-on-background">${escHtml(r.project?.name || 'Project')} — ${escHtml(r.title || 'Material Request')}</p>
+          <p class="font-body text-xs text-on-surface-variant mt-0.5">${r.project?.client_name ? escHtml(r.project.client_name) + ' · ' : ''}${r.item_count} item${r.item_count !== 1 ? 's' : ''} · Awaiting price approval</p>
+        </div>
+      </div>
+      <span class="font-label font-bold text-xs text-primary group-hover:underline">Approve Pricing →</span>
+    </a>`).join('');
+}
+
+// ── Render: Active Deliveries ─────────────────────────────────────────────────
+
+function renderDeliveries(items) {
+  const el = document.getElementById('deliveriesList');
+  if (!el) return;
+
+  if (!items.length) {
+    el.innerHTML = `<div class="bg-surface-container-lowest rounded-xl p-5 text-sm text-on-surface-variant">No active deliveries right now.</div>`;
+    return;
+  }
+
+  // Group by project
+  const byProject = {};
+  for (const item of items) {
+    const pid = item.request?.project?.id || 'unknown';
+    if (!byProject[pid]) byProject[pid] = { project: item.request?.project, items: [] };
+    byProject[pid].items.push(item);
+  }
+
+  const ORDER_LABEL = { ordered: 'Ordered', in_transit: 'In Transit' };
+  const ORDER_COLOR = { ordered: 'text-secondary', in_transit: 'text-tertiary' };
+
+  el.innerHTML = Object.values(byProject).map(group => `
+    <div class="bg-surface-container-lowest rounded-xl px-5 py-4 mb-2">
+      <p class="font-label font-bold text-sm text-on-background mb-2">${escHtml(group.project?.name || 'Project')}${group.project?.client_name ? ' <span class="font-normal text-on-surface-variant">— ' + escHtml(group.project.client_name) + '</span>' : ''}</p>
+      <div class="flex flex-col gap-1">
+        ${group.items.map(item => `
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-on-surface-variant">${escHtml(item.description || item.category || '—')}${item.quantity ? ' · ' + item.quantity + (item.unit ? ' ' + item.unit : '') : ''}</span>
+            <span class="font-bold ${ORDER_COLOR[item.order_status] || 'text-on-surface-variant'}">${ORDER_LABEL[item.order_status] || item.order_status}</span>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 // ── Render: Project list (lead-designer card style) ───────────────────────────
 

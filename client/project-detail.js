@@ -64,9 +64,9 @@ const DRAWING_STATUS_LABELS = {
 const is = (...roles) => roles.includes(_profile?.role);
 const can = {
   editProject:          () => is("admin", "lead_designer", "sales", "designer"),
-  changeStatus:         () => is("admin", "lead_designer"), // legacy alias
-  changePhase:          () => is("admin", "lead_designer"),
-  toggleOnHold:         () => is("admin", "lead_designer"),
+  changeStatus:         () => is("admin"), // legacy alias
+  changePhase:          () => is("admin"),
+  toggleOnHold:         () => is("admin"),
   markPaid:             () => is("admin", "sales"),         // advance payment
   markDesignPayment:    () => is("admin", "sales"),
   markPrepApproved:     () => is("admin", "lead_designer"),
@@ -79,13 +79,14 @@ const can = {
   seeAIResults:         () => is("admin", "sales", "lead_designer", "designer"),
   seeConcepts:          () => is("admin", "lead_designer", "designer"),
   seeDrawings:          () => is("admin", "lead_designer", "designer"),
+  seeApprovedDrawings:  () => is("site_supervisor"),
   seeTasks:             () => is("designer"),
   fitoutPlanner:        () => is("admin", "lead_designer", "sales"),
   shareClient:          () => is("admin", "sales"),
   // ── Material Requests (site_supervisor, procurement) ────────────────────────
   seeMatReqs:           () => is("admin", "lead_designer", "site_supervisor", "procurement"),
   createMatReq:         () => is("admin", "site_supervisor"),
-  approveMatReq:        () => is("admin", "lead_designer"),
+  approveMatReq:        () => is("lead_designer"),
   markProcured:         () => is("admin", "procurement"),
   approvePricing:       () => is("admin"),
   editRate:             () => is("admin", "procurement"),
@@ -392,7 +393,8 @@ function buildMainSections(project) {
   const parts = [];
   if (can.seeAIResults()) parts.push(buildAISection(project));
   if (can.seeConcepts())  parts.push(buildConceptsSection(project));
-  if (can.seeDrawings())  parts.push(buildDrawingsSection(_drawings, project));
+  if (can.seeDrawings())         parts.push(buildDrawingsSection(_drawings, project));
+  if (can.seeApprovedDrawings()) parts.push(buildApprovedDrawingsSection(_drawings));
   // Material Requests: shown in prep / production / execution phases
   const MAT_REQ_PHASES = ["prep", "production", "execution", "completed"];
   if (can.seeMatReqs() && MAT_REQ_PHASES.includes(project.phase)) {
@@ -668,6 +670,48 @@ function buildDrawingsSection(drawings, project) {
                   <span class="material-symbols-outlined" style="font-size:14px">upload_file</span> Upload First Drawing
                 </a>` : ""}
          </div>`}
+    </div>`;
+}
+
+// ─── Approved Drawings (site_supervisor read-only view) ──────────────────────
+function buildApprovedDrawingsSection(drawings) {
+  const approved = (drawings || []).filter(d => d.status === "approved");
+
+  const rows = approved.length
+    ? approved.map(d => `
+        <tr>
+          <td style="padding:10px 12px;font-weight:600;color:var(--color-on-surface)">${escHtml(DRAWING_TYPE_LABELS[d.drawing_type] || d.drawing_type)}</td>
+          <td style="padding:10px 12px;color:var(--color-on-surface-variant)">${escHtml(d.title || "—")}</td>
+          <td style="padding:10px 12px;color:var(--color-on-surface-variant)">${d.created_at ? new Date(d.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</td>
+          <td style="padding:10px 12px;text-align:right">
+            <button class="ghost-sm sup-view-drawing-btn" data-id="${d.id}" data-path="${escHtml(d.storage_path || "")}" data-title="${escHtml(d.title || "Drawing")}" style="font-size:12px">
+              <span class="material-symbols-outlined" style="font-size:13px;vertical-align:middle">open_in_new</span> View
+            </button>
+          </td>
+        </tr>`).join("")
+    : `<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--color-on-surface-variant);font-size:13px">No approved drawings yet.</td></tr>`;
+
+  return `
+    <div class="dash-section" id="approvedDrawingsSection">
+      <div class="dash-section-head" style="margin-bottom:16px">
+        <div class="dash-section-icon">
+          <span class="material-symbols-outlined" style="color:#526258">description</span>
+          <h2 class="dash-section-title">Approved Drawings</h2>
+        </div>
+      </div>
+      <div style="overflow-x:auto;border-radius:8px;border:1px solid var(--color-outline-variant)">
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:var(--color-surface-container-low)">
+              <th style="padding:10px 12px;text-align:left;font-weight:700;color:var(--color-on-surface-variant);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Type</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700;color:var(--color-on-surface-variant);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Title</th>
+              <th style="padding:10px 12px;text-align:left;font-weight:700;color:var(--color-on-surface-variant);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Date</th>
+              <th style="padding:10px 12px;text-align:right;font-weight:700;color:var(--color-on-surface-variant);font-size:11px;text-transform:uppercase;letter-spacing:.06em">Action</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
     </div>`;
 }
 
@@ -1199,6 +1243,20 @@ function wireInteractions(project) {
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 10000);
       } catch { alert("Could not download drawing."); }
+    });
+  });
+
+  // Supervisor approved-drawings view buttons
+  document.querySelectorAll(".sup-view-drawing-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const path = btn.dataset.path;
+      if (!path) { alert("Drawing file not available."); return; }
+      const win = window.open("", "_blank");
+      try {
+        const res = await apiFetch(`/api/drawings/signed-url?path=${encodeURIComponent(path)}`);
+        const { url } = await res.json();
+        win.location.href = url;
+      } catch { win.close(); alert("Could not open drawing."); }
     });
   });
 

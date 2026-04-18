@@ -6,7 +6,7 @@ const { httpError } = require("./utils");
 const { logAuditEvent } = require("./audit");
 
 const SUPERVISOR_ROLES       = ["site_supervisor", "admin"];
-const APPROVER_ROLES         = ["lead_designer", "admin"];
+const APPROVER_ROLES         = ["lead_designer"];
 const PROCUREMENT_ROLES      = ["procurement", "admin"];
 const PRICING_APPROVER_ROLES = ["admin"];
 const READ_ROLES             = ["site_supervisor", "lead_designer", "admin", "procurement"];
@@ -103,15 +103,6 @@ async function materialRequestCreate(req, body) {
     .eq("project_id", projectId)
     .order("version_number", { ascending: false })
     .limit(1);
-
-  // Prevent creating a new request if the last one is still active
-  const ACTIVE_STATUSES = ["draft", "pending_approval", "pricing_review", "procurement_active"];
-  if (existing?.length) {
-    const last = existing[0];
-    if (ACTIVE_STATUSES.includes(last.status)) {
-      throw httpError(409, "There is already an active material request for this project. Complete it before creating a supplement.");
-    }
-  }
 
   const versionNumber = existing?.length ? existing[0].version_number + 1 : 1;
   const requestTitle  = title?.trim() ||
@@ -673,6 +664,43 @@ async function materialRequestSummary(req, projectIds) {
   return { summary };
 }
 
+// ─── Admin queue: pricing approvals + active deliveries ──────────────────────
+async function materialRequestAdminQueue(req) {
+  await requireAuth(req, ["admin"]);
+  const sb = db.getClient();
+
+  const [{ data: pricingRequests }, { data: activeItems }] = await Promise.all([
+    // All requests awaiting pricing approval
+    sb.from("material_requests")
+      .select(`
+        id, title, version_number, status, created_at,
+        project:projects(id, name, client_name),
+        item_count:material_request_items(count)
+      `)
+      .eq("status", "pricing_review")
+      .order("created_at", { ascending: true }),
+
+    // All items in ordered / in_transit states
+    sb.from("material_request_items")
+      .select(`
+        id, description, category, quantity, unit, order_status, updated_at,
+        request:material_requests(
+          id, title,
+          project:projects(id, name, client_name)
+        )
+      `)
+      .in("order_status", ["ordered", "in_transit"])
+      .order("updated_at", { ascending: false }),
+  ]);
+
+  const pricing = (pricingRequests || []).map(r => ({
+    ...r,
+    item_count: r.item_count?.[0]?.count ?? 0,
+  }));
+
+  return { pricingApprovals: pricing, activeDeliveries: activeItems || [] };
+}
+
 module.exports = {
   materialRequestsList,
   materialRequestGet,
@@ -687,4 +715,5 @@ module.exports = {
   materialRequestItemUpdateOrderStatus,
   materialRequestCategories,
   materialRequestSummary,
+  materialRequestAdminQueue,
 };

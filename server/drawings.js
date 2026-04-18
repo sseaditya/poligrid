@@ -355,7 +355,7 @@ async function drawingReview(req, body) {
       .eq("project_id", drawing.project_id)
       .eq("drawing_type", drawing.drawing_type);
 
-    // Check if all assignments are now approved → mark project complete
+    // Check if all assignments are now approved → auto-advance to prep phase
     if (status === "approved") {
       const { data: allAssignments } = await sb
         .from("drawing_assignments")
@@ -364,9 +364,17 @@ async function drawingReview(req, body) {
       const allDone = (allAssignments || []).length > 0 &&
         (allAssignments || []).every(a => a.status === "approved");
       if (allDone) {
-        await sb.from("projects")
-          .update({ status: "completed", updated_at: new Date().toISOString() })
-          .eq("id", drawing.project_id);
+        // Only advance if still in design phase
+        const { data: proj } = await sb
+          .from("projects")
+          .select("phase")
+          .eq("id", drawing.project_id)
+          .single();
+        if (proj?.phase === "design") {
+          await sb.from("projects")
+            .update({ phase: "prep", updated_at: new Date().toISOString() })
+            .eq("id", drawing.project_id);
+        }
       }
     }
 
