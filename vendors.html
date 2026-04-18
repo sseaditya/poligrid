@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Poligrid — Vendors</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200;400;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "on-error": "#fff7f6",
+          "on-secondary": "#f3fbf3",
+          "primary-fixed-dim": "#c7d9cc",
+          "outline-variant": "#adb3b4",
+          "surface-container-low": "#f2f4f4",
+          "primary-dim": "#46564c",
+          "primary": "#526258",
+          "primary-container": "#d5e7da",
+          "on-primary": "#eafcef",
+          "background": "#f9f9f9",
+          "on-surface-variant": "#5a6061",
+          "on-background": "#2d3435",
+          "error-container": "#fe8983",
+          "surface": "#f9f9f9",
+          "surface-bright": "#f9f9f9",
+          "on-error-container": "#752121",
+          "surface-container-high": "#e4e9ea",
+          "surface-container": "#ebeeef",
+          "secondary-container": "#dde5dd",
+          "surface-container-lowest": "#ffffff",
+          "primary-fixed": "#d5e7da",
+          "surface-tint": "#526258",
+          "on-surface": "#2d3435",
+          "secondary-fixed": "#dde5dd",
+          "on-secondary-container": "#4c544e",
+          "outline": "#757c7d",
+          "error": "#9f403d",
+          "surface-container-lowest": "#ffffff",
+          "surface-dim": "#d4dbdd",
+          "surface-container-highest": "#dde4e5",
+        },
+        borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+        fontFamily: { "headline": ["Manrope"], "body": ["Inter"], "label": ["Inter"] }
+      },
+    },
+  }
+</script>
+<style>
+  .skeleton { background: linear-gradient(90deg,#e4e9ea 25%,#f2f4f4 50%,#e4e9ea 75%); background-size:200% 100%; animation:shimmer 1.4s infinite; border-radius:8px; }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  .vendor-row:hover { background: #f2f4f4; cursor: pointer; }
+</style>
+</head>
+<body class="bg-background text-on-background font-body antialiased min-h-screen">
+
+<main id="sidebarMain" class="md:ml-64 min-h-screen">
+  <header class="h-16 bg-surface/80 backdrop-blur-md sticky top-0 z-20 border-b border-outline-variant/10 flex items-center justify-between px-8">
+    <h1 class="font-headline font-extrabold text-xl text-on-background">Vendor Directory</h1>
+    <button id="addVendorBtn" class="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold text-on-primary hover:opacity-90 transition-all" style="background:linear-gradient(135deg,#526258,#46564c)">
+      <span class="material-symbols-outlined text-[18px]">add</span>
+      Add Vendor
+    </button>
+  </header>
+
+  <div class="p-8 max-w-6xl mx-auto">
+
+    <!-- Search + filter bar -->
+    <div class="flex items-center gap-3 mb-6">
+      <div class="relative flex-1 max-w-sm">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]">search</span>
+        <input id="searchInput" type="text" placeholder="Search vendors…"
+               class="w-full pl-9 pr-4 py-2.5 border border-outline-variant rounded-lg text-sm outline-none focus:border-primary bg-surface-container-lowest"/>
+      </div>
+      <select id="categoryFilter" class="border border-outline-variant rounded-lg px-3 py-2.5 text-sm outline-none focus:border-primary bg-surface-container-lowest">
+        <option value="">All categories</option>
+        <option>Civil</option>
+        <option>Electrical</option>
+        <option>Plumbing</option>
+        <option>HVAC</option>
+        <option>Flooring</option>
+        <option>Furniture/Joinery</option>
+        <option>Doors &amp; Windows</option>
+        <option>Miscellaneous</option>
+      </select>
+      <label class="flex items-center gap-2 text-sm text-on-surface-variant cursor-pointer select-none">
+        <input type="checkbox" id="showInactive" class="accent-primary"/> Show inactive
+      </label>
+    </div>
+
+    <!-- Vendor table -->
+    <div class="bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant/20">
+      <table class="w-full border-collapse">
+        <thead>
+          <tr class="border-b border-outline-variant/20">
+            <th class="text-left px-5 py-3 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Name</th>
+            <th class="text-left px-5 py-3 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant hidden md:table-cell">Location</th>
+            <th class="text-left px-5 py-3 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant hidden lg:table-cell">Specialties</th>
+            <th class="text-right px-5 py-3 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Business Value</th>
+            <th class="px-5 py-3 text-[11px] font-bold uppercase tracking-widest text-on-surface-variant"></th>
+          </tr>
+        </thead>
+        <tbody id="vendorTableBody">
+          <tr><td colspan="5" class="px-5 py-8 text-center"><div class="skeleton h-5 w-48 mx-auto"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="text-xs text-on-surface-variant mt-3" id="vendorCount"></p>
+  </div>
+</main>
+
+<!-- Vendor Detail Modal -->
+<div id="vendorDetailModal" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6" style="display:none!important">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 flex flex-col gap-5 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-start justify-between">
+      <h3 class="font-headline font-extrabold text-xl" id="detailVendorName">Vendor</h3>
+      <button id="closeDetailModal" class="text-on-surface-variant hover:text-on-surface text-xl leading-none">✕</button>
+    </div>
+    <div id="detailVendorBody">Loading…</div>
+    <div class="flex gap-3 justify-end pt-2 border-t border-outline-variant/10" id="detailVendorActions"></div>
+  </div>
+</div>
+
+<!-- Add / Edit Vendor Modal -->
+<div id="vendorFormModal" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6" style="display:none!important">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 flex flex-col gap-5 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-start justify-between">
+      <h3 class="font-headline font-extrabold text-xl" id="vendorFormTitle">Add Vendor</h3>
+      <button id="vendorFormClose" class="text-on-surface-variant hover:text-on-surface text-xl leading-none">✕</button>
+    </div>
+    <input type="hidden" id="vfId"/>
+    <div class="grid grid-cols-1 gap-4">
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold">Vendor Name <span class="text-error">*</span></label>
+        <input id="vfName" type="text" placeholder="e.g. Shree Tiles & Marbles" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-semibold">Phone</label>
+          <input id="vfPhone" type="tel" placeholder="+91 9876543210" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-semibold">Location</label>
+          <input id="vfLocation" type="text" placeholder="Hyderabad - Secunderabad" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+        </div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold">Address</label>
+        <input id="vfAddress" type="text" placeholder="Full address" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-semibold">Email</label>
+          <input id="vfEmail" type="email" placeholder="vendor@example.com" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-semibold">GSTIN</label>
+          <input id="vfGstin" type="text" placeholder="29ABCDE1234F1Z5" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+        </div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold">Specialty Categories</label>
+        <div class="flex flex-wrap gap-3" id="vfCategoryChips"></div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold">Notes</label>
+        <textarea id="vfNotes" rows="2" placeholder="Any additional notes…" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary resize-none"></textarea>
+      </div>
+    </div>
+    <div id="vendorFormErr" class="hidden text-error text-sm bg-red-50 rounded-lg px-3 py-2"></div>
+    <div class="flex gap-3 justify-end">
+      <button id="vendorFormCancel" class="px-5 py-2.5 rounded-lg bg-surface-container text-sm font-semibold">Cancel</button>
+      <button id="vendorFormSave" class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white" style="background:linear-gradient(135deg,#526258,#46564c)">Save Vendor</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/client/auth.js"></script>
+<script src="/client/nav.js"></script>
+<script src="/client/studio-utils.js"></script>
+<script src="/client/vendors.js"></script>
+</body>
+</html>

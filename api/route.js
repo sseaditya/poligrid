@@ -85,12 +85,20 @@ const {
   teamStats,
 } = require("../server/admin");
 const { auditLogsList } = require("../server/audit");
+const {
+  vendorsList,
+  vendorGet,
+  vendorCreate,
+  vendorUpdate,
+  vendorDelete,
+} = require("../server/vendors");
+const { materialRequestItemSetVendor } = require("../server/material_requests");
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 module.exports = async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
 
@@ -368,6 +376,26 @@ module.exports = async (req, res) => {
     }
     if (req.method === "POST" && pathname === "/api/material-requests/items/update-order-status") {
       return sendJson(res, 200, await materialRequestItemUpdateOrderStatus(req, await readJson(req)));
+    }
+    if (req.method === "POST" && pathname === "/api/material-requests/items/set-vendor") {
+      return sendJson(res, 200, await materialRequestItemSetVendor(req, await readJson(req)));
+    }
+
+    // ── Vendors ──────────────────────────────────────────────────────────────
+    if (req.method === "GET" && pathname === "/api/vendors/list") {
+      return sendJson(res, 200, await vendorsList(req, url.searchParams));
+    }
+    if (req.method === "GET" && pathname === "/api/vendors/get") {
+      return sendJson(res, 200, await vendorGet(req, url.searchParams.get("id")));
+    }
+    if (req.method === "POST" && pathname === "/api/vendors/create") {
+      return sendJson(res, 200, await vendorCreate(req, await readJson(req)));
+    }
+    if (req.method === "PATCH" && pathname === "/api/vendors/update") {
+      return sendJson(res, 200, await vendorUpdate(req, await readJson(req)));
+    }
+    if (req.method === "POST" && pathname === "/api/vendors/delete") {
+      return sendJson(res, 200, await vendorDelete(req, await readJson(req)));
     }
 
     return sendJson(res, 404, { error: "Not found." });

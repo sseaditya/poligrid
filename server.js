@@ -46,6 +46,14 @@ const {
   ceoDashboard, teamStats
 } = require("./server/admin");
 const { auditLogsList } = require("./server/audit");
+const {
+  vendorsList,
+  vendorGet,
+  vendorCreate,
+  vendorUpdate,
+  vendorDelete,
+} = require("./server/vendors");
+const { materialRequestItemSetVendor } = require("./server/material_requests");
 
 loadEnvFile(path.join(ROOT, ".env.local"));
 
@@ -210,6 +218,26 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/ceo/team-stats") {
       return sendJson(res, 200, await teamStats(req));
     }
+    // ── Vendors ───────────────────────────────────────────────────────────────
+    if (req.method === "GET" && url.pathname === "/api/vendors/list") {
+      return sendJson(res, 200, await vendorsList(req, url.searchParams));
+    }
+    if (req.method === "GET" && url.pathname === "/api/vendors/get") {
+      return sendJson(res, 200, await vendorGet(req, url.searchParams.get("id")));
+    }
+    if (req.method === "POST" && url.pathname === "/api/vendors/create") {
+      return sendJson(res, 200, await vendorCreate(req, await readJson(req)));
+    }
+    if (req.method === "PATCH" && url.pathname === "/api/vendors/update") {
+      return sendJson(res, 200, await vendorUpdate(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/vendors/delete") {
+      return sendJson(res, 200, await vendorDelete(req, await readJson(req)));
+    }
+    if (req.method === "POST" && url.pathname === "/api/material-requests/items/set-vendor") {
+      return sendJson(res, 200, await materialRequestItemSetVendor(req, await readJson(req)));
+    }
+
     if (req.method === "GET" && url.pathname === "/api/audit/logs") {
       return sendJson(res, 200, await auditLogsList(req, {
         projectId: url.searchParams.get("projectId"),
@@ -292,6 +320,10 @@ const server = http.createServer(async (req, res) => {
     // Serve material request
     if (req.method === "GET" && url.pathname === "/material_request") {
       return serveStatic("/material_request.html", false, res);
+    }
+    // Serve vendor directory
+    if (req.method === "GET" && url.pathname === "/vendors") {
+      return serveStatic("/vendors.html", false, res);
     }
     if (req.method === "GET" || req.method === "HEAD") {
       return serveStatic(url.pathname, req.method === "HEAD", res);

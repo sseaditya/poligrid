@@ -189,6 +189,73 @@
   </div>
 </div>
 
+<!-- Vendor Popup Modal -->
+<div id="vendorPopupModal" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6" style="display:none!important">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 flex flex-col gap-5 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-start justify-between">
+      <h3 class="font-headline font-extrabold text-xl" id="vendorPopupName">Vendor</h3>
+      <button onclick="document.getElementById('vendorPopupModal').style.display='none'" class="text-on-surface-variant hover:text-on-surface text-xl leading-none">✕</button>
+    </div>
+    <div id="vendorPopupBody" class="text-sm text-on-surface-variant">Loading…</div>
+  </div>
+</div>
+
+<!-- Add Vendor Modal (inline, triggered from combobox) -->
+<div id="addVendorModal" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-6" style="display:none!important">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 flex flex-col gap-5">
+    <div class="flex items-start justify-between">
+      <h3 class="font-headline font-extrabold text-xl">Add Vendor</h3>
+      <button id="addVendorClose" class="text-on-surface-variant hover:text-on-surface text-xl leading-none">✕</button>
+    </div>
+    <div class="grid grid-cols-1 gap-4">
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold">Vendor Name <span class="text-error">*</span></label>
+        <input id="avName" type="text" placeholder="e.g. Shree Tiles & Marbles" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-semibold">Phone</label>
+          <input id="avPhone" type="tel" placeholder="+91 9876543210" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-semibold">Location</label>
+          <input id="avLocation" type="text" placeholder="Hyderabad - Secunderabad" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+        </div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold">Address</label>
+        <input id="avAddress" type="text" placeholder="Full address" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-semibold">Email</label>
+          <input id="avEmail" type="email" placeholder="vendor@example.com" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-semibold">GSTIN</label>
+          <input id="avGstin" type="text" placeholder="29ABCDE1234F1Z5" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+        </div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold">Specialty Categories</label>
+        <div class="flex flex-wrap gap-2" id="avCategoryChips">
+          <!-- Chips wired by JS -->
+        </div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold">Notes</label>
+        <input id="avNotes" type="text" placeholder="Any additional notes…" class="border border-outline-variant rounded-lg p-2.5 text-sm outline-none focus:border-primary"/>
+      </div>
+    </div>
+    <div id="addVendorErr" class="hidden text-error text-sm bg-red-50 rounded-lg px-3 py-2"></div>
+    <input type="hidden" id="avTargetItemId"/>
+    <div class="flex gap-3 justify-end">
+      <button id="addVendorCancel" class="px-5 py-2.5 rounded-lg bg-surface-container text-sm font-semibold">Cancel</button>
+      <button id="addVendorSave" class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white" style="background:linear-gradient(135deg,#526258,#46564c)">Add Vendor</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="/client/auth.js"></script>
 <script src="/client/nav.js"></script>

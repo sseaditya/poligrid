@@ -131,6 +131,18 @@ function renderPage() {
     content.querySelectorAll('.procure-checkbox').forEach(cb => {
       cb.addEventListener('change', () => toggleProcured(cb));
     });
+    // Vendor comboboxes
+    content.querySelectorAll('.vendor-search-input').forEach(inp => {
+      wireVendorCombobox(inp);
+    });
+    // Vendor chip clicks (open popup)
+    content.querySelectorAll('.vendor-chip').forEach(chip => {
+      chip.addEventListener('click', () => openVendorPopup(chip.dataset.vendorId));
+    });
+    // Clear vendor buttons
+    content.querySelectorAll('.vendor-clear-btn').forEach(btn => {
+      btn.addEventListener('click', () => clearVendor(btn.dataset.itemId));
+    });
   }
 
   // Order status dropdowns
@@ -369,6 +381,7 @@ function buildBody(canEdit, canProcure, canEditRate, canOrderStatus, showPricing
                   <th style="width:80px">Unit</th>
                   ${showPricing ? `<th style="width:100px;text-align:right">Rate (₹)</th>` : ''}
                   ${showPricing ? `<th style="width:100px;text-align:right">Amount (₹)</th>` : ''}
+                  ${canProcure ? '<th style="width:170px">Vendor</th>' : ''}
                   ${canOrderStatus ? '<th style="width:130px">Order Status</th>' : ''}
                   ${canEdit ? '<th style="width:40px"></th>' : ''}
                 </tr>
@@ -477,7 +490,8 @@ function buildItemRow(item, canEdit, canProcure, canEditRate, canOrderStatus, sh
   }
 
   if (canProcure) {
-    // Procurement active: read rates, mark procured, update order status
+    // Procurement active: read rates, mark procured, assign vendor, update order status
+    const vendorCell = renderVendorCell(item);
     return `
       <tr class="item-row ${item.procured ? 'opacity-50' : ''}" data-id="${item.id}">
         <td>
@@ -490,6 +504,7 @@ function buildItemRow(item, canEdit, canProcure, canEditRate, canOrderStatus, sh
         <td>${esc(item.unit||'')}</td>
         ${showPricing ? `<td style="text-align:right">${item.estimated_rate != null ? '₹'+fmtNum(item.estimated_rate) : '—'}</td>` : ''}
         ${showPricing ? `<td style="text-align:right">${amount > 0 ? '₹'+fmtNum(amount) : '—'}</td>` : ''}
+        <td style="min-width:160px" data-vendor-cell="1">${vendorCell}</td>
         ${orderStatusCell()}
       </tr>`;
   }
@@ -896,6 +911,268 @@ function categoryIcon(cat) {
     'Doors & Windows':'door_front','Miscellaneous':'category',
   };
   return MAP[cat] || 'inventory_2';
+}
+
+// ─── Vendor combobox rendering ────────────────────────────────────────────────
+function renderVendorCell(item) {
+  if (item.vendor?.id) {
+    return `
+      <div class="flex items-center gap-1">
+        <button class="vendor-chip text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-full transition-colors max-w-[120px] truncate"
+                data-vendor-id="${escAttr(item.vendor.id)}" title="${escAttr(item.vendor.name)}"
+                style="cursor:pointer">
+          ${esc(item.vendor.name)}
+        </button>
+        <button class="vendor-clear-btn text-on-surface-variant/50 hover:text-error transition-colors" data-item-id="${escAttr(item.id)}" title="Remove vendor">
+          <span class="material-symbols-outlined text-[14px]">close</span>
+        </button>
+      </div>`;
+  }
+  return `
+    <div class="vendor-combobox-wrap relative" data-item-id="${escAttr(item.id)}">
+      <input type="text" placeholder="Search vendor…"
+             class="vendor-search-input w-full border border-outline-variant rounded px-2 py-1 text-xs outline-none focus:border-primary"
+             data-item-id="${escAttr(item.id)}" autocomplete="off"/>
+      <div class="vendor-dropdown hidden absolute left-0 top-full mt-1 z-30 bg-white border border-outline-variant rounded-lg shadow-lg w-56 max-h-48 overflow-y-auto"></div>
+    </div>`;
+}
+
+// Wire up a vendor search input with live dropdown
+let _vendorDebounce = null;
+function wireVendorCombobox(inp) {
+  const wrap = inp.closest('.vendor-combobox-wrap');
+  const dropdown = wrap.querySelector('.vendor-dropdown');
+
+  inp.addEventListener('input', () => {
+    clearTimeout(_vendorDebounce);
+    const q = inp.value.trim();
+    _vendorDebounce = setTimeout(() => fetchVendorDropdown(inp, dropdown, q), 200);
+  });
+
+  inp.addEventListener('focus', () => {
+    if (inp.value.trim().length === 0) fetchVendorDropdown(inp, dropdown, '');
+  });
+
+  // Close dropdown on outside click
+  document.addEventListener('click', e => {
+    if (!wrap.contains(e.target)) dropdown.classList.add('hidden');
+  }, { capture: true });
+}
+
+async function fetchVendorDropdown(inp, dropdown, q) {
+  try {
+    const res = await studioFetch(`/api/vendors/list?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return;
+    const { vendors } = await res.json();
+    renderVendorDropdown(inp, dropdown, vendors || []);
+  } catch {}
+}
+
+function renderVendorDropdown(inp, dropdown, vendors) {
+  const itemId = inp.dataset.itemId;
+  const rows = vendors.slice(0, 20).map(v => `
+    <button class="vendor-option w-full text-left px-3 py-2 hover:bg-surface-container-low text-xs flex items-start gap-2"
+            data-vendor-id="${escAttr(v.id)}" data-vendor-name="${escAttr(v.name)}" data-item-id="${escAttr(itemId)}">
+      <div>
+        <div class="font-semibold text-on-surface">${esc(v.name)}</div>
+        ${v.location ? `<div class="text-on-surface-variant">${esc(v.location)}</div>` : ''}
+        ${v.specialty_categories?.length ? `<div class="text-on-surface-variant/70">${v.specialty_categories.join(', ')}</div>` : ''}
+      </div>
+    </button>`).join('');
+
+  dropdown.innerHTML = rows + `
+    <div class="border-t border-outline-variant/20">
+      <button class="add-vendor-from-dropdown w-full text-left px-3 py-2 hover:bg-surface-container-low text-xs font-semibold text-primary flex items-center gap-1.5"
+              data-item-id="${escAttr(itemId)}">
+        <span class="material-symbols-outlined text-[14px]">add</span> Add new vendor
+      </button>
+    </div>`;
+
+  dropdown.classList.remove('hidden');
+
+  // Wire option clicks
+  dropdown.querySelectorAll('.vendor-option').forEach(btn => {
+    btn.addEventListener('click', () => selectVendor(btn.dataset.itemId, btn.dataset.vendorId, btn.dataset.vendorName));
+  });
+  dropdown.querySelector('.add-vendor-from-dropdown')?.addEventListener('click', () => {
+    dropdown.classList.add('hidden');
+    openAddVendorModal(itemId, inp.value.trim());
+  });
+}
+
+async function selectVendor(itemId, vendorId, vendorName) {
+  try {
+    const res = await studioFetch('/api/material-requests/items/set-vendor', {
+      method: 'POST',
+      body: JSON.stringify({ itemId, vendorId }),
+    });
+    if (res.ok) {
+      // Update local state
+      const item = _items.find(i => i.id === itemId);
+      if (item) item.vendor = { id: vendorId, name: vendorName };
+      // Re-render just this row's vendor cell
+      const row = document.querySelector(`tr[data-id="${CSS.escape(itemId)}"]`);
+      const td = row?.querySelector('td[data-vendor-cell]');
+      if (td) {
+        td.innerHTML = renderVendorCell({ id: itemId, vendor: { id: vendorId, name: vendorName } });
+        td.querySelector('.vendor-chip')?.addEventListener('click', () => openVendorPopup(vendorId));
+        td.querySelector('.vendor-clear-btn')?.addEventListener('click', () => clearVendor(itemId));
+      }
+    }
+  } catch {}
+}
+
+async function clearVendor(itemId) {
+  try {
+    const res = await studioFetch('/api/material-requests/items/set-vendor', {
+      method: 'POST',
+      body: JSON.stringify({ itemId, vendorId: null }),
+    });
+    if (res.ok) {
+      const item = _items.find(i => i.id === itemId);
+      if (item) item.vendor = null;
+      const row = document.querySelector(`tr[data-id="${CSS.escape(itemId)}"]`);
+      const td = row?.querySelector('td[data-vendor-cell]');
+      if (td) {
+        td.innerHTML = renderVendorCell({ id: itemId, vendor: null });
+        const inp = td.querySelector('.vendor-search-input');
+        if (inp) wireVendorCombobox(inp);
+      }
+    }
+  } catch {}
+}
+
+// ─── Vendor popup modal ───────────────────────────────────────────────────────
+async function openVendorPopup(vendorId) {
+  const modal = document.getElementById('vendorPopupModal');
+  const body  = document.getElementById('vendorPopupBody');
+  const nameEl = document.getElementById('vendorPopupName');
+  modal.style.removeProperty('display');
+  body.innerHTML = '<div class="text-sm text-on-surface-variant">Loading…</div>';
+  nameEl.textContent = 'Vendor';
+
+  try {
+    const res = await studioFetch(`/api/vendors/get?id=${encodeURIComponent(vendorId)}`);
+    if (!res.ok) throw new Error('Failed');
+    const { vendor, stats, recent_items } = await res.json();
+
+    nameEl.textContent = vendor.name;
+    const cats = (vendor.specialty_categories || []).join(', ') || '—';
+    const fmtMoney = n => '₹' + fmtNum(n || 0);
+
+    const recentRows = (recent_items || []).slice(0, 10).map(i => `
+      <div class="flex items-center justify-between py-1.5 border-b border-outline-variant/10 last:border-0">
+        <div>
+          <div class="font-medium text-on-surface text-xs">${esc(i.item_name || i.category)}</div>
+          <div class="text-on-surface-variant text-[11px]">${esc(i.request?.project?.name || '—')}</div>
+        </div>
+        <div class="text-xs text-right">
+          ${i.procured ? `<span class="text-primary font-semibold">Procured</span>` : `<span class="text-on-surface-variant">Pending</span>`}
+          <div class="text-on-surface-variant">${i.quantity ? i.quantity + (i.unit ? ' ' + i.unit : '') : ''}</div>
+        </div>
+      </div>`).join('');
+
+    body.innerHTML = `
+      <div class="grid grid-cols-2 gap-3 mb-5">
+        <div class="bg-surface-container-low rounded-xl p-3">
+          <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-0.5">Total Orders</p>
+          <p class="text-2xl font-headline font-extrabold text-on-surface">${stats.total_orders}</p>
+        </div>
+        <div class="bg-surface-container-low rounded-xl p-3">
+          <p class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-0.5">Business Value</p>
+          <p class="text-2xl font-headline font-extrabold text-primary">${fmtMoney(stats.total_business_value)}</p>
+        </div>
+      </div>
+      <div class="space-y-1.5 text-sm mb-5">
+        ${vendor.phone     ? `<div class="flex gap-2"><span class="text-on-surface-variant w-20 shrink-0">Phone</span><span class="font-medium">${esc(vendor.phone)}</span></div>` : ''}
+        ${vendor.email     ? `<div class="flex gap-2"><span class="text-on-surface-variant w-20 shrink-0">Email</span><span class="font-medium">${esc(vendor.email)}</span></div>` : ''}
+        ${vendor.location  ? `<div class="flex gap-2"><span class="text-on-surface-variant w-20 shrink-0">Location</span><span class="font-medium">${esc(vendor.location)}</span></div>` : ''}
+        ${vendor.address   ? `<div class="flex gap-2"><span class="text-on-surface-variant w-20 shrink-0">Address</span><span class="font-medium">${esc(vendor.address)}</span></div>` : ''}
+        ${vendor.gstin     ? `<div class="flex gap-2"><span class="text-on-surface-variant w-20 shrink-0">GSTIN</span><span class="font-medium">${esc(vendor.gstin)}</span></div>` : ''}
+        <div class="flex gap-2"><span class="text-on-surface-variant w-20 shrink-0">Categories</span><span class="font-medium">${esc(cats)}</span></div>
+        ${vendor.notes     ? `<div class="flex gap-2"><span class="text-on-surface-variant w-20 shrink-0">Notes</span><span class="font-medium">${esc(vendor.notes)}</span></div>` : ''}
+      </div>
+      ${recent_items.length ? `
+      <div>
+        <p class="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2">Recent Items</p>
+        ${recentRows}
+      </div>` : ''}`;
+  } catch {
+    body.innerHTML = '<div class="text-error text-sm">Failed to load vendor info.</div>';
+  }
+}
+
+// ─── Add Vendor Modal ─────────────────────────────────────────────────────────
+const VENDOR_CATEGORIES = [
+  'Civil','Electrical','Plumbing','HVAC',
+  'Flooring','Furniture/Joinery','Doors & Windows','Miscellaneous',
+];
+
+function openAddVendorModal(itemId, prefillName = '') {
+  const modal = document.getElementById('addVendorModal');
+  modal.style.removeProperty('display');
+  document.getElementById('avName').value = prefillName;
+  document.getElementById('avPhone').value = '';
+  document.getElementById('avEmail').value = '';
+  document.getElementById('avAddress').value = '';
+  document.getElementById('avLocation').value = '';
+  document.getElementById('avGstin').value = '';
+  document.getElementById('avNotes').value = '';
+  document.getElementById('avTargetItemId').value = itemId || '';
+  document.getElementById('addVendorErr').classList.add('hidden');
+
+  // Render category chips
+  const chipsEl = document.getElementById('avCategoryChips');
+  chipsEl.innerHTML = VENDOR_CATEGORIES.map(c => `
+    <label class="flex items-center gap-1.5 cursor-pointer">
+      <input type="checkbox" class="av-cat-chip accent-primary" value="${escAttr(c)}"/>
+      <span class="text-xs">${esc(c)}</span>
+    </label>`).join('');
+
+  document.getElementById('addVendorClose').onclick = () => closeModal('addVendorModal');
+  document.getElementById('addVendorCancel').onclick = () => closeModal('addVendorModal');
+  document.getElementById('addVendorSave').onclick = doAddVendor;
+}
+
+async function doAddVendor() {
+  const name     = document.getElementById('avName').value.trim();
+  const itemId   = document.getElementById('avTargetItemId').value;
+  const errEl    = document.getElementById('addVendorErr');
+  errEl.classList.add('hidden');
+
+  if (!name) { errEl.textContent = 'Vendor name is required.'; errEl.classList.remove('hidden'); return; }
+
+  const selectedCats = [...document.querySelectorAll('.av-cat-chip:checked')].map(c => c.value);
+
+  const payload = {
+    name,
+    phone:    document.getElementById('avPhone').value.trim() || undefined,
+    email:    document.getElementById('avEmail').value.trim() || undefined,
+    address:  document.getElementById('avAddress').value.trim() || undefined,
+    location: document.getElementById('avLocation').value.trim() || undefined,
+    gstin:    document.getElementById('avGstin').value.trim() || undefined,
+    notes:    document.getElementById('avNotes').value.trim() || undefined,
+    specialty_categories: selectedCats,
+  };
+
+  const saveBtn = document.getElementById('addVendorSave');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving…';
+
+  try {
+    const res = await studioFetch('/api/vendors/create', { method: 'POST', body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to create vendor.');
+
+    closeModal('addVendorModal');
+    if (itemId) await selectVendor(itemId, data.vendor.id, data.vendor.name);
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.classList.remove('hidden');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Add Vendor';
+  }
 }
 
 function fmtNum(n) {

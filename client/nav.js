@@ -144,6 +144,7 @@ const AppNav = (() => {
 
     if (role === 'admin') {
       links.push({ href: '/admin', icon: 'manage_accounts', label: 'Team' });
+      links.push({ href: '/vendors', icon: 'storefront', label: 'Vendors' });
       links.push({ href: '/ceo', icon: 'bar_chart', label: 'CEO View' });
       links.push({ href: '/audit', icon: 'history', label: 'Audit Logs' });
     }

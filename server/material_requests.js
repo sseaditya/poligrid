@@ -70,7 +70,7 @@ async function materialRequestGet(req, id) {
         .eq("id", id)
         .single(),
       sb.from("material_request_items")
-        .select("*")
+        .select("*, vendor:vendors(id, name, phone, specialty_categories)")
         .eq("request_id", id)
         .order("category")
         .order("sort_order")
@@ -437,6 +437,41 @@ async function materialRequestItemMarkProcured(req, body) {
   return { ok: true };
 }
 
+// ─── Procurement sets vendor on an item ──────────────────────────────────────
+async function materialRequestItemSetVendor(req, body) {
+  await requireAuth(req, PROCUREMENT_ROLES);
+  const { itemId, vendorId } = body;
+  if (!itemId) throw httpError(400, "itemId required.");
+
+  const sb = db.getClient();
+
+  // Verify item exists and request is in procurement_active
+  const { data: item } = await sb
+    .from("material_request_items")
+    .select("request_id, material_requests(status)")
+    .eq("id", itemId)
+    .single();
+
+  if (!item) throw httpError(404, "Item not found.");
+  const reqStatus = item.material_requests?.status;
+  if (reqStatus !== "approved" && reqStatus !== "procurement_active") {
+    throw httpError(409, "Vendor can only be assigned on approved or active procurement requests.");
+  }
+
+  const patch = {
+    vendor_id: vendorId || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await sb
+    .from("material_request_items")
+    .update(patch)
+    .eq("id", itemId);
+
+  if (error) throw httpError(500, error.message);
+  return { ok: true };
+}
+
 // ─── Procurement submits pricing for admin approval ───────────────────────────
 async function materialRequestSubmitPricing(req, body) {
   const { profile } = await requireAuth(req, PROCUREMENT_ROLES);
@@ -683,7 +718,8 @@ async function materialRequestAdminQueue(req) {
     // All items in ordered / in_transit states
     sb.from("material_request_items")
       .select(`
-        id, description, category, quantity, unit, order_status, updated_at,
+        id, item_name, description, category, quantity, unit, order_status, updated_at,
+        vendor:vendors(id, name),
         request:material_requests(
           id, title,
           project:projects(id, name, client_name)
@@ -713,6 +749,7 @@ module.exports = {
   materialRequestSubmitPricing,
   materialRequestApprovePricing,
   materialRequestItemUpdateOrderStatus,
+  materialRequestItemSetVendor,
   materialRequestCategories,
   materialRequestSummary,
   materialRequestAdminQueue,

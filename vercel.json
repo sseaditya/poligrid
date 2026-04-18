@@ -25,6 +25,7 @@
     { "src": "^/supervisor_home$", "dest": "/supervisor_home.html" },
     { "src": "^/procurement_home$", "dest": "/procurement_home.html" },
     { "src": "^/material_request$", "dest": "/material_request.html" },
+    { "src": "^/vendors$",      "dest": "/vendors.html" },
     { "src": "^/$",             "dest": "/login.html" }
   ]
 }

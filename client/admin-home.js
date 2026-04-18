@@ -253,7 +253,7 @@ function renderDeliveries(items) {
       <div class="flex flex-col gap-1">
         ${group.items.map(item => `
           <div class="flex items-center justify-between text-xs">
-            <span class="text-on-surface-variant">${escHtml(item.description || item.category || '—')}${item.quantity ? ' · ' + item.quantity + (item.unit ? ' ' + item.unit : '') : ''}</span>
+            <span class="text-on-surface-variant">${escHtml(item.item_name || item.description || item.category || '—')}${item.quantity ? ' · ' + item.quantity + (item.unit ? ' ' + item.unit : '') : ''}${item.vendor?.name ? ' <span class="text-outline font-medium">· ' + escHtml(item.vendor.name) + '</span>' : ''}</span>
             <span class="font-bold ${ORDER_COLOR[item.order_status] || 'text-on-surface-variant'}">${ORDER_LABEL[item.order_status] || item.order_status}</span>
           </div>`).join('')}
       </div>
@@ -342,10 +342,10 @@ function renderProjectList(summaryOrEvent, assignmentsArg) {
       </div>`;
     }).join('');
 
-    // Pending tasks badge
-    const tasks = Number(d.tasks_pending || 0);
-    const tasksBadge = tasks > 0
-      ? `<span class="ml-1 text-[10px] font-bold uppercase tracking-wider text-error bg-[#fff0f0] px-2.5 py-1 rounded-full">⚠ ${tasks} tasks</span>`
+    // Approvals required badge (pricing reviews needing admin action)
+    const approvals = Number(d.admin_approvals_pending || 0);
+    const tasksBadge = approvals > 0
+      ? `<span class="ml-1 text-[10px] font-bold uppercase tracking-wider text-error bg-[#fff0f0] px-2.5 py-1 rounded-full">⚠ ${approvals} approval${approvals > 1 ? 's' : ''} required</span>`
       : '';
 
     return `
